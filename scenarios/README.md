@@ -27,11 +27,11 @@ Cada YAML describe una misión completa y es **determinista** con su `seed`. Tod
 - `events.jsonl`: eventos a publicar, ordenados por `sim_time` (sin `seq` ni `ingestion_time`).
 - `labels.json`: una entrada por anomalía, generada a partir del YAML:
 ```json
-{ "id": "A1", "type": "wind", "start_s": 95.0, "end_s": 150.0,
+{ "id": "A1", "type": "wind", "source": null, "start_s": 95.0, "end_s": 150.0,
   "expected_rules": ["ROUTE_DEVIATION"], "expected_cause": "WIND",
   "eval_window": [95.0, 210.0] }
 ```
-`eval_window` = de `start_s` a `end_s + 60`: una alerta con la causa esperada dentro de esa ventana cuenta como acierto. Para el spoofing también vale la alerta de recuperación (`GPS_SPOOFING`) tras `end_s`. Para cada fallo programado: `{"id": "F1", "type": "source_silent", "source": "radar", "start_s": 120.0, "end_s": 180.0, "expected_rules": ["SOURCE_SILENT"], "expected_cause": "SENSOR_FAULT", "eval_window": [120.0, 240.0]}`.
+`eval_window` = de `start_s` a `end_s + 60`: una alerta con la causa esperada dentro de esa ventana cuenta como acierto. Para el spoofing también vale la alerta de recuperación (`GPS_SPOOFING`) tras `end_s`. Para cada fallo programado (`F1`, `F2`… por orden de inicio; la ventana es `[start_s, end_s)`): `{"id": "F1", "type": "source_silent", "source": "radar", "start_s": 120.0, "end_s": 180.0, "expected_rules": ["SOURCE_SILENT"], "expected_cause": "SENSOR_FAULT", "eval_window": [120.0, 240.0]}`.
 - `plan_xy.png`, `scenario_xy.png`, `scenario_time.png` (con `plot_scenario.py`).
 
 ## Criterios de aceptación del generador (Fase 1)

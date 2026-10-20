@@ -24,7 +24,7 @@ mission:
 
 sensors:
   gps: {period_s: 1.0, sigma_m: 1.5, sats: 14, hdop: 0.8}
-  radar: {id: radar-1, period_s: 2.0, sigma_m: 8.0}
+  radar: {id: radar-1, period_s: 2.0, sigma_m: 5.0}
   meteo: {id: meteo-1, period_s: 10.0, sigma_mps: 0.5, sigma_deg: 8.0}
   link: {period_s: 5.0, controller_id: GCS-1, rssi_dbm: -62.0, latency_ms: 45.0}
   battery: {period_s: 10.0, start_pct: 100.0, drain_pct_per_min: 1.2}

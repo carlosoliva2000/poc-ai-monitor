@@ -1,0 +1,19 @@
+{
+  "labels": [
+    {
+      "id": "A1",
+      "type": "hijack",
+      "source": null,
+      "start_s": 335.0,
+      "end_s": 380.0,
+      "expected_rules": [
+        "ROUTE_DEVIATION"
+      ],
+      "expected_cause": "HIJACK",
+      "eval_window": [
+        335.0,
+        440.0
+      ]
+    }
+  ]
+}

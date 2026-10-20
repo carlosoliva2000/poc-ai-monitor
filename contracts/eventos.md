@@ -1,6 +1,6 @@
 # Contratos de `poc-ai-monitor`
 
-> **Fuente de verdad** de lo que se intercambian los componentes: eventos, topics, mensajes del WebSocket, API HTTP y tools. Versión 0.3 (20/10/2026: `source` y `asset` del sobre, `fix`, `GET /scenarios`, resultado de `get_flight_summary` y `get_track_metrics` sin datos de una fuente, patrón de suscripción de ejemplo corregido en §3; v0.2, 16/10/2026: fallos manuales y regla `SOURCE_SILENT`). Cualquier cambio se hace aquí primero y después en `contracts/python` (Pydantic), `contracts/schemas/` (JSON Schema exportado) y en todos los componentes, en el mismo cambio.
+> **Fuente de verdad** de lo que se intercambian los componentes: eventos, topics, mensajes del WebSocket, API HTTP y tools. Versión 0.4 (20/10/2026: ficheros del generador y YAML de escenario (§8), la ruta de `MissionPlanned` incluye la vuelta a la base; v0.3: `source` y `asset` del sobre, `fix`, `GET /scenarios`, resultado de `get_flight_summary` y `get_track_metrics` sin datos de una fuente, patrón de suscripción de ejemplo corregido en §3; v0.2, 16/10/2026: fallos manuales y regla `SOURCE_SILENT`). Cualquier cambio se hace aquí primero y después en `contracts/python` (Pydantic), `contracts/schemas/` (JSON Schema exportado) y en todos los componentes, en el mismo cambio.
 
 ## 1. Convenciones
 - **Unidades:** metros, segundos, m/s, grados. Plano x,y con origen en la base: **x hacia el este, y hacia el norte**.
@@ -65,6 +65,8 @@ Suscripciones con comodines: `*` = un segmento, `>` = el resto. Ejemplos: `citad
   "waypoints": [ {"id": "BASE", "x": 0.0, "y": 0.0, "eta_s": 0.0},
                  {"id": "WP1", "x": 400.0, "y": 900.0, "eta_s": 66.5} ] }
 ```
+`waypoints` es la ruta completa: la base (`BASE`), los waypoints y **otra vez la base** como último punto (la vuelta); `eta_s` es el instante previsto de llegada en un vuelo sin perturbaciones. La polilínea de esos puntos es la ruta planificada con la que se mide la desviación. El índice de `WaypointReached` es la posición en esa lista (`BASE` = 0; la llegada final a la base lleva el último índice).
+
 **`MissionStarted`** `{ "mission_id": "MSN-DEMO" }` · **`WaypointReached`** `{ "waypoint_id": "WP2", "index": 2 }` (lo decide el dron con su GPS) · **`MissionCompleted`** `{ "mission_id": "MSN-DEMO", "completed": true, "reason": "returned_to_base" }` (`reason`: `returned_to_base` | `timeout`)
 
 **`PositionUpdated`** (`gps-`, cada 1 s)
@@ -144,8 +146,8 @@ Plataforma → cliente:
 
 ## 6. API HTTP (`http://127.0.0.1:8100/api`)
 - `GET /scenarios` → `{"scenarios": [{"name": "demo", "description": "…", "generated": true, "duration_s": 556.0}]}`. `generated` = existe `runs/<name>/events.jsonl`; `duration_s` es `null` si no está generado. `load` de un escenario no generado lo genera antes de cargarlo. `GET /state` → como el mensaje `state`.
-- `GET /plan` → `plan.json` del escenario cargado (waypoints y trayectoria planificada). Lo usa la web.
-- `GET /truth` → `truth.json`. **Solo para la capa «verdad» de la web.** Ninguna tool lo usa.
+- `GET /plan` → `plan.json` del escenario cargado (§8.2: waypoints y trayectoria planificada). Lo usa la web.
+- `GET /truth` → `truth.json` (§8.3). **Solo para la capa «verdad» de la web.** Ninguna tool lo usa.
 - `GET /timeline?source=&type=&since=&until=&limit=` → eventos del timeline (sin corte temporal; es para la web y la evaluación).
 - `POST /tools/{name}` con el JSON de argumentos → `{"ok": true, "result": …}` o `{"ok": false, "error": "…"}`. **Aplica el corte temporal:** `until` efectivo = mínimo entre lo pedido y el `sim_time` actual.
 
@@ -186,3 +188,80 @@ Los esquemas que ve el modelo están en `agent-assets/tools.json` (formato OpenA
 ```
 Siempre con todas las claves (0 si no hay). `completion_reason`: `returned_to_base` | `timeout` | `null` (la misión aún no ha terminado). `distance_m.gps` / `.radar` son `null` si esa fuente no tiene muestras. Nunca incluye información del dominio `sim` (fallos inyectados).
 - **`publish_alert`**, **`close_alert`**, **`load_skill`**: las ejecuta el módulo de IA. `publish_alert` devuelve `{"ok": true, "alert_id": "ai-0003"}` o `{"ok": false, "errors": ["…"]}` (validación: Pydantic, ids de evidencia existentes y con `sim_time` ≤ `as_of_sim_time`).
+
+## 8. Ficheros del generador
+El generador (`platform/`) lee `scenarios/<nombre>.yaml` y escribe `runs/<nombre>/`: `plan.json`, `truth.json`, `events.jsonl` y `labels.json`. Modelos en `poc_contracts.scenario` y `poc_contracts.run_files`; esquemas en `contracts/schemas/files/`. Los números de los ficheros JSON van redondeados (posiciones y velocidades a 2 decimales en plan y verdad, a 1 en los eventos).
+
+### 8.1 YAML de escenario (`scenarios/<nombre>.yaml`)
+Todos los campos son obligatorios (los que admiten `null` lo dicen); no se admiten campos desconocidos. `name` debe coincidir con el nombre del fichero. Ejemplo completo:
+```yaml
+name: demo
+description: Las tres anomalías en un vuelo.
+seed: 42
+t0: "2026-10-20T10:00:00Z"        # event_time = t0 + sim_time (ISO 8601 UTC, segundos enteros)
+max_duration_s: 900              # si se alcanza: MissionCompleted con completed false y reason timeout
+drone: {cruise_speed_mps: 15.0, max_accel_mps2: 2.0, max_turn_rate_dps: 40.0, altitude_m: 60.0,
+        acceptance_radius_m: 25.0, lookahead_m: 40.0}
+mission:
+  id: MSN-DEMO
+  waypoints: [{id: WP1, x: 500.0, y: 1200.0}, {id: WP2, x: 1600.0, y: 1500.0}]
+  return_to_base: true           # obligatorio; por ahora solo se admite true
+sensors:
+  gps: {period_s: 1.0, sigma_m: 1.5, sats: 14, hdop: 0.8}
+  radar: {id: radar-1, period_s: 2.0, sigma_m: 5.0}
+  meteo: {id: meteo-1, period_s: 10.0, sigma_mps: 0.5, sigma_deg: 8.0}
+  link: {period_s: 5.0, controller_id: GCS-1, rssi_dbm: -62.0, latency_ms: 45.0}
+  battery: {period_s: 10.0, start_pct: 100.0, drain_pct_per_min: 1.2}
+wind:
+  base: {speed_mps: 2.0, gust_mps: 3.5, from_deg: 300.0}
+  episodes: [{start_s: 95.0, end_s: 150.0, ramp_s: 10.0, speed_mps: 12.0, gust_mps: 16.0, from_deg: 350.0}]
+spoofing: {start_s: 168.0, end_s: 222.0, drift_rate_mps: 1.5, direction_deg: 45.0}   # o null
+hijack:                                                                              # o null
+  start_s: 335.0
+  end_s: 380.0                   # o null: el control no se recupera
+  target: {x: 1500.0, y: -1400.0}
+  link_hint: {controller_id: UNK-4F2A, rssi_dbm: -79.0, latency_ms: 120.0}
+faults: [{source: radar, start_s: 120.0, end_s: 180.0}]   # lista, puede estar vacía
+```
+`radar.id` y `meteo.id` solo pueden ser `radar-1` y `meteo-1` (son el `source` del sobre). Significado de cada bloque en `scenarios/README.md`. Las desviaciones típicas de lo que no sale del YAML (altitud, velocidad y rumbo del GPS, calidad del radar, RSSI, latencia, batería) son constantes del generador.
+
+### 8.2 `plan.json`
+Vuelo del mismo controlador **sin** viento, spoofing ni secuestro. `waypoints` es la misma lista que `MissionPlanned` (con la base al final); `trajectory`, una muestra por segundo más la última (`t`, `x`, `y`, `speed_mps` respecto al suelo, `heading_deg`). Ejemplo (recortado: el real trae una muestra por segundo hasta `duration_s`):
+```json
+{ "mission_id": "MSN-DEMO", "cruise_speed_mps": 15.0, "altitude_m": 60.0, "acceptance_radius_m": 25.0,
+  "duration_s": 435.3,
+  "waypoints": [ {"id": "BASE", "x": 0.0, "y": 0.0, "eta_s": 0.0},
+                 {"id": "WP1", "x": 500.0, "y": 1200.0, "eta_s": 88.8},
+                 {"id": "BASE", "x": 0.0, "y": 0.0, "eta_s": 435.3} ],
+  "trajectory": [ {"t": 0.0, "x": 0.0, "y": 0.0, "speed_mps": 0.0, "heading_deg": 22.62},
+                  {"t": 1.0, "x": 0.42, "y": 1.02, "speed_mps": 2.0, "heading_deg": 22.62} ] }
+```
+
+### 8.3 `truth.json`
+La trayectoria real y el viento real, una muestra por segundo más la última. **El agente nunca lo ve**; lo usan las gráficas, la evaluación y la capa «verdad» de la web. `heading_deg` es el rumbo del morro; `course_deg`, el rumbo sobre el suelo (distintos cuando hay viento); `speed_mps`, la velocidad sobre el suelo. En `wind`, `from_deg` es la procedencia.
+```json
+{ "duration_s": 556.3,
+  "trajectory": [ {"t": 0.0, "x": 0.0, "y": 0.0, "speed_mps": 0.0, "heading_deg": 22.62, "course_deg": 22.62},
+                  {"t": 1.0, "x": 2.12, "y": 0.03, "speed_mps": 2.57, "heading_deg": 20.1, "course_deg": 70.05} ],
+  "wind": [ {"t": 0.0, "speed_mps": 2.0, "gust_mps": 3.5, "from_deg": 300.0},
+            {"t": 1.0, "speed_mps": 2.0, "gust_mps": 3.5, "from_deg": 300.0} ] }
+```
+
+### 8.4 `labels.json`
+Una etiqueta por anomalía (`A1`, `A2`… por orden de inicio: viento por episodio, spoofing, secuestro) y por fallo programado (`F1`, `F2`… por orden de inicio). Solo para evaluar. Campos: `type` (`wind` | `hijack` | `gps_spoofing` | `source_silent`), `source` (la fuente silenciada; `null` si no es un fallo), `start_s`, `end_s` (en un secuestro sin fin, el fin de la misión), `expected_rules` (reglas del detector que se esperan en la ventana; basta con que salte una), `expected_cause` y `eval_window` (de `start_s` a `end_s` más 60 s: una alerta con la causa esperada dentro de la ventana cuenta como acierto). En el spoofing las reglas esperadas son `SOURCE_DISCREPANCY` y también `ROUTE_DEVIATION`, porque al acabar el engaño el GPS salta a la verdad, lejos de la ruta.
+```json
+{ "labels": [ { "id": "A1", "type": "wind", "source": null, "start_s": 95.0, "end_s": 150.0,
+                "expected_rules": ["ROUTE_DEVIATION"], "expected_cause": "WIND",
+                "eval_window": [95.0, 210.0] },
+              { "id": "F1", "type": "source_silent", "source": "radar", "start_s": 120.0, "end_s": 180.0,
+                "expected_rules": ["SOURCE_SILENT"], "expected_cause": "SENSOR_FAULT",
+                "eval_window": [120.0, 240.0] } ] }
+```
+
+### 8.5 `events.jsonl`
+Un `EventDraft` (§2, sin `seq` ni `ingestion_time`) por línea, ordenado por `sim_time` y, a igualdad de instante, así: misión, fallos, GPS, radar, meteo, enlace, batería.
+- **Ids:** los de las fuentes llevan el número de orden de la medición (`gps-000061` es la que cae en t = 61 s), así que un fallo programado deja huecos en la numeración, igual que lo haría uno manual. Los de misión (`mis-`) y los de fallos (`sim-`) son secuenciales. **Numeración `sim-`:** el reproductor continúa tras el último `sim-` de `events.jsonl` (los fallos programados ocupan los primeros números).
+- **Fallos programados:** de cada fuente se quitan los eventos con `start_s <= sim_time < end_s` y se escriben `FaultInjected` en `start_s` y `FaultCleared` en `end_s` (`origin: scenario`). Se genera todo con el mismo ruido y después se filtra: con la misma semilla, un escenario con fallos tiene los mismos eventos que el equivalente sin ellos, menos los silenciados.
+- **Fin del vuelo:** las fuentes dejan de emitir al terminar la misión; `MissionCompleted` lleva el `sim_time` de ese instante. Un fallo o una anomalía que acabaría después se recorta al fin de la misión (`FaultCleared` y el `end_s` de su etiqueta); uno que empezaría después no se escribe.
+- **Determinismo:** misma semilla y mismo YAML, ficheros idénticos byte a byte.
+

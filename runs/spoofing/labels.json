@@ -1,0 +1,20 @@
+{
+  "labels": [
+    {
+      "id": "A1",
+      "type": "gps_spoofing",
+      "source": null,
+      "start_s": 168.0,
+      "end_s": 222.0,
+      "expected_rules": [
+        "SOURCE_DISCREPANCY",
+        "ROUTE_DEVIATION"
+      ],
+      "expected_cause": "GPS_SPOOFING",
+      "eval_window": [
+        168.0,
+        282.0
+      ]
+    }
+  ]
+}

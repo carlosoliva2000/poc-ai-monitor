@@ -1,0 +1,84 @@
+"""Ficheros que escribe el generador en `runs/<escenario>/` (`contracts/eventos.md` §8.2 a §8.4).
+
+`events.jsonl` son `EventDraft`; aquí están `plan.json`, `truth.json` y `labels.json`.
+"""
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from .enums import Cause, LabelType, Rule, SensorSource
+from .payloads import Waypoint
+
+
+class RunFile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class PlanSample(RunFile):
+    """Estado previsto en el vuelo sin perturbaciones, cada segundo."""
+
+    t: float
+    x: float
+    y: float
+    speed_mps: float
+    heading_deg: float
+
+
+class PlanFile(RunFile):
+    mission_id: str
+    cruise_speed_mps: float
+    altitude_m: float
+    acceptance_radius_m: float
+    duration_s: float
+    waypoints: list[Waypoint]
+    trajectory: list[PlanSample]
+
+
+class TruthSample(RunFile):
+    """Estado real cada segundo. `course_deg`: rumbo sobre el suelo; `heading_deg`: el del morro."""
+
+    t: float
+    x: float
+    y: float
+    speed_mps: float
+    heading_deg: float
+    course_deg: float
+
+
+class TruthWind(RunFile):
+    """Viento real (media y racha) cada segundo, con `from_deg` de procedencia."""
+
+    t: float
+    speed_mps: float
+    gust_mps: float
+    from_deg: float
+
+
+class TruthFile(RunFile):
+    """Verdad del vuelo. El agente nunca la ve."""
+
+    duration_s: float
+    trajectory: list[TruthSample]
+    wind: list[TruthWind]
+
+
+class Label(RunFile):
+    id: str = Field(pattern=r"^[AF]\d+$")
+    type: LabelType
+    source: SensorSource | None
+    start_s: float
+    end_s: float
+    expected_rules: list[Rule] = Field(min_length=1)
+    expected_cause: Cause
+    eval_window: tuple[float, float]
+
+    @model_validator(mode="after")
+    def _check(self) -> "Label":
+        if (self.type == LabelType.SOURCE_SILENT) != (self.source is not None):
+            raise ValueError("`source` es obligatoria en source_silent y null en el resto")
+        if self.eval_window[0] != self.start_s or self.eval_window[1] < self.end_s:
+            raise ValueError("eval_window va de start_s a end_s o más allá")
+        return self
+
+
+class LabelsFile(RunFile):
+    labels: list[Label]

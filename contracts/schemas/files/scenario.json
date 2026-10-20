@@ -1,0 +1,598 @@
+{
+  "$defs": {
+    "BatteryConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "period_s": {
+          "exclusiveMinimum": 0,
+          "title": "Period S",
+          "type": "number"
+        },
+        "start_pct": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Start Pct",
+          "type": "number"
+        },
+        "drain_pct_per_min": {
+          "minimum": 0,
+          "title": "Drain Pct Per Min",
+          "type": "number"
+        }
+      },
+      "required": [
+        "period_s",
+        "start_pct",
+        "drain_pct_per_min"
+      ],
+      "title": "BatteryConfig",
+      "type": "object"
+    },
+    "DroneConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "cruise_speed_mps": {
+          "exclusiveMinimum": 0,
+          "title": "Cruise Speed Mps",
+          "type": "number"
+        },
+        "max_accel_mps2": {
+          "exclusiveMinimum": 0,
+          "title": "Max Accel Mps2",
+          "type": "number"
+        },
+        "max_turn_rate_dps": {
+          "exclusiveMinimum": 0,
+          "title": "Max Turn Rate Dps",
+          "type": "number"
+        },
+        "altitude_m": {
+          "title": "Altitude M",
+          "type": "number"
+        },
+        "acceptance_radius_m": {
+          "exclusiveMinimum": 0,
+          "title": "Acceptance Radius M",
+          "type": "number"
+        },
+        "lookahead_m": {
+          "exclusiveMinimum": 0,
+          "title": "Lookahead M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "cruise_speed_mps",
+        "max_accel_mps2",
+        "max_turn_rate_dps",
+        "altitude_m",
+        "acceptance_radius_m",
+        "lookahead_m"
+      ],
+      "title": "DroneConfig",
+      "type": "object"
+    },
+    "FaultConfig": {
+      "additionalProperties": false,
+      "description": "Fuente silenciada en `[start_s, end_s)`: solo afecta a lo que se reporta.",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SensorSource"
+        },
+        "start_s": {
+          "minimum": 0,
+          "title": "Start S",
+          "type": "number"
+        },
+        "end_s": {
+          "title": "End S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "source",
+        "start_s",
+        "end_s"
+      ],
+      "title": "FaultConfig",
+      "type": "object"
+    },
+    "GpsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "period_s": {
+          "exclusiveMinimum": 0,
+          "title": "Period S",
+          "type": "number"
+        },
+        "sigma_m": {
+          "minimum": 0,
+          "title": "Sigma M",
+          "type": "number"
+        },
+        "sats": {
+          "title": "Sats",
+          "type": "integer"
+        },
+        "hdop": {
+          "title": "Hdop",
+          "type": "number"
+        }
+      },
+      "required": [
+        "period_s",
+        "sigma_m",
+        "sats",
+        "hdop"
+      ],
+      "title": "GpsConfig",
+      "type": "object"
+    },
+    "HijackConfig": {
+      "additionalProperties": false,
+      "description": "Desde `start_s` el objetivo pasa a `target`; en `end_s` (`null`: nunca) vuelve el mando.",
+      "properties": {
+        "start_s": {
+          "minimum": 0,
+          "title": "Start S",
+          "type": "number"
+        },
+        "end_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "End S"
+        },
+        "target": {
+          "$ref": "#/$defs/Point"
+        },
+        "link_hint": {
+          "$ref": "#/$defs/LinkHint"
+        }
+      },
+      "required": [
+        "start_s",
+        "end_s",
+        "target",
+        "link_hint"
+      ],
+      "title": "HijackConfig",
+      "type": "object"
+    },
+    "LinkConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "period_s": {
+          "exclusiveMinimum": 0,
+          "title": "Period S",
+          "type": "number"
+        },
+        "controller_id": {
+          "title": "Controller Id",
+          "type": "string"
+        },
+        "rssi_dbm": {
+          "title": "Rssi Dbm",
+          "type": "number"
+        },
+        "latency_ms": {
+          "title": "Latency Ms",
+          "type": "number"
+        }
+      },
+      "required": [
+        "period_s",
+        "controller_id",
+        "rssi_dbm",
+        "latency_ms"
+      ],
+      "title": "LinkConfig",
+      "type": "object"
+    },
+    "LinkHint": {
+      "additionalProperties": false,
+      "properties": {
+        "controller_id": {
+          "title": "Controller Id",
+          "type": "string"
+        },
+        "rssi_dbm": {
+          "title": "Rssi Dbm",
+          "type": "number"
+        },
+        "latency_ms": {
+          "title": "Latency Ms",
+          "type": "number"
+        }
+      },
+      "required": [
+        "controller_id",
+        "rssi_dbm",
+        "latency_ms"
+      ],
+      "title": "LinkHint",
+      "type": "object"
+    },
+    "MeteoConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "const": "meteo-1",
+          "title": "Id",
+          "type": "string"
+        },
+        "period_s": {
+          "exclusiveMinimum": 0,
+          "title": "Period S",
+          "type": "number"
+        },
+        "sigma_mps": {
+          "minimum": 0,
+          "title": "Sigma Mps",
+          "type": "number"
+        },
+        "sigma_deg": {
+          "minimum": 0,
+          "title": "Sigma Deg",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "period_s",
+        "sigma_mps",
+        "sigma_deg"
+      ],
+      "title": "MeteoConfig",
+      "type": "object"
+    },
+    "MissionConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "waypoints": {
+          "items": {
+            "$ref": "#/$defs/WaypointConfig"
+          },
+          "minItems": 1,
+          "title": "Waypoints",
+          "type": "array"
+        },
+        "return_to_base": {
+          "const": true,
+          "title": "Return To Base",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "waypoints",
+        "return_to_base"
+      ],
+      "title": "MissionConfig",
+      "type": "object"
+    },
+    "Point": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "Point",
+      "type": "object"
+    },
+    "RadarConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "const": "radar-1",
+          "title": "Id",
+          "type": "string"
+        },
+        "period_s": {
+          "exclusiveMinimum": 0,
+          "title": "Period S",
+          "type": "number"
+        },
+        "sigma_m": {
+          "minimum": 0,
+          "title": "Sigma M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "period_s",
+        "sigma_m"
+      ],
+      "title": "RadarConfig",
+      "type": "object"
+    },
+    "SensorSource": {
+      "description": "Fuentes que se pueden silenciar y en las que puede saltar `SOURCE_SILENT`.",
+      "enum": [
+        "gps",
+        "radar",
+        "meteo",
+        "link",
+        "battery"
+      ],
+      "title": "SensorSource",
+      "type": "string"
+    },
+    "SensorsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "gps": {
+          "$ref": "#/$defs/GpsConfig"
+        },
+        "radar": {
+          "$ref": "#/$defs/RadarConfig"
+        },
+        "meteo": {
+          "$ref": "#/$defs/MeteoConfig"
+        },
+        "link": {
+          "$ref": "#/$defs/LinkConfig"
+        },
+        "battery": {
+          "$ref": "#/$defs/BatteryConfig"
+        }
+      },
+      "required": [
+        "gps",
+        "radar",
+        "meteo",
+        "link",
+        "battery"
+      ],
+      "title": "SensorsConfig",
+      "type": "object"
+    },
+    "SpoofingConfig": {
+      "additionalProperties": false,
+      "description": "GPS reportado = real + desfase que crece a `drift_rate_mps` hacia `direction_deg`.",
+      "properties": {
+        "start_s": {
+          "minimum": 0,
+          "title": "Start S",
+          "type": "number"
+        },
+        "end_s": {
+          "title": "End S",
+          "type": "number"
+        },
+        "drift_rate_mps": {
+          "exclusiveMinimum": 0,
+          "title": "Drift Rate Mps",
+          "type": "number"
+        },
+        "direction_deg": {
+          "title": "Direction Deg",
+          "type": "number"
+        }
+      },
+      "required": [
+        "start_s",
+        "end_s",
+        "drift_rate_mps",
+        "direction_deg"
+      ],
+      "title": "SpoofingConfig",
+      "type": "object"
+    },
+    "WaypointConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "x",
+        "y"
+      ],
+      "title": "WaypointConfig",
+      "type": "object"
+    },
+    "WindBase": {
+      "additionalProperties": false,
+      "properties": {
+        "speed_mps": {
+          "minimum": 0,
+          "title": "Speed Mps",
+          "type": "number"
+        },
+        "gust_mps": {
+          "minimum": 0,
+          "title": "Gust Mps",
+          "type": "number"
+        },
+        "from_deg": {
+          "title": "From Deg",
+          "type": "number"
+        }
+      },
+      "required": [
+        "speed_mps",
+        "gust_mps",
+        "from_deg"
+      ],
+      "title": "WindBase",
+      "type": "object"
+    },
+    "WindConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/WindBase"
+        },
+        "episodes": {
+          "items": {
+            "$ref": "#/$defs/WindEpisode"
+          },
+          "title": "Episodes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "base",
+        "episodes"
+      ],
+      "title": "WindConfig",
+      "type": "object"
+    },
+    "WindEpisode": {
+      "additionalProperties": false,
+      "description": "Episodio con rampa de subida y bajada de `ramp_s` (la procedencia salta de golpe).",
+      "properties": {
+        "speed_mps": {
+          "minimum": 0,
+          "title": "Speed Mps",
+          "type": "number"
+        },
+        "gust_mps": {
+          "minimum": 0,
+          "title": "Gust Mps",
+          "type": "number"
+        },
+        "from_deg": {
+          "title": "From Deg",
+          "type": "number"
+        },
+        "start_s": {
+          "minimum": 0,
+          "title": "Start S",
+          "type": "number"
+        },
+        "end_s": {
+          "title": "End S",
+          "type": "number"
+        },
+        "ramp_s": {
+          "exclusiveMinimum": 0,
+          "title": "Ramp S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "speed_mps",
+        "gust_mps",
+        "from_deg",
+        "start_s",
+        "end_s",
+        "ramp_s"
+      ],
+      "title": "WindEpisode",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "seed": {
+      "title": "Seed",
+      "type": "integer"
+    },
+    "t0": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "T0",
+      "type": "string"
+    },
+    "max_duration_s": {
+      "exclusiveMinimum": 0,
+      "title": "Max Duration S",
+      "type": "number"
+    },
+    "drone": {
+      "$ref": "#/$defs/DroneConfig"
+    },
+    "mission": {
+      "$ref": "#/$defs/MissionConfig"
+    },
+    "sensors": {
+      "$ref": "#/$defs/SensorsConfig"
+    },
+    "wind": {
+      "$ref": "#/$defs/WindConfig"
+    },
+    "spoofing": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SpoofingConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hijack": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HijackConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "faults": {
+      "items": {
+        "$ref": "#/$defs/FaultConfig"
+      },
+      "title": "Faults",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "description",
+    "seed",
+    "t0",
+    "max_duration_s",
+    "drone",
+    "mission",
+    "sensors",
+    "wind",
+    "spoofing",
+    "hijack",
+    "faults"
+  ],
+  "title": "ScenarioConfig",
+  "type": "object"
+}

@@ -15,6 +15,8 @@ from poc_contracts.api import ScenarioInfo, ScenariosResponse, ToolError
 from poc_contracts.enums import EventType
 from poc_contracts.envelope import Envelope
 from poc_contracts.payloads import PAYLOAD_MODELS
+from poc_contracts.run_files import LabelsFile, PlanFile, TruthFile
+from poc_contracts.scenario import ScenarioConfig
 from poc_contracts.tools import (
     FlightSummary,
     GetEventsResult,
@@ -98,6 +100,13 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ('{ "mission_id": "MSN-DEMO", "duration_s"', model(FlightSummary)),
     ('{"ok": true, "alert_id"', TypeAdapter(PublishAlertResult).validate_python),
     ('{"ok": false, "errors"', TypeAdapter(PublishAlertResult).validate_python),
+    (
+        '{ "mission_id": "MSN-DEMO", "cruise_speed_mps": 15.0, "altitude_m": 60.0, '
+        '"acceptance_radius_m": 25.0, "duration_s"',
+        model(PlanFile),
+    ),
+    ('{ "duration_s": 556.3, "trajectory"', model(TruthFile)),
+    ('{ "labels"', model(LabelsFile)),
 ]
 
 
@@ -124,6 +133,21 @@ def test_example_validates(index: int) -> None:
         pytest.skip("ejemplo ilustrativo, no es JSON válido")
     assert callable(check)
     check(json.loads(source))
+
+
+YAML_RE = re.compile(r"```yaml\n(.*?)```", re.S)
+
+
+def test_yaml_example_of_the_scenario_validates() -> None:
+    """El ejemplo completo de §8.1 es un escenario válido."""
+    import yaml
+
+    blocks = YAML_RE.findall(DOC.read_text(encoding="utf-8"))
+    assert len(blocks) == 1
+    config = ScenarioConfig.model_validate(yaml.safe_load(blocks[0]))
+    assert config.name == "demo"
+    assert config.hijack is not None
+    assert config.faults[0].source.value == "radar"
 
 
 def test_scenario_info_null_duration() -> None:

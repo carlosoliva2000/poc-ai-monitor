@@ -1,0 +1,50 @@
+{
+  "labels": [
+    {
+      "id": "A1",
+      "type": "wind",
+      "source": null,
+      "start_s": 95.0,
+      "end_s": 150.0,
+      "expected_rules": [
+        "ROUTE_DEVIATION"
+      ],
+      "expected_cause": "WIND",
+      "eval_window": [
+        95.0,
+        210.0
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "gps_spoofing",
+      "source": null,
+      "start_s": 168.0,
+      "end_s": 222.0,
+      "expected_rules": [
+        "SOURCE_DISCREPANCY",
+        "ROUTE_DEVIATION"
+      ],
+      "expected_cause": "GPS_SPOOFING",
+      "eval_window": [
+        168.0,
+        282.0
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "hijack",
+      "source": null,
+      "start_s": 335.0,
+      "end_s": 380.0,
+      "expected_rules": [
+        "ROUTE_DEVIATION"
+      ],
+      "expected_cause": "HIJACK",
+      "eval_window": [
+        335.0,
+        440.0
+      ]
+    }
+  ]
+}

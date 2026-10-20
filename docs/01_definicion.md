@@ -85,7 +85,7 @@ Reparto: la plataforma es el «mundo» (simulación, bus, historial y servicios 
 | Fuente | Evento | Periodo | Ruido / notas |
 |---|---|---|---|
 | GPS del dron (`d1-gps`) | `PositionUpdated` | 1 s | σ ≈ 1,5 m; lleva velocidad y rumbo de navegación |
-| Radar de tierra (`radar-1`) | `TrackUpdated` | 2 s | σ ≈ 8 m; sin sesgo; ve la posición real |
+| Radar de tierra (`radar-1`) | `TrackUpdated` | 2 s | σ ≈ 5 m; sin sesgo; ve la posición real |
 | Estación meteo (`meteo-1`) | `WindReported` | 10 s | velocidad media, racha y dirección **de procedencia** (convención meteorológica) |
 | Enlace de mando (`d1-link`) | `LinkStatus` | 5 s | `controller_id`, RSSI, latencia |
 | Batería (`d1-bat`) | `BatteryStatus` | 10 s | ruido de fondo: el agente debería ignorarla |

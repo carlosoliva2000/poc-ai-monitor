@@ -1,0 +1,103 @@
+{
+  "$defs": {
+    "TruthSample": {
+      "additionalProperties": false,
+      "description": "Estado real cada segundo. `course_deg`: rumbo sobre el suelo; `heading_deg`: el del morro.",
+      "properties": {
+        "t": {
+          "title": "T",
+          "type": "number"
+        },
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "speed_mps": {
+          "title": "Speed Mps",
+          "type": "number"
+        },
+        "heading_deg": {
+          "title": "Heading Deg",
+          "type": "number"
+        },
+        "course_deg": {
+          "title": "Course Deg",
+          "type": "number"
+        }
+      },
+      "required": [
+        "t",
+        "x",
+        "y",
+        "speed_mps",
+        "heading_deg",
+        "course_deg"
+      ],
+      "title": "TruthSample",
+      "type": "object"
+    },
+    "TruthWind": {
+      "additionalProperties": false,
+      "description": "Viento real (media y racha) cada segundo, con `from_deg` de procedencia.",
+      "properties": {
+        "t": {
+          "title": "T",
+          "type": "number"
+        },
+        "speed_mps": {
+          "title": "Speed Mps",
+          "type": "number"
+        },
+        "gust_mps": {
+          "title": "Gust Mps",
+          "type": "number"
+        },
+        "from_deg": {
+          "title": "From Deg",
+          "type": "number"
+        }
+      },
+      "required": [
+        "t",
+        "speed_mps",
+        "gust_mps",
+        "from_deg"
+      ],
+      "title": "TruthWind",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Verdad del vuelo. El agente nunca la ve.",
+  "properties": {
+    "duration_s": {
+      "title": "Duration S",
+      "type": "number"
+    },
+    "trajectory": {
+      "items": {
+        "$ref": "#/$defs/TruthSample"
+      },
+      "title": "Trajectory",
+      "type": "array"
+    },
+    "wind": {
+      "items": {
+        "$ref": "#/$defs/TruthWind"
+      },
+      "title": "Wind",
+      "type": "array"
+    }
+  },
+  "required": [
+    "duration_s",
+    "trajectory",
+    "wind"
+  ],
+  "title": "TruthFile",
+  "type": "object"
+}

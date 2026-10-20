@@ -1,0 +1,132 @@
+{
+  "$defs": {
+    "Cause": {
+      "description": "Causas del diagnóstico (`GPS_JAMMING` y `REPLAY` quedan reservadas para el futuro).",
+      "enum": [
+        "WIND",
+        "HIJACK",
+        "GPS_SPOOFING",
+        "SENSOR_FAULT",
+        "UNKNOWN"
+      ],
+      "title": "Cause",
+      "type": "string"
+    },
+    "Label": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[AF]\\d+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/LabelType"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SensorSource"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "start_s": {
+          "title": "Start S",
+          "type": "number"
+        },
+        "end_s": {
+          "title": "End S",
+          "type": "number"
+        },
+        "expected_rules": {
+          "items": {
+            "$ref": "#/$defs/Rule"
+          },
+          "minItems": 1,
+          "title": "Expected Rules",
+          "type": "array"
+        },
+        "expected_cause": {
+          "$ref": "#/$defs/Cause"
+        },
+        "eval_window": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Eval Window",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "source",
+        "start_s",
+        "end_s",
+        "expected_rules",
+        "expected_cause",
+        "eval_window"
+      ],
+      "title": "Label",
+      "type": "object"
+    },
+    "LabelType": {
+      "description": "Tipo de anomalía de `labels.json`.",
+      "enum": [
+        "wind",
+        "hijack",
+        "gps_spoofing",
+        "source_silent"
+      ],
+      "title": "LabelType",
+      "type": "string"
+    },
+    "Rule": {
+      "description": "Reglas del detector.",
+      "enum": [
+        "ROUTE_DEVIATION",
+        "SOURCE_DISCREPANCY",
+        "SOURCE_SILENT"
+      ],
+      "title": "Rule",
+      "type": "string"
+    },
+    "SensorSource": {
+      "description": "Fuentes que se pueden silenciar y en las que puede saltar `SOURCE_SILENT`.",
+      "enum": [
+        "gps",
+        "radar",
+        "meteo",
+        "link",
+        "battery"
+      ],
+      "title": "SensorSource",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "labels": {
+      "items": {
+        "$ref": "#/$defs/Label"
+      },
+      "title": "Labels",
+      "type": "array"
+    }
+  },
+  "required": [
+    "labels"
+  ],
+  "title": "LabelsFile",
+  "type": "object"
+}

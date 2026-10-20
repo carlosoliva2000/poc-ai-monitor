@@ -132,6 +132,15 @@ class ActivityState(StrEnum):
     FINISHED = "finished"
 
 
+class LabelType(StrEnum):
+    """Tipo de anomalía de `labels.json`."""
+
+    WIND = "wind"
+    HIJACK = "hijack"
+    GPS_SPOOFING = "gps_spoofing"
+    SOURCE_SILENT = "source_silent"
+
+
 class ClientKind(StrEnum):
     WEB = "web"
     AI_MODULE = "ai-module"
