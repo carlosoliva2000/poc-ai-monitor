@@ -1,0 +1,120 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "get_events",
+      "description": "Devuelve eventos ya ocurridos de una fuente, del más antiguo al más reciente. Nunca devuelve eventos posteriores al instante actual. Úsala para ver datos concretos (posiciones, viento, enlace, detecciones, tus propias alertas o mensajes del operador).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": ["gps", "radar", "meteo", "link", "battery", "mission", "detector", "monitor", "operator"],
+            "description": "gps = PositionUpdated del dron; radar = TrackUpdated del radar de tierra; meteo = WindReported; link = LinkStatus del enlace de mando; battery = BatteryStatus; mission = eventos de misión; detector = detecciones de reglas; monitor = alertas publicadas por el monitor; operator = mensajes del operador"
+          },
+          "type": {"type": "string", "description": "Opcional: filtrar por tipo de evento, p. ej. WindReported"},
+          "last_n": {"type": "integer", "description": "Cuántos eventos (los más recientes). Por defecto 10, máximo 50"},
+          "since": {"type": "number", "description": "Opcional: sim_time inicial en segundos"},
+          "until": {"type": "number", "description": "Opcional: sim_time final en segundos (se recorta al instante actual)"}
+        },
+        "required": ["source"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_mission_plan",
+      "description": "Devuelve el plan de vuelo: waypoints con coordenadas x,y en metros (x este, y norte), velocidad de crucero, hora estimada de paso y siguiente waypoint pendiente.",
+      "parameters": {"type": "object", "properties": {}, "required": []}
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_track_metrics",
+      "description": "Calcula métricas de la trayectoria entre dos instantes a partir del GPS y del radar: desviación de cada fuente respecto a la ruta planificada, distancia entre GPS y radar, dirección de la deriva, rumbo de avance frente al rumbo al siguiente waypoint y velocidad media. Devuelve también los ids de los eventos usados, para citarlos como evidencia.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "since": {"type": "number", "description": "sim_time inicial en segundos"},
+          "until": {"type": "number", "description": "sim_time final en segundos (se recorta al instante actual)"}
+        },
+        "required": ["since", "until"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_my_alerts",
+      "description": "Devuelve las alertas que ha publicado el agente monitor, con su estado (open, closed o superseded).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "only_open": {"type": "boolean", "description": "true para ver solo las abiertas. Por defecto false"}
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_flight_summary",
+      "description": "Resumen del vuelo completo: duración, distancia según GPS y según radar, waypoints alcanzados, si la misión se completó, detecciones por regla y alertas por causa.",
+      "parameters": {"type": "object", "properties": {}, "required": []}
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "publish_alert",
+      "description": "Publica en el bus una alerta de anomalía (evento AnomalyDetected) con tu diagnóstico. Es tu única forma de actuar. Si los datos no cumplen el formato, devuelve los errores para que lo corrijas.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "detection_ids": {"type": "array", "items": {"type": "string"}, "description": "Ids de las detecciones que motivan la alerta (det-…)"},
+          "cause": {"type": "string", "enum": ["WIND", "HIJACK", "GPS_SPOOFING", "SENSOR_FAULT", "UNKNOWN"], "description": "Causa más probable"},
+          "severity": {"type": "string", "enum": ["low", "medium", "high"]},
+          "confidence": {"type": "number", "description": "Confianza en la causa, de 0 a 1"},
+          "summary": {"type": "string", "description": "Una frase, como máximo 160 caracteres"},
+          "explanation": {"type": "string", "description": "Razonamiento con datos concretos y tiempos (T+mm:ss)"},
+          "recommendation": {"type": "string", "description": "Qué recomiendas al responsable del dron. Solo recomendar: no puedes actuar"},
+          "evidence_event_ids": {"type": "array", "items": {"type": "string"}, "description": "Ids de los eventos que respaldan el diagnóstico (deben existir)"},
+          "supersedes": {"type": "string", "description": "Opcional: alert_id de una alerta tuya anterior a la que esta sustituye"}
+        },
+        "required": ["detection_ids", "cause", "severity", "confidence", "summary", "explanation", "recommendation", "evidence_event_ids"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "close_alert",
+      "description": "Cierra una alerta tuya que ya no aplica (publica un evento AlertClosed; las alertas no se modifican).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "alert_id": {"type": "string"},
+          "reason": {"type": "string", "description": "Por qué se cierra, con datos"}
+        },
+        "required": ["alert_id", "reason"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "load_skill",
+      "description": "Carga una skill (procedimiento de diagnóstico o de formato) de las que aparecen en el índice del prompt de sistema y devuelve su contenido.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string", "description": "Nombre exacto de la skill, p. ej. route-deviation"}
+        },
+        "required": ["name"]
+      }
+    }
+  }
+]

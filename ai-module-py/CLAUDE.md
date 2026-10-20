@@ -1,0 +1,22 @@
+# ai-module-py/
+
+El **módulo de IA**: la extensión del worker. Proceso aparte que se conecta a la plataforma por el WebSocket (`/ws`) y por la API de tools (`/api/tools/{nombre}`). **No importa nada de `platform/`**, solo `contracts/python`. Se portará a Java, así que el diseño tiene que poder traducirse tal cual: lógica aquí, prompts/skills/esquemas en `agent-assets/`.
+
+## Piezas
+1. **Cliente del bus** (`bus_client.py`): `hello` como `ai-module`, se suscribe a `citadel.pub.evt.>` y publica los eventos del módulo (topics `…evt.ai…`). Reconexión simple.
+2. **Detector de reglas** (`detector.py`): las tres reglas de `docs/01_definicion.md` §6 con histéresis, umbrales en un fichero de configuración. `SOURCE_SILENT` va **por fuente** (umbral según su periodo) y se comprueba con el avance del reloj simulado (`sim_time` de cualquier evento que llegue), no con el reloj de pared, para que funcione igual a cualquier velocidad. `SOURCE_DISCREPANCY` no se evalúa con un radar de más de 6 s ni `ROUTE_DEVIATION` sin GPS reciente. Necesita el plan (lo saca de `MissionPlanned`). Ignora los eventos del dominio `sim` salvo para el reloj. Es **determinista y sin LLM**. Pruebas sobre `runs/<escenario>/events.jsonl` de los seis escenarios: `nominal` sin detecciones; cada anomalía, la regla esperada **una vez por episodio**; `fallos`, `SOURCE_SILENT` con la fuente correcta.
+3. **Motor de agente** (`agent/engine.py`): bucle de tool calling a mano con el SDK `openai` (Chat Completions) contra vLLM, como el caso f del spike 1. Recibe la configuración de `agent-assets/agents.yaml`. Construye el prompt de sistema = orquestación + salida + índice de skills (de la cabecera `name`/`description` de cada `SKILL.md`); sustituye los marcadores `<<…>>`. Ejecuta tools: las de datos por HTTP a la plataforma; `publish_alert`, `close_alert` y `load_skill` en local. Tope de iteraciones, guardrails (§7.5) y trazas (§7.6).
+4. **Monitor** (`monitor.py`): cola de detecciones con **un solo trabajador** (una invocación a la vez); si llegan varias mientras trabaja, se agrupan en la siguiente. Opción B de memoria: cada invocación es nueva, con el resumen de estado (alertas abiertas, últimas 3 decisiones). Modo guiado según `agents.yaml`.
+5. **Informe** (`report.py`): con `SimulationFinished`, cuando la cola del monitor está vacía. Publica `ReportGenerated` y guarda `runs/<escenario>/<run_id>/informe.md`.
+6. **Chats** (`chat.py`): uno por agente (`conversation_id` `monitor` y `report`), con historial (últimos 12 mensajes), en **streaming** (`stream=True`; publica `AgentReplyChunk` efímeros y al final `AgentReply`). Corren en paralelo al monitor (vLLM atiende peticiones concurrentes). El prompt de sistema del chat se **reconstruye en cada pregunta** (cambia el instante actual); el historial guarda solo los mensajes de usuario y las respuestas finales. El chat del informe solo responde después del informe; antes, contesta que aún no hay informe.
+7. **Evaluación** (`evaluate.py`): §8 de la definición, sobre `timeline.jsonl`, `llm_trace.jsonl` y `labels.json` → `eval.md`.
+
+## Reglas del cliente LLM (de los spikes 0 y 1)
+- `temperature`, `top_p` y `max_tokens` de `agents.yaml`, **siempre explícitos** (si no se envían, vLLM aplica el `generation_config.json` del modelo); `tool_choice: "auto"`.
+- Hay llamada a tool si `message.tool_calls` no está vacío; **nunca** mirar `finish_reason`.
+- Los esquemas de las tools se envían **tal cual** están en `agent-assets/tools.json` (filtrados por la lista del agente). No los regeneres desde funciones Python: en el spike 1 cambiar la forma de definir las herramientas cambió el comportamiento del modelo.
+- Los argumentos de las tool calls llegan como texto JSON: si no se pueden parsear, devuelve el error al modelo como resultado de la tool (cuenta como iteración).
+- Devuelve al modelo los resultados de las tools como JSON compacto; recorta resultados enormes (máximo ~4000 caracteres) avisando de que se ha recortado.
+
+## Comando
+`uv run python -m ai_module --platform http://127.0.0.1:8100` (documenta el definitivo en `docs/fases/`).

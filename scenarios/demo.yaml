@@ -1,0 +1,49 @@
+name: demo
+description: >-
+  Las tres anomalías en un vuelo: viento (WP1→WP2), spoofing (WP2→WP3) y secuestro (WP4→BASE).
+seed: 42
+t0: "2026-10-20T10:00:00Z"
+max_duration_s: 900
+
+drone:
+  cruise_speed_mps: 15.0
+  max_accel_mps2: 2.0
+  max_turn_rate_dps: 40.0
+  altitude_m: 60.0
+  acceptance_radius_m: 25.0
+  lookahead_m: 40.0         # punto de mira sobre el tramo, por delante de la proyección
+
+mission:
+  id: MSN-DEMO
+  waypoints:            # BASE = (0, 0) se añade al principio y al final
+    - {id: WP1, x: 500.0, y: 1200.0}
+    - {id: WP2, x: 1600.0, y: 1500.0}
+    - {id: WP3, x: 2400.0, y: 800.0}
+    - {id: WP4, x: 1900.0, y: -200.0}
+  return_to_base: true
+
+sensors:
+  gps: {period_s: 1.0, sigma_m: 1.5, sats: 14, hdop: 0.8}
+  radar: {id: radar-1, period_s: 2.0, sigma_m: 8.0}
+  meteo: {id: meteo-1, period_s: 10.0, sigma_mps: 0.5, sigma_deg: 8.0}
+  link: {period_s: 5.0, controller_id: GCS-1, rssi_dbm: -62.0, latency_ms: 45.0}
+  battery: {period_s: 10.0, start_pct: 100.0, drain_pct_per_min: 1.2}
+
+wind:
+  base: {speed_mps: 2.0, gust_mps: 3.5, from_deg: 300.0}
+  episodes:
+    - {start_s: 95.0, end_s: 150.0, ramp_s: 10.0, speed_mps: 12.0, gust_mps: 16.0, from_deg: 350.0}
+
+spoofing:
+  start_s: 168.0
+  end_s: 222.0
+  drift_rate_mps: 1.5
+  direction_deg: 45.0
+
+hijack:
+  start_s: 335.0
+  end_s: 380.0
+  target: {x: 1500.0, y: -1400.0}
+  link_hint: {controller_id: UNK-4F2A, rssi_dbm: -79.0, latency_ms: 120.0}
+
+faults: []              # fuentes silenciadas programadas (ver README)

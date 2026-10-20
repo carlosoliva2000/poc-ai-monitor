@@ -1,0 +1,66 @@
+# Configuración de cada instancia del motor de agente.
+# El código lee este fichero; los prompts y las skills están en ficheros aparte.
+# Marcadores que el código sustituye en los prompts: <<nombre>> (ver cada prompt).
+
+llm:
+  base_url: http://127.0.0.1:8000/v1
+  api_key: EMPTY            # vLLM local no la comprueba
+  model: Qwen/Qwen2.5-14B-Instruct-AWQ
+  # Muestreo por defecto; cada agente lo puede sobrescribir. Se envía SIEMPRE explícito:
+  # si no, vLLM aplica el generation_config.json del modelo (0.7 / top_p 0.8 / top_k 20).
+  # top_k no se envía (se queda el 20 del modelo; con temperature 0 no influye).
+  temperature: 0
+  top_p: 1.0
+  max_tokens: 800
+  tool_choice: auto         # nunca por nombre (ver ref/02_lecciones_spikes.md)
+
+agents:
+  monitor:
+    system_prompt: prompts/monitor_system.md
+    objective_prompt: prompts/monitor_objective.md   # secciones: raised, updated, cleared
+    output_prompt: prompts/monitor_output.md        # se añade al final del prompt de sistema
+    tools: [get_events, get_mission_plan, get_track_metrics, get_my_alerts, publish_alert, close_alert, load_skill]
+    disabled_tools: []      # experimento: [get_track_metrics]
+    skills: [route-deviation, source-discrepancy]
+    max_iterations: 8
+    temperature: 0          # decisiones reproducibles y evaluación comparable
+    guided_mode: false      # true = el módulo precarga la skill que corresponde a la regla
+    guided_skill_by_rule:
+      ROUTE_DEVIATION: route-deviation
+      SOURCE_DISCREPANCY: source-discrepancy
+      SOURCE_SILENT: source-discrepancy
+    memory: per_invocation  # opción B; la opción A (conversation) queda como mejora
+    last_decisions_in_state: 3
+
+  chat_monitor:
+    system_prompt: prompts/chat_monitor_system.md
+    tools: [get_events, get_mission_plan, get_track_metrics, get_my_alerts, load_skill]
+    skills: [route-deviation, source-discrepancy]
+    max_iterations: 6
+    temperature: 0.7        # valores recomendados por el modelo: texto más natural
+    top_p: 0.8
+    memory: conversation
+    max_history_messages: 12
+    stream: true
+
+  report:
+    system_prompt: prompts/report_system.md
+    objective_prompt: prompts/report_objective.md
+    tools: [get_flight_summary, get_events, get_mission_plan, get_track_metrics, get_my_alerts, load_skill]
+    skills: [report-format, route-deviation, source-discrepancy]
+    max_iterations: 10
+    temperature: 0.7
+    top_p: 0.8
+    max_tokens: 1800
+    memory: per_invocation
+
+  chat_report:
+    system_prompt: prompts/chat_report_system.md
+    tools: [get_flight_summary, get_events, get_mission_plan, get_track_metrics, get_my_alerts, load_skill]
+    skills: [report-format, route-deviation, source-discrepancy]
+    max_iterations: 6
+    temperature: 0.7
+    top_p: 0.8
+    memory: conversation
+    max_history_messages: 12
+    stream: true
