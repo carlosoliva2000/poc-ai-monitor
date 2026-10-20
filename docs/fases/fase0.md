@@ -91,9 +91,15 @@ Decisiones de implementación que **no estaban en el documento** (dímelo si alg
 - `.gitignore`: añadidos `runs/*`, `!runs/.gitkeep` y `.tools/`.
 
 ### 2.6 Instantánea limpia y reglas 15–16 (añadido tras la revisión)
-- `CLAUDE.md`: reglas 15 (instantánea limpia) y 16 (sin referencias a Claude en el proyecto).
-- Antes de copiar, un grep previo encontró tres menciones en ficheros que entran en la instantánea limpia, y se corrigieron **en el repo**: `docs/01_definicion.md` línea 3 (cita de cabecera reescrita sin mencionar `CLAUDE.md` ni a Claude), `docs/01_definicion.md` línea 15 («con Claude Code» eliminado) y el docstring de `contracts/python/tests/test_schemas_up_to_date.py` (citaba `CLAUDE.md`).
-- Resultado del comando de la regla 15 sobre `snapshots-limpias/fase0/` (103 ficheros): `instantánea limpia` (el grep no devolvió ningún fichero).
+- `CLAUDE.md`: reglas 15 (instantánea limpia, ahora excluyendo `docs/` entera y con dos comprobaciones: palabras de Claude/spikes/documentos/reuniones y nombres de personas) y 16 (sin referencias propias de Claude Code, personas, reuniones, spikes ni a ficheros excluidos de la instantánea limpia).
+- Con las comprobaciones nuevas sobre los ficheros que entran en la copia limpia se encontraron estas menciones, corregidas **en el repo**:
+  - `docs/01_definicion.md` líneas 3 y 15 y el docstring de `contracts/python/tests/test_schemas_up_to_date.py` (primera pasada; `docs/` ya no entra en la copia limpia, pero se dejaron corregidas).
+  - `contracts/eventos.md:37`: quitado «taxonomía de David, 13/10/2026»; queda la forma del topic.
+  - `agent-assets/agents.yaml:15`: el comentario ya no remite a `ref/`; dice el motivo (con `tool_choice` por nombre vLLM devuelve `finish_reason "stop"` aunque haya llamada).
+  - `scenarios/README.md`: sin las referencias a `ref/simcheck_controlador.py` y `docs/01_definicion.md` (explicado en una frase en el propio fichero) y, además, la de `docs/fases/fase1.md` (línea 45), que no estaba en tu lista pero incumplía la regla 16: ahora dice «en el informe de la fase».
+  - `ruff.toml:1`: quitada la mención al spike.
+  - `.gitignore` y `LICENSE` no se tocaron.
+- Resultado sobre `snapshots-limpias/fase0/` (101 ficheros, rehecha desde cero porque la anterior contenía `docs/`): comprobación 1 sin coincidencias (exit 1) y comprobación 2 sin coincidencias (exit 1). `snapshots/fase0/` (regla 13) rehecha con el estado actual (115 ficheros, idéntica al repo).
 
 ## 3. Cómo se ejecuta
 ```bash

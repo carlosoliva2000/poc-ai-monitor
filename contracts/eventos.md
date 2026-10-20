@@ -34,7 +34,7 @@
 - El generador escribe los eventos sin `seq` ni `ingestion_time`; los pone el bus al publicar.
 
 ## 3. Topics
-Forma (taxonomía de David, 13/10/2026): `<namespace>.<clasification>.<type>.<domain>.<routing>.<event>.<version>`, con `namespace = citadel`, `clasification = pub` (sin clasificar; es una PoC), `type = evt | cmd`.
+Forma: `<namespace>.<clasification>.<type>.<domain>.<routing>.<event>.<version>`, con `namespace = citadel`, `clasification = pub` (sin clasificar; es una PoC), `type = evt | cmd`.
 
 | Topic | Evento | Publica |
 |---|---|---|

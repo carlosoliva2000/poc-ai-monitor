@@ -13,7 +13,7 @@ Cada YAML describe una misión completa y es **determinista** con su `seed`. Tod
 
 ## Campos
 - `seed`, `t0` (ISO UTC; `event_time = t0 + sim_time`), `max_duration_s` (si se alcanza, `MissionCompleted` con `completed: false, reason: timeout`).
-- `drone`: velocidad de crucero, aceleración máxima, velocidad de giro máxima, altitud, radio de aceptación de waypoint y `lookahead_m` (distancia del punto de mira sobre el tramo; ver `docs/01_definicion.md` §4.2).
+- `drone`: velocidad de crucero, aceleración máxima, velocidad de giro máxima, altitud, radio de aceptación de waypoint y `lookahead_m` (distancia del punto de mira: el dron apunta a un punto situado `lookahead_m` por delante de su posición proyectada sobre el tramo pendiente).
 - `mission`: `id`, `waypoints` (la base `BASE` está en (0, 0) y se añade al principio y, con `return_to_base: true`, al final).
 - `sensors`: periodo y ruido de cada fuente (ver `contracts/eventos.md`).
 - `wind.base` (constante) y `wind.episodes` (con rampa de subida y bajada de `ramp_s`). `from_deg` es la **procedencia**.
@@ -35,11 +35,11 @@ Cada YAML describe una misión completa y es **determinista** con su `seed`. Tod
 - `plan_xy.png`, `scenario_xy.png`, `scenario_time.png` (con `plot_scenario.py`).
 
 ## Criterios de aceptación del generador (Fase 1)
-Valores de referencia de `ref/simcheck_controlador.py` (misma física, sin ruido) entre paréntesis.
+Entre paréntesis, los valores de referencia de una simulación de la misma física sin sensores ni ruido.
 - `nominal`: desviación de la verdad y del GPS respecto al plan < 15 m en todo el vuelo, esquinas incluidas (≈ 13 m); distancia GPS–radar dentro del ruido.
 - `viento`: desviación máxima entre 40 y 120 m durante el episodio (≈ 52 m); GPS y radar coinciden; el dron recupera la ruta.
 - `spoofing`: el GPS se mantiene a < 15 m del plan mientras dura el engaño (< 10 m); la verdad (y el radar) se alejan hasta unos 70–90 m (≈ 75 m); al final del engaño el GPS salta y el dron corrige.
 - `secuestro`: la verdad y el GPS se alejan cientos de metros hacia el `target` (≈ 700 m); `LinkStatus` cambia durante el secuestro; tras recuperar el control se reincorpora a la ruta, vuelve a la base y la misión se completa.
 - `fallos`: trayectoria idéntica a `nominal`; en `events.jsonl` no hay `TrackUpdated` entre 120 y 180 s ni `PositionUpdated` entre 300 y 312 s, y están los `FaultInjected`/`FaultCleared` correspondientes.
 - `demo`: las tres anomalías se ven separadas en el tiempo, en el orden viento → spoofing → secuestro.
-Si con estos parámetros no se cumple algún criterio, ajusta los parámetros del YAML (no la física) y anótalo en `docs/fases/fase1.md`.
+Si con estos parámetros no se cumple algún criterio, ajusta los parámetros del YAML (no la física) y anótalo en el informe de la fase.

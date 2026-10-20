@@ -1,4 +1,4 @@
-# Configuración de ruff de poc-ai-monitor (copiada de ~/spike1/py/ruff.toml).
+# Configuración de ruff de poc-ai-monitor.
 # Equivalente a google-java-format (format) + Checkstyle (lint) del Java: 100 columnas, 4 espacios.
 # ruff no está en los venvs (no cuenta como dependencia): es una herramienta global de uv.
 line-length = 100
