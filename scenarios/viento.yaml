@@ -38,4 +38,4 @@ spoofing: null
 
 hijack: null
 
-faults: []              # fuentes silenciadas programadas (ver README)
+faults: []              # fallos programados, mute o loss (ver README)

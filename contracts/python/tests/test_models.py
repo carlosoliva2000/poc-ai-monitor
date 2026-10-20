@@ -6,10 +6,12 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from helpers import POSITION, draft, position_draft
-from poc_contracts.api import ScenariosResponse
+from poc_contracts.api import ScenariosResponse, TimelineResponse
 from poc_contracts.enums import ConversationId, EventType
 from poc_contracts.envelope import Envelope, EventDraft
-from poc_contracts.payloads import AnomalyDetected, DetectionRaised
+from poc_contracts.payloads import AnomalyDetected, DetectionRaised, FaultCleared, FaultInjected
+from poc_contracts.run_files import Label
+from poc_contracts.scenario import FaultConfig
 from poc_contracts.tools import (
     GetEventsArgs,
     PublishAlertArgs,
@@ -110,6 +112,14 @@ def test_source_silent_needs_source_and_seconds() -> None:
         DetectionRaised.model_validate({**DETECTION, "source": "gps"})
 
 
+def test_gps_degraded_is_about_the_gps() -> None:
+    degraded = {**DETECTION, "rule": "GPS_DEGRADED", "unit": "hdop", "source": "gps"}
+    assert DetectionRaised.model_validate(degraded).source == "gps"
+    for bad in (None, "radar"):
+        with pytest.raises(ValidationError, match="exige `source: gps`"):
+            DetectionRaised.model_validate({**degraded, "source": bad})
+
+
 def test_anomaly_limits() -> None:
     alert: dict[str, Any] = {
         "alert_id": "ai-0003", "detection_ids": ["det-0002"], "cause": "WIND", "severity": "low",
@@ -118,7 +128,7 @@ def test_anomaly_limits() -> None:
         "fallback": False,
     }  # fmt: skip
     assert AnomalyDetected.model_validate(alert).cause == "WIND"
-    for bad in ({"confidence": 1.2}, {"cause": "GPS_JAMMING"}, {"severity": "critical"},
+    for bad in ({"confidence": 1.2}, {"cause": "REPLAY"}, {"severity": "critical"},
                 {"summary": "x" * 161}):  # fmt: skip
         with pytest.raises(ValidationError):
             AnomalyDetected.model_validate({**alert, **bad})
@@ -140,7 +150,17 @@ def test_anomaly_limits() -> None:
         {"op": "control", "action": "speed", "value": 16},
         {"op": "control", "action": "speed", "value": 0.5},
         {"op": "control", "action": "wait_agent", "value": True},
-        {"op": "control", "action": "fault", "value": {"source": "radar", "muted": True}},
+        {"op": "control", "action": "interactive", "value": True},
+        {
+            "op": "control",
+            "action": "fault",
+            "value": {"source": "radar", "mode": "mute", "active": True},
+        },
+        {
+            "op": "control",
+            "action": "fault",
+            "value": {"source": "gps", "mode": "loss", "active": False},
+        },
     ],
 )
 def test_valid_client_messages(message: dict[str, Any]) -> None:
@@ -158,7 +178,18 @@ def test_valid_client_messages(message: dict[str, Any]) -> None:
         {"op": "control", "action": "speed", "value": 3},
         {"op": "control", "action": "wait_agent", "value": "yes"},
         {"op": "control", "action": "load"},
-        {"op": "control", "action": "fault", "value": {"source": "sim", "muted": True}},
+        {"op": "control", "action": "interactive", "value": "yes"},
+        {
+            "op": "control",
+            "action": "fault",
+            "value": {"source": "sim", "mode": "mute", "active": True},
+        },
+        {
+            "op": "control",
+            "action": "fault",
+            "value": {"source": "radar", "mode": "loss", "active": True},
+        },
+        {"op": "control", "action": "fault", "value": {"source": "radar", "muted": True}},
         {"op": "control", "action": "rewind", "value": 1},
         {"op": "dance"},
     ],
@@ -171,7 +202,8 @@ def test_invalid_client_messages(message: dict[str, Any]) -> None:
 def test_server_messages() -> None:
     state = {
         "op": "state", "status": "running", "scenario": "demo", "run_id": "20261020-101500",
-        "sim_time": 61.0, "speed": 4.0, "wait_agent": True, "muted_sources": ["radar"],
+        "sim_time": 61.0, "speed": 4.0, "wait_agent": True, "interactive": True,
+        "active_faults": [{"source": "gps", "mode": "loss", "origin": "manual"}],
         "cursor": 212, "total_events": 913,
     }  # fmt: skip
     SERVER.validate_python(state)
@@ -182,7 +214,9 @@ def test_server_messages() -> None:
     with pytest.raises(ValidationError):
         SERVER.validate_python({"op": "event", "event": position_draft()})  # sin seq
     with pytest.raises(ValidationError):
-        SERVER.validate_python({**state, "muted_sources": ["sim"]})
+        SERVER.validate_python({**state, "active_faults": [{"source": "gps", "mode": "mute"}]})
+    with pytest.raises(ValidationError):
+        SERVER.validate_python({**state, "muted_sources": ["radar"]})
 
 
 # --- API y tools -----------------------------------------------------------------------------
@@ -238,3 +272,47 @@ def test_track_metrics_without_radar() -> None:
         }
     )  # fmt: skip
     assert not metrics.radar_available and metrics.samples.radar == 0
+
+
+# --- Fallos: mute y loss ---------------------------------------------------------------------
+
+
+def test_loss_only_exists_for_the_gps() -> None:
+    assert FaultInjected.model_validate({"source": "gps", "mode": "loss", "origin": "manual"})
+    assert FaultCleared.model_validate({"source": "radar", "mode": "mute", "origin": "scenario"})
+    with pytest.raises(ValidationError, match="solo existe para el GPS"):
+        FaultInjected.model_validate({"source": "radar", "mode": "loss", "origin": "manual"})
+    with pytest.raises(ValidationError):  # el tipo de fallo es obligatorio
+        FaultInjected.model_validate({"source": "radar", "origin": "manual"})
+
+
+def test_scenario_fault_needs_a_mode() -> None:
+    assert FaultConfig.model_validate({"source": "gps", "mode": "loss", "start_s": 1, "end_s": 2})
+    for bad in (
+        {"source": "gps", "start_s": 1, "end_s": 2},
+        {"source": "link", "mode": "loss", "start_s": 1, "end_s": 2},
+    ):
+        with pytest.raises(ValidationError):
+            FaultConfig.model_validate(bad)
+
+
+def test_labels_of_faults_need_a_source() -> None:
+    label: dict[str, Any] = {
+        "id": "F1", "type": "gps_loss", "source": "gps", "start_s": 245.0, "end_s": 290.0,
+        "expected_rules": ["GPS_DEGRADED"], "expected_cause": "GPS_JAMMING",
+        "also_accepted_causes": ["SENSOR_FAULT"], "eval_window": [245.0, 350.0],
+    }  # fmt: skip
+    assert Label.model_validate(label).also_accepted_causes == ["SENSOR_FAULT"]
+    with pytest.raises(ValidationError, match="obligatoria en los fallos"):
+        Label.model_validate({**label, "source": None})
+    with pytest.raises(ValidationError, match="obligatoria en los fallos"):
+        Label.model_validate({**label, "type": "wind"})
+
+
+def test_timeline_response() -> None:
+    full = position_draft(seq=1, ingestion_time="2026-10-20T08:15:32.418Z")
+    assert (
+        TimelineResponse.model_validate({"events": [full], "truncated": False}).events[0].seq == 1
+    )
+    with pytest.raises(ValidationError):
+        TimelineResponse.model_validate({"events": [position_draft()], "truncated": False})

@@ -6,7 +6,8 @@ import pytest
 from pydantic import ValidationError
 
 from helpers import scenario_config
-from platform_app.generator.controller import STEP_S, Flight, fly
+from platform_app.generator.controller import STEP_S
+from platform_app.generator.simulator import Flight, fly
 from platform_app.geometry import angle_diff_deg, distance_to_route
 from poc_contracts.scenario import ScenarioConfig
 

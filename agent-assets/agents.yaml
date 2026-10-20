@@ -29,6 +29,7 @@ agents:
       ROUTE_DEVIATION: route-deviation
       SOURCE_DISCREPANCY: source-discrepancy
       SOURCE_SILENT: source-discrepancy
+      GPS_DEGRADED: source-discrepancy
     memory: per_invocation  # opción B; la opción A (conversation) queda como mejora
     last_decisions_in_state: 3
 

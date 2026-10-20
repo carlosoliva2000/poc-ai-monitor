@@ -26,6 +26,7 @@ from poc_contracts.enums import LabelType
 from poc_contracts.run_files import Label, PlanFile
 
 from .generator.scenario_io import load_scenario
+from .geometry import Point
 from .paths import RUNS_DIR
 from .scenario_metrics import (
     RunData,
@@ -102,6 +103,8 @@ def _clock(seconds: float, prefix: str = "T+") -> str:
 def _label_name(label: Label) -> str:
     if label.type == LabelType.SOURCE_SILENT:
         return f"{label.source.value if label.source else '?'} silenciado"
+    if label.type == LabelType.GPS_LOSS:
+        return "pérdida de GPS"
     return LABEL_NAMES[label.type]
 
 
@@ -233,6 +236,22 @@ def _truth_segment(run: RunData, a: float, b: float) -> tuple[list[float], list[
     return [s.x for s in pts], [s.y for s in pts]
 
 
+def _callouts(ax: Axes, callouts: list[tuple[Label, float, float]], center: Point) -> None:
+    """Etiqueta de cada tramo, hacia fuera de la ruta y sin salirse de los ejes."""
+    (x0, x1), (y0, y1) = ax.get_xlim(), ax.get_ylim()
+    for label, mx, my in callouts:
+        dx, dy = mx - center[0], my - center[1]
+        norm = math.hypot(dx, dy) or 1.0
+        tx = min(max(mx + 600 * dx / norm, x0 + 330), x1 - 330)
+        ty = min(max(my + 600 * dy / norm, y0 + 90), y1 - 170)
+        ax.annotate(
+            f"{label.id} · {_label_name(label)}\n{_clock(label.start_s)} – {_clock(label.end_s)}",
+            (mx, my), xytext=(tx, ty), textcoords="data",
+            ha="center", va="center", fontsize=9, fontweight="bold", color=INK, zorder=8,
+            arrowprops={"arrowstyle": "-", "color": INK_SOFT, "lw": 0.9},
+        )  # fmt: skip
+
+
 def plot_xy(name: str, out_dir: Path) -> Path:
     """Plan en tono claro, trayectoria real, puntos de GPS y radar y zonas de anomalía."""
     run = load_run(name, out_dir.parent)
@@ -248,22 +267,22 @@ def plot_xy(name: str, out_dir: Path) -> Path:
     # zonas de anomalía y de fallo: la trayectoria real resaltada en esa ventana y su etiqueta
     pts = [(w.x, w.y) for w in plan.waypoints]
     cx, cy = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
+    callouts: list[tuple[Label, float, float]] = []  # (etiqueta, x, y) del punto medio del tramo
     for label in run.labels:
         xs, ys = _truth_segment(run, label.start_s, label.end_s)
         ax.plot(xs, ys, color=BAND, lw=15, alpha=0.2, solid_capstyle="round", zorder=1)
-        mx, my = xs[len(xs) // 2], ys[len(ys) // 2]
-        dx, dy = mx - cx, my - cy
-        norm = math.hypot(dx, dy) or 1.0
-        ax.annotate(
-            f"{label.id} · {_label_name(label)}\n{_clock(label.start_s)} – {_clock(label.end_s)}",
-            (mx, my), xytext=(100 * dx / norm, 100 * dy / norm), textcoords="offset points",
-            ha="center", va="center", fontsize=9, fontweight="bold", color=INK, zorder=8,
-            arrowprops={"arrowstyle": "-", "color": INK_SOFT, "lw": 0.9},
-        )  # fmt: skip
+        callouts.append((label, xs[len(xs) // 2], ys[len(ys) // 2]))
 
-    gps = [(e["payload"]["x"], e["payload"]["y"]) for e in run.of_type("PositionUpdated")]
+    fixes = run.of_type("PositionUpdated")
+    gps = [(e["payload"]["x"], e["payload"]["y"]) for e in fixes if e["payload"]["fix"] != "none"]
+    estimated = [
+        (e["payload"]["x"], e["payload"]["y"]) for e in fixes if e["payload"]["fix"] == "none"
+    ]
     radar = [(e["payload"]["x"], e["payload"]["y"]) for e in run.of_type("TrackUpdated")]
     ax.scatter(*zip(*gps, strict=True), s=7, color=GPS, alpha=0.55, linewidths=0, zorder=2)
+    if estimated:  # sin fix: la posición es la estima del dron
+        ax.scatter(*zip(*estimated, strict=True), s=22, facecolor="none", edgecolor=GPS,
+                   linewidths=0.9, zorder=2)  # fmt: skip
     ax.scatter(*zip(*radar, strict=True), s=16, color=RADAR, marker="D", alpha=0.6,
                linewidths=0, zorder=2)  # fmt: skip
 
@@ -288,6 +307,7 @@ def plot_xy(name: str, out_dir: Path) -> Path:
         xs_all.append(t.x)
         ys_all.append(t.y)
     _style_xy(ax, xs_all, ys_all)
+    _callouts(ax, callouts, (cx, cy))
     _speed_colorbar(fig, arrows, ax)
 
     handles = [
@@ -298,6 +318,11 @@ def plot_xy(name: str, out_dir: Path) -> Path:
         Line2D([], [], color=RADAR, lw=0, marker="D", markersize=5, label="radar (0,5 Hz)"),
         Line2D([], [], color=BAND, lw=9, alpha=0.25, label="tramo con anomalía o fallo"),
     ]  # fmt: skip
+    if estimated:
+        handles.append(
+            Line2D([], [], color=GPS, lw=0, marker="o", markersize=6, markerfacecolor="none",
+                   label="GPS sin fix (posición estimada)")
+        )  # fmt: skip
     fig.legend(handles=handles, loc="lower center", ncol=3, fontsize=8.5)
     _titles(fig, f"{name} · trayectoria planificada y real", _summary(run))
     path = out_dir / "scenario_xy.png"
@@ -395,8 +420,8 @@ def plot_time(name: str, out_dir: Path) -> Path:
         ax.grid(True, axis="y")
         for label in run.labels:
             ax.axvspan(label.start_s, label.end_s, color=BAND, alpha=0.13, lw=0, zorder=0)
-    for label in run.labels:
-        dev_ax.text(label.start_s + 1.5, 0.97, f"{label.id} {_label_name(label)}",
+    for k, label in enumerate(run.labels):  # alternan de altura para que no se pisen
+        dev_ax.text(label.start_s + 1.5, 0.97 - 0.08 * (k % 2), f"{label.id} {_label_name(label)}",
                     transform=dev_ax.get_xaxis_transform(), va="top", ha="left", fontsize=8.5,
                     fontweight="bold", color=INK)  # fmt: skip
     wind_ax.set_xlim(0, end)

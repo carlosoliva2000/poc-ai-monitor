@@ -74,10 +74,13 @@
     },
     "FaultConfig": {
       "additionalProperties": false,
-      "description": "Fuente silenciada en `[start_s, end_s)`: solo afecta a lo que se reporta.",
+      "description": "Fallo en `[start_s, end_s)`: `mute` (la fuente no se publica) o `loss` (solo GPS).",
       "properties": {
         "source": {
           "$ref": "#/$defs/SensorSource"
+        },
+        "mode": {
+          "$ref": "#/$defs/FaultMode"
         },
         "start_s": {
           "minimum": 0,
@@ -91,11 +94,21 @@
       },
       "required": [
         "source",
+        "mode",
         "start_s",
         "end_s"
       ],
       "title": "FaultConfig",
       "type": "object"
+    },
+    "FaultMode": {
+      "description": "Tipo de fallo: `mute` (la fuente no se publica) o `loss` (solo GPS: pérdida de señal).",
+      "enum": [
+        "mute",
+        "loss"
+      ],
+      "title": "FaultMode",
+      "type": "string"
     },
     "GpsConfig": {
       "additionalProperties": false,

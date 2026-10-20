@@ -1,5 +1,14 @@
 {
   "$defs": {
+    "FaultMode": {
+      "description": "Tipo de fallo: `mute` (la fuente no se publica) o `loss` (solo GPS: pérdida de señal).",
+      "enum": [
+        "mute",
+        "loss"
+      ],
+      "title": "FaultMode",
+      "type": "string"
+    },
     "FaultOrigin": {
       "enum": [
         "manual",
@@ -22,10 +31,13 @@
     }
   },
   "additionalProperties": false,
-  "description": "Fuente silenciada. El agente no ve este evento.",
+  "description": "Fallo activado (fuente silenciada o pérdida de GPS). El agente no ve este evento.",
   "properties": {
     "source": {
       "$ref": "#/$defs/SensorSource"
+    },
+    "mode": {
+      "$ref": "#/$defs/FaultMode"
     },
     "origin": {
       "$ref": "#/$defs/FaultOrigin"
@@ -33,6 +45,7 @@
   },
   "required": [
     "source",
+    "mode",
     "origin"
   ],
   "title": "FaultInjected",

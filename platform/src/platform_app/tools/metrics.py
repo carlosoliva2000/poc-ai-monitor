@@ -1,0 +1,174 @@
+"""Tool `get_track_metrics`: métricas de trayectoria calculadas a partir de los eventos.
+
+Cálculos (todo sale de `PositionUpdated` del GPS y `TrackUpdated` del radar en la ventana):
+- Desviación respecto al plan: distancia de cada posición a la polilínea de waypoints de
+  `MissionPlanned` (con la vuelta a la base).
+- `trend`: media del primer tercio de las muestras frente a la del último tercio. Es
+  `increasing`/`decreasing` si cambia más de un 20 % y más de 2 m; si no, `stable`. Con menos de
+  3 muestras es `None`.
+- `gps_radar_distance_m`: distancia entre cada medida del radar y el GPS interpolado a su
+  instante (no se interpola a través de un hueco de más de 3 s).
+- `drift_direction_deg`: rumbo del vector medio que va del punto más cercano de la ruta a la
+  posición GPS.
+- `course_deg`: rumbo del desplazamiento neto entre la primera y la última posición de la ventana.
+"""
+
+import math
+from bisect import bisect_left
+from collections.abc import Sequence
+
+from poc_contracts.enums import EventType, Trend
+from poc_contracts.envelope import Envelope
+from poc_contracts.tools import (
+    GetTrackMetricsArgs,
+    MetricStat,
+    SampleCounts,
+    SourcePair,
+    TrackMetrics,
+)
+
+from ..geometry import Point, bearing_deg, closest_on_route
+from .context import ToolContext, ToolFailure
+from .events import mission_planned, next_waypoint
+
+GPS_SOURCE = "d1-gps"
+RADAR_SOURCE = "radar-1"
+TREND_RATIO = 0.2  # cambio relativo mínimo entre el primer y el último tercio
+TREND_MIN_DELTA_M = 2.0  # y cambio absoluto mínimo, para no ver tendencias en el ruido
+MAX_INTERP_GAP_S = 3.0
+MIN_TREND_SAMPLES = 3
+MIN_COURSE_DISTANCE_M = 0.5
+
+Sample = tuple[float, float, float]  # (sim_time, x, y)
+
+
+def _samples(events: Sequence[Envelope]) -> list[Sample]:
+    return [(e.sim_time, float(e.payload["x"]), float(e.payload["y"])) for e in events]
+
+
+def _trend(values: list[float]) -> Trend | None:
+    if len(values) < MIN_TREND_SAMPLES:
+        return None
+    k = max(1, len(values) // 3)
+    first, last = sum(values[:k]) / k, sum(values[-k:]) / k
+    delta = last - first
+    if abs(delta) < TREND_MIN_DELTA_M or abs(delta) <= TREND_RATIO * abs(first):
+        return Trend.STABLE
+    return Trend.INCREASING if delta > 0 else Trend.DECREASING
+
+
+def _stat(values: list[float]) -> MetricStat | None:
+    if not values:
+        return None
+    return MetricStat(
+        mean=round(sum(values) / len(values), 1), max=round(max(values), 1), trend=_trend(values)
+    )
+
+
+def _interpolate(series: list[Sample], times: list[float], t: float) -> Point | None:
+    """Posición de `series` en el instante `t`, o `None` si no hay muestras cercanas."""
+    i = bisect_left(times, t)
+    if i < len(series) and series[i][0] == t:
+        return series[i][1], series[i][2]
+    if i == 0 or i == len(series):
+        return None
+    (t0, x0, y0), (t1, x1, y1) = series[i - 1], series[i]
+    if t1 - t0 > MAX_INTERP_GAP_S:
+        return None
+    f = (t - t0) / (t1 - t0)
+    return x0 + f * (x1 - x0), y0 + f * (y1 - y0)
+
+
+def _course(samples: list[Sample]) -> float | None:
+    if len(samples) < 2:
+        return None
+    dx, dy = samples[-1][1] - samples[0][1], samples[-1][2] - samples[0][2]
+    if math.hypot(dx, dy) < MIN_COURSE_DISTANCE_M:
+        return None
+    return round(bearing_deg(dx, dy), 1)
+
+
+def _mean(events: Sequence[Envelope], key: str) -> float | None:
+    if not events:
+        return None
+    return round(sum(float(e.payload[key]) for e in events) / len(events), 1)
+
+
+def get_track_metrics(ctx: ToolContext, args: GetTrackMetricsArgs) -> TrackMetrics:
+    if args.since > args.until:
+        raise ToolFailure("`since` no puede ser mayor que `until`")
+    plan = mission_planned(ctx)
+    route: list[Point] = [(w.x, w.y) for w in plan.waypoints]
+    until = ctx.cutoff(args.until)
+
+    gps_events, _ = ctx.events(
+        source=GPS_SOURCE, type=EventType.POSITION_UPDATED, since=args.since, until=until
+    )
+    radar_events, _ = ctx.events(
+        source=RADAR_SOURCE, type=EventType.TRACK_UPDATED, since=args.since, until=until
+    )
+    gps, radar = _samples(gps_events), _samples(radar_events)
+
+    gps_dev = [closest_on_route((x, y), route)[1] for _, x, y in gps]
+    radar_dev = [closest_on_route((x, y), route)[1] for _, x, y in radar]
+
+    # GPS con tres segundos de margen antes de la ventana, solo para interpolar
+    gps_context, _ = ctx.events(
+        source=GPS_SOURCE,
+        type=EventType.POSITION_UPDATED,
+        since=args.since - MAX_INTERP_GAP_S,
+        until=until,
+    )
+    gps_series = _samples(gps_context)
+    gps_times = [s[0] for s in gps_series]
+    distances = []
+    for t, x, y in radar:
+        pos = _interpolate(gps_series, gps_times, t)
+        if pos is not None:
+            distances.append(math.hypot(x - pos[0], y - pos[1]))
+
+    drift: float | None = None
+    if gps:
+        vectors = [
+            (x - c[0], y - c[1]) for _, x, y in gps for c in [closest_on_route((x, y), route)[0]]
+        ]
+        mx = sum(v[0] for v in vectors) / len(vectors)
+        my = sum(v[1] for v in vectors) / len(vectors)
+        if math.hypot(mx, my) > 1e-9:
+            drift = round(bearing_deg(mx, my), 1)
+
+    next_wp = next_waypoint(ctx, plan, until) if gps else None
+    bearing: float | None = None
+    if next_wp is not None:
+        target = next(w for w in plan.waypoints if w.id == next_wp)
+        bearing = round(bearing_deg(target.x - gps[-1][1], target.y - gps[-1][2]), 1)
+
+    def last_seen(source: str, event_type: EventType) -> float | None:
+        found, _ = ctx.events(source=source, type=event_type, limit=1)
+        return found[0].sim_time if found else None
+
+    first_ids = [e[0].event_id for e in (gps_events, radar_events) if e]
+    last_ids = [e[-1].event_id for e in (gps_events, radar_events) if e]
+    return TrackMetrics(
+        since=args.since,
+        until=until,
+        gps_deviation_from_plan_m=_stat(gps_dev),
+        radar_deviation_from_plan_m=_stat(radar_dev),
+        gps_radar_distance_m=_stat(distances),
+        drift_direction_deg=drift,
+        course_deg=SourcePair(gps=_course(gps), radar=_course(radar)),
+        bearing_to_next_waypoint_deg=bearing,
+        next_waypoint=next_wp,
+        mean_speed_mps=SourcePair(
+            gps=_mean(gps_events, "speed_mps"), radar=_mean(radar_events, "speed_mps")
+        ),
+        samples=SampleCounts(gps=len(gps), radar=len(radar)),
+        gps_available=bool(gps),
+        radar_available=bool(radar),
+        last_seen_sim_time=SourcePair(
+            gps=last_seen(GPS_SOURCE, EventType.POSITION_UPDATED),
+            radar=last_seen(RADAR_SOURCE, EventType.TRACK_UPDATED),
+        ),
+        first_event_ids=first_ids,
+        last_event_ids=last_ids,
+    )

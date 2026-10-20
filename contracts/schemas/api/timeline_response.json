@@ -1,0 +1,147 @@
+{
+  "$defs": {
+    "Envelope": {
+      "additionalProperties": false,
+      "description": "Evento ya publicado: el bus añade `seq` e `ingestion_time`.",
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "topic": {
+          "title": "Topic",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/EventType"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "asset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset"
+        },
+        "sim_time": {
+          "minimum": 0,
+          "title": "Sim Time",
+          "type": "number"
+        },
+        "event_time": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+          "title": "Event Time",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Causation Id"
+        },
+        "ephemeral": {
+          "default": false,
+          "title": "Ephemeral",
+          "type": "boolean"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "seq": {
+          "minimum": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "ingestion_time": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+          "title": "Ingestion Time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "topic",
+        "type",
+        "source",
+        "sim_time",
+        "event_time",
+        "payload",
+        "seq",
+        "ingestion_time"
+      ],
+      "title": "Envelope",
+      "type": "object"
+    },
+    "EventType": {
+      "description": "Tipos de evento (último segmento del topic sin la versión).",
+      "enum": [
+        "MissionPlanned",
+        "MissionStarted",
+        "WaypointReached",
+        "MissionCompleted",
+        "PositionUpdated",
+        "TrackUpdated",
+        "WindReported",
+        "LinkStatus",
+        "BatteryStatus",
+        "SimulationStarted",
+        "SimulationPaused",
+        "SimulationResumed",
+        "SimulationFinished",
+        "SimulationReset",
+        "InteractiveModeChanged",
+        "FaultInjected",
+        "FaultCleared",
+        "DetectionRaised",
+        "DetectionUpdated",
+        "DetectionCleared",
+        "AnomalyDetected",
+        "AlertClosed",
+        "ReportGenerated",
+        "OperatorMessage",
+        "AgentReply",
+        "AgentReplyChunk",
+        "AgentActivity"
+      ],
+      "title": "EventType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Respuesta de `GET /api/timeline`: eventos por `sim_time` y `seq`.",
+  "properties": {
+    "events": {
+      "items": {
+        "$ref": "#/$defs/Envelope"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "truncated": {
+      "title": "Truncated",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "events",
+    "truncated"
+  ],
+  "title": "TimelineResponse",
+  "type": "object"
+}

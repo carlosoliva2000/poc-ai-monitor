@@ -1,0 +1,33 @@
+# Umbrales del detector de reglas. Unidades: metros y segundos.
+# Cada regla abre un episodio al pasar `open_*`, lo cierra cuando el valor baja de `close_*`
+# durante `close_hold_s` y avisa una sola vez de que empeora al pasar `worsen_*`.
+
+route_deviation:
+  open_m: 30.0
+  close_m: 15.0
+  close_hold_s: 5.0
+  worsen_m: 80.0
+  max_gps_gap_s: 3.0     # un hueco de GPS mayor reinicia el tiempo de cierre
+
+source_discrepancy:
+  open_m: 25.0
+  close_m: 12.0
+  close_hold_s: 6.0
+  worsen_m: 80.0
+  window_samples: 3      # media de las últimas N distancias GPS-radar
+  min_samples: 2         # con menos muestras no se evalúa
+  max_radar_age_s: 6.0   # muestras de radar más viejas se descartan
+  max_gps_gap_s: 3.0     # no se interpola a través de un hueco de GPS mayor
+
+# Segundos sin eventos de una fuente a partir de los cuales se abre SOURCE_SILENT.
+source_silent:
+  gps: 3.0
+  radar: 6.0
+  link: 15.0
+  meteo: 30.0
+  battery: 30.0
+
+gps_degraded:
+  min_sats: 6            # se abre con menos satélites
+  max_hdop: 3.0          # ... o con más hdop (también es el umbral de la detección)
+  clear_hold_s: 5.0      # segundos de lecturas normales para cerrar

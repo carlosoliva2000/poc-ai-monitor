@@ -62,6 +62,7 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ('{ "waypoint_id": "WP2"', payload_of(T.WAYPOINT_REACHED)),
     ('{ "mission_id": "MSN-DEMO", "completed"', payload_of(T.MISSION_COMPLETED)),
     ('{ "x": 512.3', payload_of(T.POSITION_UPDATED)),
+    ('{ "x": 498.7', payload_of(T.POSITION_UPDATED)),
     ('{ "radar_id"', payload_of(T.TRACK_UPDATED)),
     ('{ "station_id"', payload_of(T.WIND_REPORTED)),
     ('{ "controller_id"', payload_of(T.LINK_STATUS)),
@@ -71,11 +72,13 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ("{}", payload_of(T.SIMULATION_RESUMED)),
     ('{ "scenario": "demo", "run_id": "…" }', payload_of(T.SIMULATION_FINISHED)),
     ("{}", payload_of(T.SIMULATION_RESET)),
-    ('{ "source": "radar", "origin"', payload_of(T.FAULT_INJECTED)),
+    ('{ "interactive": true }', payload_of(T.INTERACTIVE_MODE_CHANGED)),
+    ('{ "source": "radar", "mode": "mute", "origin"', payload_of(T.FAULT_INJECTED)),
     (
         '{ "detection_id": "det-0002", "rule": "ROUTE_DEVIATION", "severity"',
         payload_of(T.DETECTION_RAISED),
     ),
+    ('{ "detection_id": "det-0004", "rule": "GPS_DEGRADED"', payload_of(T.DETECTION_RAISED)),
     (
         '{ "detection_id": "det-0002", "rule": "ROUTE_DEVIATION", "duration_s"',
         payload_of(T.DETECTION_CLEARED),
@@ -90,7 +93,7 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ),
     ('{ "conversation_id": "monitor", "reply_to": "ops-0004", "text"', payload_of(T.AGENT_REPLY)),
     ('{ "agent"', payload_of(T.AGENT_ACTIVITY)),
-    ('{"source": "radar", "muted"', model(FaultControl)),
+    ('{"source": "gps", "mode": "loss", "active"', model(FaultControl)),
     ('{"scenarios"', model(ScenariosResponse)),
     ('{"ok": true, "result"', SKIP),  # ilustrativo: `…` no es JSON; `result` depende de cada tool
     ('{"ok": false, "error"', model(ToolError)),

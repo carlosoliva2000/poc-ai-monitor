@@ -5,7 +5,8 @@
       "enum": [
         "ROUTE_DEVIATION",
         "SOURCE_DISCREPANCY",
-        "SOURCE_SILENT"
+        "SOURCE_SILENT",
+        "GPS_DEGRADED"
       ],
       "title": "Rule",
       "type": "string"

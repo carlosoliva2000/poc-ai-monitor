@@ -10,6 +10,7 @@
         "SOURCE_SILENT"
       ],
       "expected_cause": "SENSOR_FAULT",
+      "also_accepted_causes": [],
       "eval_window": [
         120.0,
         240.0
@@ -17,6 +18,26 @@
     },
     {
       "id": "F2",
+      "type": "gps_loss",
+      "source": "gps",
+      "start_s": 245.0,
+      "end_s": 290.0,
+      "expected_rules": [
+        "GPS_DEGRADED",
+        "SOURCE_DISCREPANCY",
+        "ROUTE_DEVIATION"
+      ],
+      "expected_cause": "GPS_JAMMING",
+      "also_accepted_causes": [
+        "SENSOR_FAULT"
+      ],
+      "eval_window": [
+        245.0,
+        350.0
+      ]
+    },
+    {
+      "id": "F3",
       "type": "source_silent",
       "source": "gps",
       "start_s": 300.0,
@@ -25,6 +46,7 @@
         "SOURCE_SILENT"
       ],
       "expected_cause": "SENSOR_FAULT",
+      "also_accepted_causes": [],
       "eval_window": [
         300.0,
         372.0

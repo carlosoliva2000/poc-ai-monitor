@@ -10,6 +10,7 @@
         "ROUTE_DEVIATION"
       ],
       "expected_cause": "WIND",
+      "also_accepted_causes": [],
       "eval_window": [
         95.0,
         210.0

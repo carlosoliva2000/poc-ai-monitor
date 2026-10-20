@@ -1,5 +1,27 @@
 {
   "$defs": {
+    "ActiveFault": {
+      "additionalProperties": false,
+      "description": "Un fallo en curso: la fuente, el tipo y quién lo activó.",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SensorSource"
+        },
+        "mode": {
+          "$ref": "#/$defs/FaultMode"
+        },
+        "origin": {
+          "$ref": "#/$defs/FaultOrigin"
+        }
+      },
+      "required": [
+        "source",
+        "mode",
+        "origin"
+      ],
+      "title": "ActiveFault",
+      "type": "object"
+    },
     "Envelope": {
       "additionalProperties": false,
       "description": "Evento ya publicado: el bus añade `seq` e `ingestion_time`.",
@@ -145,6 +167,7 @@
         "SimulationResumed",
         "SimulationFinished",
         "SimulationReset",
+        "InteractiveModeChanged",
         "FaultInjected",
         "FaultCleared",
         "DetectionRaised",
@@ -159,6 +182,23 @@
         "AgentActivity"
       ],
       "title": "EventType",
+      "type": "string"
+    },
+    "FaultMode": {
+      "description": "Tipo de fallo: `mute` (la fuente no se publica) o `loss` (solo GPS: pérdida de señal).",
+      "enum": [
+        "mute",
+        "loss"
+      ],
+      "title": "FaultMode",
+      "type": "string"
+    },
+    "FaultOrigin": {
+      "enum": [
+        "manual",
+        "scenario"
+      ],
+      "title": "FaultOrigin",
       "type": "string"
     },
     "PlayerStatus": {
@@ -224,11 +264,15 @@
           "title": "Wait Agent",
           "type": "boolean"
         },
-        "muted_sources": {
+        "interactive": {
+          "title": "Interactive",
+          "type": "boolean"
+        },
+        "active_faults": {
           "items": {
-            "$ref": "#/$defs/SensorSource"
+            "$ref": "#/$defs/ActiveFault"
           },
-          "title": "Muted Sources",
+          "title": "Active Faults",
           "type": "array"
         },
         "cursor": {
@@ -253,7 +297,8 @@
         "sim_time",
         "speed",
         "wait_agent",
-        "muted_sources",
+        "interactive",
+        "active_faults",
         "cursor",
         "total_events"
       ],

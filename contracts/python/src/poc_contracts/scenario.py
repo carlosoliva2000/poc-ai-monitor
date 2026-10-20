@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from .enums import SensorSource
+from .enums import FaultMode, SensorSource
 
 IsoUtcSeconds = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")]
 Positive = Annotated[float, Field(gt=0)]
@@ -146,9 +146,10 @@ class HijackConfig(Config):
 
 
 class FaultConfig(Config):
-    """Fuente silenciada en `[start_s, end_s)`: solo afecta a lo que se reporta."""
+    """Fallo en `[start_s, end_s)`: `mute` (la fuente no se publica) o `loss` (solo GPS)."""
 
     source: SensorSource
+    mode: FaultMode
     start_s: float = Field(ge=0)
     end_s: float
 
@@ -156,6 +157,8 @@ class FaultConfig(Config):
     def _check_window(self) -> "FaultConfig":
         if self.end_s <= self.start_s:
             raise ValueError("end_s debe ser mayor que start_s")
+        if self.mode == FaultMode.LOSS and self.source != SensorSource.GPS:
+            raise ValueError("`loss` solo existe para el GPS")
         return self
 
 

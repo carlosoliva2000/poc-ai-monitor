@@ -10,6 +10,7 @@
         "ROUTE_DEVIATION"
       ],
       "expected_cause": "HIJACK",
+      "also_accepted_causes": [],
       "eval_window": [
         335.0,
         440.0

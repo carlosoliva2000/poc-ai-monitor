@@ -11,6 +11,7 @@
         "ROUTE_DEVIATION"
       ],
       "expected_cause": "GPS_SPOOFING",
+      "also_accepted_causes": [],
       "eval_window": [
         168.0,
         282.0

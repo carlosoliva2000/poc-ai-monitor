@@ -33,6 +33,32 @@
       "title": "ControlFault",
       "type": "object"
     },
+    "ControlInteractive": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "control",
+          "default": "control",
+          "title": "Op",
+          "type": "string"
+        },
+        "action": {
+          "const": "interactive",
+          "default": "interactive",
+          "title": "Action",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "ControlInteractive",
+      "type": "object"
+    },
     "ControlLoad": {
       "additionalProperties": false,
       "properties": {
@@ -300,6 +326,7 @@
         "SimulationResumed",
         "SimulationFinished",
         "SimulationReset",
+        "InteractiveModeChanged",
         "FaultInjected",
         "FaultCleared",
         "DetectionRaised",
@@ -318,22 +345,35 @@
     },
     "FaultControl": {
       "additionalProperties": false,
-      "description": "Valor de `control` → `fault`: silencia (`muted: true`) o reactiva una fuente.",
+      "description": "Valor de `control` → `fault`: activa (`active: true`) o termina un fallo de una fuente.\n\nSolo con el modo interactivo encendido. `loss` solo existe para el GPS.",
       "properties": {
         "source": {
           "$ref": "#/$defs/SensorSource"
         },
-        "muted": {
-          "title": "Muted",
+        "mode": {
+          "$ref": "#/$defs/FaultMode"
+        },
+        "active": {
+          "title": "Active",
           "type": "boolean"
         }
       },
       "required": [
         "source",
-        "muted"
+        "mode",
+        "active"
       ],
       "title": "FaultControl",
       "type": "object"
+    },
+    "FaultMode": {
+      "description": "Tipo de fallo: `mute` (la fuente no se publica) o `loss` (solo GPS: pérdida de señal).",
+      "enum": [
+        "mute",
+        "loss"
+      ],
+      "title": "FaultMode",
+      "type": "string"
     },
     "Hello": {
       "additionalProperties": false,
@@ -419,6 +459,7 @@
         "discriminator": {
           "mapping": {
             "fault": "#/$defs/ControlFault",
+            "interactive": "#/$defs/ControlInteractive",
             "load": "#/$defs/ControlLoad",
             "pause": "#/$defs/ControlPause",
             "play": "#/$defs/ControlPlay",
@@ -452,6 +493,9 @@
             "$ref": "#/$defs/ControlWaitAgent"
           },
           {
+            "$ref": "#/$defs/ControlInteractive"
+          },
+          {
             "$ref": "#/$defs/ControlFault"
           }
         ]
@@ -476,6 +520,7 @@
       "discriminator": {
         "mapping": {
           "fault": "#/$defs/ControlFault",
+          "interactive": "#/$defs/ControlInteractive",
           "load": "#/$defs/ControlLoad",
           "pause": "#/$defs/ControlPause",
           "play": "#/$defs/ControlPlay",
@@ -507,6 +552,9 @@
         },
         {
           "$ref": "#/$defs/ControlWaitAgent"
+        },
+        {
+          "$ref": "#/$defs/ControlInteractive"
         },
         {
           "$ref": "#/$defs/ControlFault"

@@ -75,7 +75,7 @@
         "type": "object",
         "properties": {
           "detection_ids": {"type": "array", "items": {"type": "string"}, "description": "Ids de las detecciones que motivan la alerta (det-…)"},
-          "cause": {"type": "string", "enum": ["WIND", "HIJACK", "GPS_SPOOFING", "SENSOR_FAULT", "UNKNOWN"], "description": "Causa más probable"},
+          "cause": {"type": "string", "enum": ["WIND", "HIJACK", "GPS_SPOOFING", "SENSOR_FAULT", "GPS_JAMMING", "UNKNOWN"], "description": "Causa más probable"},
           "severity": {"type": "string", "enum": ["low", "medium", "high"]},
           "confidence": {"type": "number", "description": "Confianza en la causa, de 0 a 1"},
           "summary": {"type": "string", "description": "Una frase, como máximo 160 caracteres"},

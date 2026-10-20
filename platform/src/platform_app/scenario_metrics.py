@@ -29,6 +29,7 @@ MAX_INTERP_GAP_S = 3.0  # no se interpola el GPS a través de un hueco mayor
 NORMAL_LINK_ID = "GCS-1"
 JUMP_MIN_M = 40.0  # salto mínimo del GPS cuando acaba el spoofing
 HIJACK_MIN_M = 300.0  # «cientos de metros»
+LOSS_MIN_M = 40.0  # desviación mínima de la verdad con 45 s de pérdida de GPS
 
 
 @dataclass(frozen=True)
@@ -163,17 +164,23 @@ class _Checks:
         self.add("la misión se completa", f"{done['reason']} a T+{end:.0f} s", ok)
 
 
-def _nominal(c: _Checks, dev: Series) -> None:
-    gps = reported_deviation(c.run, "PositionUpdated")
+def _nominal(c: _Checks, dev: Series, until_s: float | None) -> None:
+    """Vuelo sin anomalías; `until_s`: hasta ahí (inicio de la pérdida de GPS, si la hay)."""
+    end = until_s if until_s is not None else float("inf")
+    gps = [(t, v) for t, v in reported_deviation(c.run, "PositionUpdated") if t < end]
+    dev = [(t, v) for t, v in dev if t < end]
     truth_max, gps_max = max(v for _, v in dev), max(v for _, v in gps)
     limit = DEVIATION_LIMIT_M
+    until = f" (hasta T+{until_s:.0f} s)" if until_s is not None else ""
     c.add(
-        f"desviación de la verdad respecto al plan < {limit:.0f} m",
+        f"desviación de la verdad respecto al plan < {limit:.0f} m{until}",
         f"{truth_max:.1f} m",
         truth_max < limit,
     )
     c.add(
-        f"desviación del GPS respecto al plan < {limit:.0f} m", f"{gps_max:.1f} m", gps_max < limit
+        f"desviación del GPS respecto al plan < {limit:.0f} m{until}",
+        f"{gps_max:.1f} m",
+        gps_max < limit,
     )
 
 
@@ -261,7 +268,7 @@ def _faults(c: _Checks, labels: list[Label]) -> None:
             e["type"]: e["sim_time"]
             for e in run.events
             if e["type"] in ("FaultInjected", "FaultCleared")
-            and e["payload"] == {"source": f.source.value, "origin": "scenario"}
+            and e["payload"] == {"source": f.source.value, "mode": "mute", "origin": "scenario"}
         }
         ok = not left and marks == {"FaultInjected": f.start_s, "FaultCleared": f.end_s}
         span = f"[{f.start_s:.0f}, {f.end_s:.0f})"
@@ -269,21 +276,94 @@ def _faults(c: _Checks, labels: list[Label]) -> None:
         c.add(what, f"{len(left)} eventos dentro; marcas en {list(marks.values())}", ok)
 
 
-def _same_as_nominal(c: _Checks, nominal: RunData) -> None:
-    same_truth = c.run.truth == nominal.truth
+def _same_as_nominal(c: _Checks, nominal: RunData, until_s: float) -> None:
+    """Hasta `until_s` (inicio de la pérdida de GPS; el fin del vuelo si no la hay)."""
+    same_truth = [x for x in c.run.truth.trajectory if x.t <= until_s] == [
+        x for x in nominal.truth.trajectory if x.t <= until_s
+    ]
     c.add(
-        "trayectoria idéntica a nominal (truth.json)",
+        f"trayectoria idéntica a nominal hasta T+{until_s:.0f} s (truth.json)",
         "idéntica" if same_truth else "distinta",
         same_truth,
     )
     sensors = {"PositionUpdated", "TrackUpdated", "WindReported", "LinkStatus", "BatteryStatus"}
     mine = {e["event_id"]: e for e in c.run.events if e["type"] in sensors}
     theirs = {e["event_id"]: e for e in nominal.events if e["type"] in sensors}
-    ok = set(mine) <= set(theirs) and all(mine[i] == theirs[i] for i in mine)
+    early = {i for i, e in theirs.items() if e["sim_time"] < until_s}
+    ok = all(mine[i] == theirs[i] for i in mine if i in early)
+    ok = ok and all(i in mine or run_silenced(c.run, theirs[i]) for i in early)
     c.add(
-        "resto de eventos de fuentes idéntico a nominal (solo faltan los silenciados)",
-        f"{len(set(theirs) - set(mine))} silenciados",
+        f"eventos de fuentes idénticos a nominal hasta T+{until_s:.0f} s (menos los silenciados)",
+        f"{len(early - set(mine))} silenciados",
         ok,
+    )
+
+
+def run_silenced(run: RunData, event: dict) -> bool:
+    """`True` si el evento cae dentro de un fallo `mute` del escenario."""
+    kinds = {"gps": "PositionUpdated", "radar": "TrackUpdated"}
+    return any(
+        lb.type == LabelType.SOURCE_SILENT
+        and kinds.get(lb.source.value if lb.source else "") == event["type"]
+        and lb.start_s <= event["sim_time"] < lb.end_s
+        for lb in run.labels
+    )
+
+
+def _loss(c: _Checks, label: Label, dev: Series) -> None:
+    """Pérdida de GPS: la estima sigue el plan, la verdad se desvía y el radar lo ve."""
+    run, a, b = c.run, label.start_s, label.end_s
+    marks = {
+        e["type"]: e["sim_time"]
+        for e in run.events
+        if e["type"] in ("FaultInjected", "FaultCleared")
+        and e["payload"] == {"source": "gps", "mode": "loss", "origin": "scenario"}
+    }
+    c.add(
+        f"{label.id} pérdida de GPS: FaultInjected/Cleared (mode loss) en [{a:.0f}, {b:.0f}]",
+        f"marcas en {list(marks.values())}",
+        marks == {"FaultInjected": a, "FaultCleared": b},
+    )
+    gps = run.of_type("PositionUpdated")
+    during = [e["payload"] for e in gps if a <= e["sim_time"] < b]
+    outside_ = [e["payload"] for e in gps if not a <= e["sim_time"] < b]
+    ok = bool(during) and all(
+        p["fix"] == "none" and p["sats"] == 0 and p["hdop"] >= 10 for p in during
+    )
+    ok = ok and all(p["fix"] == "3d" for p in outside_)
+    c.add(
+        f"{label.id} pérdida de GPS: fix none, sats 0 y hdop alto solo durante la pérdida",
+        f"{len(during)} PositionUpdated con pérdida",
+        ok,
+    )
+    gps_max = max(inside(reported_deviation(run, "PositionUpdated"), a, b))
+    c.add(
+        f"{label.id} pérdida de GPS: la estima sigue a < {DEVIATION_LIMIT_M:.0f} m del plan",
+        f"{gps_max:.1f} m",
+        gps_max < DEVIATION_LIMIT_M,
+    )
+    peak = max(inside(dev, a, b))
+    c.add(
+        f"{label.id} pérdida de GPS: la verdad se desvía > {LOSS_MIN_M:.0f} m del plan",
+        f"{peak:.1f} m",
+        peak > LOSS_MIN_M,
+    )
+    truth_end = inside(dev, b - 10, b)
+    radar_end = inside(reported_deviation(run, "TrackUpdated"), b - 10, b)
+    truth_mean, radar_mean = sum(truth_end) / len(truth_end), sum(radar_end) / len(radar_end)
+    c.add(
+        f"{label.id} pérdida de GPS: el radar ve lo mismo que la verdad (media 10 s, ±8 m)",
+        f"radar {radar_mean:.1f} m, verdad {truth_mean:.1f} m",
+        abs(radar_mean - truth_mean) < 8,
+    )
+    pos = run.positions("PositionUpdated")
+    before = [p for p in pos if p[0] < b][-1]
+    after = next(p for p in pos if p[0] >= b)
+    jump = ((after[1] - before[1]) ** 2 + (after[2] - before[2]) ** 2) ** 0.5
+    c.add(
+        f"{label.id} pérdida de GPS: el GPS salta a la real al volver (> {JUMP_MIN_M:.0f} m)",
+        f"{jump:.1f} m",
+        jump > JUMP_MIN_M,
     )
 
 
@@ -303,13 +383,15 @@ def run_checks(name: str, runs_dir: Path = RUNS_DIR) -> list[Check]:
     run = load_run(name, runs_dir)
     c = _Checks(run)
     dev, disc = truth_deviation(run), gps_radar_distance(run)
+    fault_types = (LabelType.SOURCE_SILENT, LabelType.GPS_LOSS)
     anomalies = sorted(
-        (lb for lb in run.labels if lb.type != LabelType.SOURCE_SILENT), key=lambda lb: lb.start_s
+        (lb for lb in run.labels if lb.type not in fault_types), key=lambda x: x.start_s
     )
     faults = [lb for lb in run.labels if lb.type == LabelType.SOURCE_SILENT]
+    losses = [lb for lb in run.labels if lb.type == LabelType.GPS_LOSS]
 
     if not anomalies:
-        _nominal(c, dev)
+        _nominal(c, dev, min((lb.start_s for lb in losses), default=None))
     for i, label in enumerate(anomalies):
         until_s = anomalies[i + 1].start_s if i + 1 < len(anomalies) else None
         if label.type == LabelType.WIND:
@@ -320,9 +402,13 @@ def run_checks(name: str, runs_dir: Path = RUNS_DIR) -> list[Check]:
             _hijack(c, label, dev, until_s)
     if len(anomalies) > 1:
         _demo_order(c, anomalies)
-    if faults:
+    if faults or losses:
         _faults(c, faults)
-        _same_as_nominal(c, load_run("nominal", runs_dir))
+        for label in losses:
+            _loss(c, label, dev)
+            c.recovery(label, dev, None)
+        until_s = min((lb.start_s for lb in losses), default=run.truth.duration_s)
+        _same_as_nominal(c, load_run("nominal", runs_dir), until_s)
 
     windows = [(lb.start_s, lb.end_s + MEAN_MEMORY_S) for lb in run.labels]
     quiet = max(outside(disc, windows))

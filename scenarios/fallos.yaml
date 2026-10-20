@@ -1,6 +1,6 @@
 name: fallos
 description: >-
-  Misión nominal con fuentes silenciadas programadas: el radar calla de T+02:00 a T+03:00 y el GPS de T+05:00 a T+05:12. Regla esperada: SOURCE_SILENT; causa: SENSOR_FAULT.
+  Misión nominal con fallos programados: el radar calla de T+02:00 a T+03:00; el GPS pierde la señal de T+04:05 a T+04:50 (el dron navega a estima en un tramo con viento de base) y calla de T+05:00 a T+05:12. Reglas esperadas: SOURCE_SILENT (radar y GPS) y GPS_DEGRADED, SOURCE_DISCREPANCY y ROUTE_DEVIATION (pérdida); causas: SENSOR_FAULT y GPS_JAMMING.
 seed: 42
 t0: "2026-10-20T10:00:00Z"
 max_duration_s: 900
@@ -37,6 +37,7 @@ spoofing: null
 
 hijack: null
 
-faults:                 # el generador quita los eventos de la fuente en la ventana e inserta FaultInjected/FaultCleared
-  - {source: radar, start_s: 120.0, end_s: 180.0}
-  - {source: gps, start_s: 300.0, end_s: 312.0}
+faults:                 # mute: la fuente no se publica; loss (solo GPS): el dron navega a estima. Inserta FaultInjected/FaultCleared
+  - {source: radar, mode: mute, start_s: 120.0, end_s: 180.0}
+  - {source: gps, mode: loss, start_s: 245.0, end_s: 290.0}   # tramo WP3→WP4, con el viento de base casi de costado
+  - {source: gps, mode: mute, start_s: 300.0, end_s: 312.0}

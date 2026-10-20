@@ -47,6 +47,7 @@
         "SimulationResumed",
         "SimulationFinished",
         "SimulationReset",
+        "InteractiveModeChanged",
         "FaultInjected",
         "FaultCleared",
         "DetectionRaised",

@@ -1,6 +1,6 @@
 [project]
 name = "poc-contracts"
-version = "0.4.0"
+version = "0.5.0"
 description = "Contratos de poc-ai-monitor: modelos Pydantic de eventos, WebSocket, API y tools"
 requires-python = ">=3.12"
 dependencies = ["pydantic>=2.9"]

@@ -20,13 +20,13 @@ Lo que se quiere demostrar, en este orden:
 |---|---|
 | Lenguajes | Plataforma y módulo de IA en **Python** (3.12, `uv`, `ruff`); web en **JS** (se parte de la interfaz de v0, Next.js). El módulo de IA se portará a Java más adelante |
 | Bus | **Sin NATS.** Bus en memoria dentro de la plataforma, con topics y comodines al estilo NATS, expuesto por **WebSocket** a la web y al módulo de IA (proceso aparte) |
-| Simulación | **Solo hacia adelante**: play, pausa, paso (siguiente evento), reinicio y velocidad. Sin retroceso ni salto a un instante |
-| Fallos manuales | Desde la web se puede **silenciar y reactivar en directo** una fuente (GPS, radar, meteo, enlace, batería) para ver si el agente reacciona. También se pueden programar en el YAML del escenario |
+| Simulación | **Un solo motor que simula en directo**, paso a paso (0,1 s), con la misma física y los mismos sensores que el generador. **Solo hacia adelante**: play, pausa, paso (siguiente evento), reinicio y velocidad. Sin retroceso ni salto a un instante |
+| Fallos | Dos tipos: **`mute`** (cualquier fuente: deja de publicarse y el dron vuela igual) y **`loss`** (solo GPS: el dron navega a estima y se desvía de verdad). Se programan en el YAML del escenario y, con el **modo interactivo** encendido (apagado por defecto), se activan y terminan en directo desde la web o el visor para ver si el agente reacciona |
 | Dron | **Uno** (`d1`), plano **x,y en metros** (x hacia el este, **y hacia el norte**), sin mapa |
-| Generador | Propio y sencillo: plan por waypoints + **controlador** que lo sigue + perturbaciones. Todo se genera de antemano con semilla |
-| Anomalías implementadas | **Viento, secuestro y spoofing de GPS.** El diseño admite más (jamming, replay…), que quedan como mejora |
+| Generador | Propio y sencillo: plan por waypoints + **controlador** que lo sigue + perturbaciones, en un **simulador incremental** (estado + paso) con semilla. Lo usan el reproductor en directo y la generación de `runs/<escenario>/`, que es el resultado esperado **sin intervenciones** (pruebas, gráficas, evaluación) |
+| Anomalías implementadas | **Viento, secuestro y spoofing de GPS**, más la **pérdida de GPS** (jamming) como fallo `loss`. El diseño admite más (replay…), que quedan como mejora |
 | Segunda fuente | **Radar de tierra** que ve la posición real; más estación meteorológica, enlace de mando y batería (ruido) |
-| Detector | **Reglas con histéresis** (sin entrenamiento). El Isolation Forest del spike 2 queda como mejora detrás del mismo puerto |
+| Detector | **Cuatro reglas con histéresis** (sin entrenamiento): desviación de ruta, discrepancia entre fuentes, fuente silenciosa y GPS degradado. El Isolation Forest del spike 2 queda como mejora detrás del mismo puerto |
 | LLM | vLLM local de Carlos, `Qwen/Qwen2.5-14B-Instruct-AWQ`, Chat Completions. **Nada sale a la nube** |
 | Librería | **`openai` (SDK oficial) con el bucle del agente escrito a mano.** Motivo: existe el SDK oficial equivalente en Java (`openai-java`) y ya se probaron los dos contra este vLLM en el spike 1. LangChain Python y LangChain4j son proyectos distintos con API distinta |
 | Agentes | **Dos**, con el mismo motor: **monitor** (tiempo real) e **informe** (al final). Se puede **chatear con los dos** |
@@ -42,9 +42,10 @@ Lo que se quiere demostrar, en este orden:
 
 ```
                  PLATAFORMA  (hace el papel de MDO; Python, un proceso, FastAPI, puerto 8100)
- scenarios/*.yaml ─► generador ─► runs/<escenario>/  (plan, verdad, eventos, etiquetas)
-                                       │
-                     reproductor (reloj simulado: play/pausa/paso/velocidad/esperar al agente)
+ scenarios/*.yaml ─► simulador incremental (paso 0,1 s) ─► runs/<escenario>/ (plan, verdad, eventos, etiquetas:
+                                       │                    el resultado esperado sin intervenciones)
+                     reproductor (reloj simulado: play/pausa/paso/velocidad/esperar al agente,
+                                  fallos en modo interactivo; ejecuta el simulador en directo)
                                        │ publica en orden de sim_time
                      bus en memoria (topics + comodines) ──► timeline (todo lo publicado)
                                        │                      ▲
@@ -68,7 +69,7 @@ Reparto: la plataforma es el «mundo» (simulación, bus, historial y servicios 
 1. **Plan:** waypoints (base → WP1 … WPn → base), velocidad de crucero, altitud, radio de aceptación del waypoint.
 2. **Trayectoria planificada:** el controlador vuela el plan **sin perturbaciones**. Da, en cada instante, posición, velocidad y rumbo previstos (`plan.json`). Es lo que se pinta primero para comprobar que el plan tiene sentido.
 3. **Trayectoria real:** el mismo controlador con perturbaciones (viento, secuestro, spoofing). Es la verdad (`truth.json`); **el agente nunca la ve**.
-4. **Lo que se reporta:** GPS del dron, radar, meteorología, enlace, batería y misión, con su ruido y sus periodos (`events.jsonl`).
+4. **Lo que se reporta:** GPS del dron, radar, meteorología, enlace, batería y misión, con su ruido y sus periodos (`events.jsonl`: lo que produce el simulador sin intervenciones; el reproductor en directo produce lo mismo).
 5. **Etiquetas:** qué anomalía hubo, cuándo y qué causa debería concluir el agente (`labels.json`). Solo para evaluar.
 
 ### 4.2 Modelo del dron (sencillo, en 2D)
@@ -98,9 +99,12 @@ Reparto: la plataforma es el «mundo» (simulación, bus, historial y servicios 
 | Viento | Deriva y el controlador corrige | Coinciden | `WindReported` fuerte; la deriva va a favor del viento | Desviación de ruta | `WIND` (física, sin intervención) |
 | Secuestro | Se va a un punto fuera del plan, con rumbo firme | Coinciden | Sin viento fuerte; cambio en `LinkStatus` | Desviación de ruta | `HIJACK` (posible toma de control) |
 | Spoofing | El dron cree ir bien y se desvía de verdad | Divergen: el GPS dice «en ruta», el radar no | Sin viento | Discrepancia entre fuentes (la de ruta **no**, porque el GPS va sobre el plan) | `GPS_SPOOFING` |
-| Fuente silenciada (manual o programada) | No cambia: los eventos ya están generados; solo se dejan de publicar los de esa fuente | Si se silencia el radar, ya no se pueden comparar | El resto de fuentes siguen llegando | Fuente silenciosa | `SENSOR_FAULT` (qué fuente; si el enlace sigue vivo, el fallo es del sensor y no de las comunicaciones) |
+| Fuente silenciada, `mute` (manual o programada) | No cambia: el dron vuela igual; solo se deja de publicar esa fuente | Si se silencia el radar, ya no se pueden comparar | El resto de fuentes siguen llegando | Fuente silenciosa | `SENSOR_FAULT` (qué fuente; si el enlace sigue vivo, el fallo es del sensor y no de las comunicaciones) |
+| Pérdida de GPS, `loss` (manual o programada) | **El dron navega a estima** (sin conocer el viento) y se desvía de verdad; puede dar por alcanzados waypoints que no ha alcanzado | Divergen: el GPS publica la estima (sobre el plan), el radar ve la desviación real | `fix: none`, `sats: 0`, `hdop` alto; sin spoofing (en el spoofing el GPS parece sano) | GPS degradado (primer segundo), discrepancia entre fuentes (después) y, al recuperarse el GPS (la posición salta a la real), desviación de ruta | `GPS_JAMMING` (o `SENSOR_FAULT` si solo está degradado y no hay discrepancia) |
 
-Un detalle que da juego en la demo: **con el radar silenciado durante el spoofing, el engaño es invisible** (no hay segunda fuente con la que comparar). El agente debería decirlo si se le pregunta.
+Un detalle que da juego en la demo: **con el radar silenciado durante el spoofing, el engaño es invisible** (no hay segunda fuente con la que comparar). El agente debería decirlo si se le pregunta. Lo mismo con la pérdida de GPS: aunque el radar calle, `fix: none` delata el fallo, pero no se puede confirmar cuánto se ha desviado el dron.
+
+El `ROUTE_DEVIATION` que salta cuando el GPS recupera la verdad (al acabar el spoofing o una pérdida de GPS) es **esperado**: en la evaluación cuenta como acierto si el monitor lo atribuye a la causa de esa anomalía (`GPS_SPOOFING`; `GPS_JAMMING` o `SENSOR_FAULT` en la pérdida) y como fallo de diagnóstico si lo atribuye a otra.
 
 ### 4.5 Gráficas (comprobación antes de la web)
 `plot_scenario.py` sobre la salida del generador, sin reproducir nada:
@@ -111,11 +115,14 @@ Un detalle que da juego en la demo: **con el radar silenciado durante el spoofin
 
 ## 5. Reproductor y bus
 
+- **Simulación en directo:** el reproductor **no lee `events.jsonl`**: ejecuta el simulador incremental paso a paso (0,1 s) con la misma física y los mismos sensores que el generador, y publica lo que va saliendo. No hay un segundo modo de «reproducir desde archivo». `runs/<escenario>/events.jsonl` sigue generándose con el mismo simulador y es el **resultado esperado sin intervenciones**: en directo y sin intervenciones, los eventos son idénticos (el ruido de todas las fuentes se saca siempre en el mismo orden, aunque una fuente esté silenciada o en fallo). Sirve para las pruebas, las gráficas, el desarrollo offline del detector y del agente y la evaluación.
 - **Reloj simulado:** `sim_time` en segundos desde 0. Velocidades 0,5×, 1×, 2×, 4×, 8× y 16×. **Paso** = publicar el siguiente evento y quedarse en pausa.
 - **Esperar al agente** (interruptor): cuando se publica un `DetectionRaised` o `DetectionUpdated`, el reproductor se pausa hasta que llega un evento del monitor con ese `causation_id` (o pasan 90 s de reloj). Así, a 8× se ven todas las alertas. Sin el interruptor, el agente va con retraso y se mide.
 - **Bus:** `publish(evento)` y `subscribe(patrón, handler)`; comodines `*` (un segmento) y `>` (el resto), como NATS. El bus pone `ingestion_time` (reloj de pared) a cada evento. Todo lo que no sea efímero se guarda en el **timeline**.
 - **Timeline:** en memoria y volcado a `runs/<escenario>/<ejecución>/timeline.jsonl`. Es lo que consultan las tools.
-- **Fallos (silenciar fuentes):** el reproductor tiene una lista de fuentes silenciadas. Mientras una fuente lo está, sus eventos se **descartan al publicar** (no llegan al bus ni al timeline). Se cambia desde la web (`control` con `action: "fault"`). Los fallos **programados** en el YAML (`faults`) los aplica ya el generador: quita de `events.jsonl` los eventos de esa fuente en la ventana y escribe ahí los `FaultInjected`/`FaultCleared` con `origin: scenario` (así las pruebas del detector sobre `events.jsonl` también los ven). Cada cambio publica `FaultInjected` / `FaultCleared` en el dominio `sim`: la web y la evaluación los ven; **el agente no** (ninguna tool devuelve eventos del dominio `sim`), igual que no ve la verdad. Como los eventos ya están generados, silenciar el GPS corta el **reporte** al bus, no la navegación del dron (no cambia su trayectoria).
+- **Modo interactivo** (interruptor `interactive`, apagado por defecto; `control` → `interactive`, visible en `state`): apagado, la plataforma **rechaza** los `fault` con un error claro y la ejecución sale idéntica a `events.jsonl`; encendido, se aceptan. Se puede cambiar en cualquier momento y cada cambio se registra en el timeline (`InteractiveModeChanged`, dominio `sim`).
+- **Fallos:** dos tipos. **`mute`** (cualquier fuente): la fuente deja de publicarse (sus eventos no llegan al bus ni al timeline) y el dron vuela igual. **`loss`** (solo GPS): el dron **navega a estima**: integra su velocidad respecto al aire sin conocer el viento, el controlador sigue el plan con esa estimación (puede dar por alcanzados waypoints que no ha alcanzado) y la trayectoria real se va desviando; mientras dura, el GPS publica `PositionUpdated` con la posición estimada, `fix: "none"`, `sats: 0` y `hdop` alto; al recuperarse, la posición salta a la real y el controlador corrige. El enlace de mando, el radar, la meteo y la batería solo tienen `mute`. Los fallos **programados** en el YAML (`faults`, con `mode`) los aplica el propio simulador (con `origin: scenario`), así que están también en `events.jsonl`; los **manuales** (`control` → `fault`, solo con el modo interactivo) los aplica el reproductor desde el instante actual (`origin: manual`). Cada cambio publica `FaultInjected` / `FaultCleared` en el dominio `sim`: la web y la evaluación los ven; **el agente no** (ninguna tool devuelve eventos del dominio `sim`), igual que no ve la verdad.
+- **Verdad en curso:** `GET /api/truth` sirve la verdad de la simulación en curso hasta el instante actual (solo para la web, el visor y la evaluación).
 
 ## 6. Detector de reglas (con histéresis)
 
@@ -126,6 +133,7 @@ Cada regla tiene dos estados (normal y en alerta) y dos umbrales. **Abre** un ep
 | `ROUTE_DEVIATION` | Distancia del GPS a la ruta planificada (polilínea) | > 30 m | < 15 m durante 5 s | > 80 m |
 | `SOURCE_DISCREPANCY` | Distancia GPS–radar (GPS interpolado al instante del radar, media de las 3 últimas) | > 25 m | < 12 m durante 6 s | > 80 m |
 | `SOURCE_SILENT` | Tiempo sin eventos de una fuente, por fuente (lleva `source` en la detección) | GPS > 3 s; radar > 6 s; enlace > 15 s; meteo > 30 s; batería > 30 s | al llegar el siguiente evento de esa fuente | — |
+| `GPS_DEGRADED` | Calidad del último `PositionUpdated` (`source: gps`; `value` = `hdop`) | `fix` distinto de `3d`, `sats` < 6 o `hdop` > 3 | 5 s de lecturas normales | `fix: none` (severidad `high`) |
 
 Mientras el radar está en silencio (o su último dato tiene más de 6 s), `SOURCE_DISCREPANCY` no se evalúa: no se compara con datos viejos. Lo mismo `ROUTE_DEVIATION` con el GPS.
 
@@ -164,8 +172,8 @@ Las tools de datos viven en la plataforma (`POST /api/tools/{nombre}`) porque so
 
 ### 7.3 Skills
 Ficheros `agent-assets/skills/<nombre>/SKILL.md` con cabecera (`name`, `description`). En el prompt de sistema va **solo el índice**; el agente carga la que necesite con `load_skill`.
-- `route-deviation`: árbol de diagnóstico cuando salta `ROUTE_DEVIATION` (viento, secuestro, desconocido).
-- `source-discrepancy`: cuando salta `SOURCE_DISCREPANCY` o `SOURCE_SILENT` (spoofing, fallo de sensor, fuente que deja de informar).
+- `route-deviation`: árbol de diagnóstico cuando salta `ROUTE_DEVIATION` (viento, secuestro, recuperación tras un engaño o una pérdida del GPS, desconocido).
+- `source-discrepancy`: cuando salta `SOURCE_DISCREPANCY`, `SOURCE_SILENT` o `GPS_DEGRADED` (spoofing, pérdida o interferencia del GPS, fallo de sensor, fuente que deja de informar).
 - `report-format`: estructura del informe final.
 
 **Modo guiado** (interruptor, apagado por defecto): el módulo precarga la skill que corresponde al tipo de detección. Se activa solo si el modelo no llama a `load_skill` por sí mismo; la evaluación cuenta cuántas veces lo hace.
@@ -190,7 +198,7 @@ Cada invocación de cada agente se guarda en `runs/.../llm_trace.jsonl`: mensaje
 `evaluate.py runs/<escenario>/<ejecución>` produce `eval.md`:
 - Por anomalía etiquetada: ¿se detectó? (regla y `sim_time`), retraso de detección, ¿se diagnosticó con la causa correcta?, confianza, retraso de diagnóstico (en tiempo simulado y en reloj de pared).
 - Falsas alarmas: detecciones o alertas fuera de las ventanas etiquetadas (en `nominal`, cualquiera).
-- Fallos (programados o manuales, de los `FaultInjected`): para cada uno, si saltó `SOURCE_SILENT` de esa fuente y si el monitor publicó `SENSOR_FAULT` (o lo que concluyera) y con cuánto retraso. Se listan aunque no tengan etiqueta previa.
+- Fallos (programados o manuales, de los `FaultInjected`): para cada uno, si saltó la regla esperada (`SOURCE_SILENT` de esa fuente en un `mute`; `GPS_DEGRADED` y `SOURCE_DISCREPANCY` en una pérdida de GPS) y si el monitor publicó `SENSOR_FAULT` (o `GPS_JAMMING` en la pérdida) y con cuánto retraso. Se listan aunque no tengan etiqueta previa.
 - Del agente: iteraciones, tools usadas, skills cargadas por sí mismo, reintentos por JSON inválido, fallbacks, latencia de cada llamada al LLM.
 
 ## 9. Fases (con punto de parada al final de cada una)
@@ -199,7 +207,7 @@ Cada invocación de cada agente se guarda en `runs/.../llm_trace.jsonl`: mensaje
 |---|---|---|
 | 0 | Repo, entornos, contratos en código (Pydantic) y esquemas JSON exportados | Los ejemplos de `contracts/eventos.md` validan |
 | 1 | Generador, controlador y gráficas | **Carlos revisa las gráficas.** `nominal` sin desvíos > 15 m; cada anomalía se ve en las gráficas como en la tabla 4.4 |
-| 2 | Plataforma: reproductor (con fallos manuales), bus, WebSocket, timeline y tools de datos. Detector de reglas en el módulo de IA. Ejecución por terminal | `nominal` sin detecciones; cada escenario dispara la regla esperada una vez por episodio; `fallos` dispara `SOURCE_SILENT` de la fuente correcta |
+| 2 | Plataforma: simulador incremental y reproductor en directo (con modo interactivo y fallos `mute`/`loss`), bus, WebSocket, timeline y tools de datos. Detector de reglas en el módulo de IA. Visor en directo sin web. Ejecución por terminal | `nominal` sin detecciones; cada escenario dispara la regla esperada una vez por episodio; `fallos` dispara `SOURCE_SILENT` de la fuente correcta y, en la pérdida de GPS, `GPS_DEGRADED` y después `SOURCE_DISCREPANCY` |
 | 3 | Motor de agente, monitor, informe, chats, guardrails, trazas y evaluación | `demo.yaml` diagnosticado con la causa correcta en las tres anomalías (o el fallo documentado) |
 | 4 | Web conectada a la plataforma | Demo completa en el navegador |
 | 5 | Extras si queda tiempo (ver `docs/mejoras_futuras.md`) | — |

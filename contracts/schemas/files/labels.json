@@ -1,12 +1,13 @@
 {
   "$defs": {
     "Cause": {
-      "description": "Causas del diagnóstico (`GPS_JAMMING` y `REPLAY` quedan reservadas para el futuro).",
+      "description": "Causas del diagnóstico (`REPLAY` queda reservada para el futuro).",
       "enum": [
         "WIND",
         "HIJACK",
         "GPS_SPOOFING",
         "SENSOR_FAULT",
+        "GPS_JAMMING",
         "UNKNOWN"
       ],
       "title": "Cause",
@@ -52,6 +53,13 @@
         "expected_cause": {
           "$ref": "#/$defs/Cause"
         },
+        "also_accepted_causes": {
+          "items": {
+            "$ref": "#/$defs/Cause"
+          },
+          "title": "Also Accepted Causes",
+          "type": "array"
+        },
         "eval_window": {
           "maxItems": 2,
           "minItems": 2,
@@ -75,6 +83,7 @@
         "end_s",
         "expected_rules",
         "expected_cause",
+        "also_accepted_causes",
         "eval_window"
       ],
       "title": "Label",
@@ -86,7 +95,8 @@
         "wind",
         "hijack",
         "gps_spoofing",
-        "source_silent"
+        "source_silent",
+        "gps_loss"
       ],
       "title": "LabelType",
       "type": "string"
@@ -96,7 +106,8 @@
       "enum": [
         "ROUTE_DEVIATION",
         "SOURCE_DISCREPANCY",
-        "SOURCE_SILENT"
+        "SOURCE_SILENT",
+        "GPS_DEGRADED"
       ],
       "title": "Rule",
       "type": "string"

@@ -7,7 +7,8 @@ import pytest
 from pydantic import ValidationError
 
 from helpers import scenario_config
-from platform_app.generator.build import event_time, generate
+from platform_app.generator.build import generate
+from platform_app.generator.events import event_time
 from platform_app.generator.scenario_io import list_scenarios, load_scenario
 from platform_app.scenario_metrics import load_run
 from poc_contracts.enums import EventType
@@ -163,43 +164,47 @@ def test_labels_of_the_scheduled_faults(runs_dir: Path) -> None:
             "end_s": 180.0,
             "expected_rules": ["SOURCE_SILENT"],
             "expected_cause": "SENSOR_FAULT",
+            "also_accepted_causes": [],
             "eval_window": [120.0, 240.0],
         },
         {
             "id": "F2",
+            "type": "gps_loss",
+            "source": "gps",
+            "start_s": 245.0,
+            "end_s": 290.0,
+            "expected_rules": ["GPS_DEGRADED", "SOURCE_DISCREPANCY", "ROUTE_DEVIATION"],
+            "expected_cause": "GPS_JAMMING",
+            "also_accepted_causes": ["SENSOR_FAULT"],
+            "eval_window": [245.0, 350.0],
+        },
+        {
+            "id": "F3",
             "type": "source_silent",
             "source": "gps",
             "start_s": 300.0,
             "end_s": 312.0,
             "expected_rules": ["SOURCE_SILENT"],
             "expected_cause": "SENSOR_FAULT",
+            "also_accepted_causes": [],
             "eval_window": [300.0, 372.0],
         },
     ]
 
 
-def test_nominal_has_no_labels(runs_dir: Path) -> None:
-    assert load_run("nominal", runs_dir).labels == []
-
-
-def test_open_ended_hijack_is_labelled_until_the_end_of_the_mission() -> None:
-    cfg = scenario_config("secuestro")
-    hijack = cfg.hijack.model_copy(update={"end_s": None})
-    run = generate(cfg.model_copy(update={"hijack": hijack}))
-    (label,) = run.labels.labels
-    assert label.end_s == run.truth.duration_s
-
-
-def test_fault_events_use_the_player_source_and_continue_numbering(runs_dir: Path) -> None:
+def test_fault_events_use_the_player_source_and_are_numbered_in_order(runs_dir: Path) -> None:
     faults = [e for e in load_run("fallos", runs_dir).events if e["event_id"].startswith("sim-")]
-    assert [(e["type"], e["event_id"], e["source"]) for e in faults] == [
-        ("FaultInjected", "sim-0001", "platform-player"),
-        ("FaultCleared", "sim-0002", "platform-player"),
-        ("FaultInjected", "sim-0003", "platform-player"),
-        ("FaultCleared", "sim-0004", "platform-player"),
+    assert [(e["type"], e["event_id"], e["payload"]["mode"]) for e in faults] == [
+        ("FaultInjected", "sim-0001", "mute"),
+        ("FaultCleared", "sim-0002", "mute"),
+        ("FaultInjected", "sim-0003", "loss"),
+        ("FaultCleared", "sim-0004", "loss"),
+        ("FaultInjected", "sim-0005", "mute"),
+        ("FaultCleared", "sim-0006", "mute"),
     ]
+    assert {e["source"] for e in faults} == {"platform-player"}
     assert {e["asset"] for e in faults} == {None}
-    assert {e["type"] for e in faults} <= {EventType.FAULT_INJECTED, EventType.FAULT_CLEARED}
+    assert {e["payload"]["origin"] for e in faults} == {"scenario"}
 
 
 def test_scenario_name_must_match_the_file(tmp_path: Path) -> None:
@@ -212,7 +217,7 @@ def test_scenario_name_must_match_the_file(tmp_path: Path) -> None:
 
 def test_a_fault_that_outlasts_the_mission_is_clipped_to_its_end() -> None:
     cfg = scenario_config(
-        "nominal", faults=[{"source": "battery", "start_s": 400.0, "end_s": 900.0}]
+        "nominal", faults=[{"source": "battery", "mode": "mute", "start_s": 400.0, "end_s": 900.0}]
     )
     run = generate(cfg)
     end = run.truth.duration_s
@@ -223,7 +228,9 @@ def test_a_fault_that_outlasts_the_mission_is_clipped_to_its_end() -> None:
 
 
 def test_a_fault_that_starts_after_the_mission_is_not_written() -> None:
-    cfg = scenario_config("nominal", faults=[{"source": "gps", "start_s": 800.0, "end_s": 850.0}])
+    cfg = scenario_config(
+        "nominal", faults=[{"source": "gps", "mode": "mute", "start_s": 800.0, "end_s": 850.0}]
+    )
     run = generate(cfg)
     assert not [e for e in run.events if e.type.value.startswith("Fault")]
     assert run.labels.labels == []

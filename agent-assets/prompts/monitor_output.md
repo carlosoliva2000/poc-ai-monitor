@@ -1,10 +1,10 @@
 ## Formato de tu salida (`publish_alert`)
 Tu salida es la llamada a `publish_alert`; se valida antes de publicarse y, si falla, recibirás los errores para corregirlos.
-- `cause`: una de `WIND`, `HIJACK`, `GPS_SPOOFING`, `SENSOR_FAULT`, `UNKNOWN`.
+- `cause`: una de `WIND`, `HIJACK`, `GPS_SPOOFING`, `SENSOR_FAULT`, `GPS_JAMMING` (pérdida o interferencia del GPS), `UNKNOWN`.
 - `severity`:
   - `low`: causa física y controlada, sin riesgo apreciable (p. ej. viento con el dron corrigiendo).
   - `medium`: causa desconocida, fallo de sensor o situación que empeora.
-  - `high`: posible ataque o pérdida de control (secuestro, spoofing).
+  - `high`: posible ataque, interferencia o pérdida de control (secuestro, spoofing, pérdida de GPS con el dron desviándose).
 - `confidence` (0–1): ≥ 0,8 si al menos dos fuentes independientes encajan con los criterios de la skill; 0,5–0,7 si encajan en parte; < 0,5 si es una conjetura.
 - `summary`: una frase (≤ 160 caracteres) que entienda alguien que no ve los datos.
 - `explanation`: el razonamiento, con cifras, fuentes y tiempos T+mm:ss.

@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from .envelope import Envelope
+
 
 class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -22,6 +24,14 @@ class ScenariosResponse(_Model):
     """Respuesta de `GET /api/scenarios`."""
 
     scenarios: list[ScenarioInfo]
+
+
+class TimelineResponse(_Model):
+    """Respuesta de `GET /api/timeline`: eventos por `sim_time` y `seq`."""
+
+    events: list[Envelope]
+    truncated: bool
+    """`True` si `limit` ha recortado el resultado."""
 
 
 class ToolOk(_Model):

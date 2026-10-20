@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, TypeAdapter
 
-from .api import ScenariosResponse, ToolError, ToolOk
+from .api import ScenariosResponse, TimelineResponse, ToolError, ToolOk
 from .envelope import Envelope, EventDraft
 from .payloads import PAYLOAD_MODELS
 from .run_files import LabelsFile, PlanFile, TruthFile
@@ -31,6 +31,7 @@ def build_schemas() -> dict[str, dict[str, Any]]:
         "ws/server_message.json": TypeAdapter(ServerMessage).json_schema(),
         "api/state.json": StateMessage.model_json_schema(),
         "api/scenarios_response.json": ScenariosResponse.model_json_schema(),
+        "api/timeline_response.json": TimelineResponse.model_json_schema(),
         "api/tool_ok.json": ToolOk.model_json_schema(),
         "api/tool_error.json": ToolError.model_json_schema(),
         "tools/publish_alert.result.json": TypeAdapter(PublishAlertResult).json_schema(),

@@ -69,12 +69,14 @@ class Label(RunFile):
     end_s: float
     expected_rules: list[Rule] = Field(min_length=1)
     expected_cause: Cause
+    also_accepted_causes: list[Cause]
     eval_window: tuple[float, float]
 
     @model_validator(mode="after")
     def _check(self) -> "Label":
-        if (self.type == LabelType.SOURCE_SILENT) != (self.source is not None):
-            raise ValueError("`source` es obligatoria en source_silent y null en el resto")
+        is_fault = self.type in (LabelType.SOURCE_SILENT, LabelType.GPS_LOSS)
+        if is_fault != (self.source is not None):
+            raise ValueError("`source` es obligatoria en los fallos y null en el resto")
         if self.eval_window[0] != self.start_s or self.eval_window[1] < self.end_s:
             raise ValueError("eval_window va de start_s a end_s o más allá")
         return self

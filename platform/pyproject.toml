@@ -4,13 +4,17 @@ version = "0.1.0"
 description = "Plataforma de poc-ai-monitor: generador, reproductor, bus, timeline, tools de datos, API y WebSocket"
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.152.0",
     "matplotlib>=3.11.2",
     "poc-contracts",
     "pyyaml>=6.0.3",
+    "uvicorn[standard]>=0.54.0",
+    "websockets>=17.3",
 ]
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.15.1",
     "pytest>=8",
     "types-pyyaml>=6.0.12.20260906",
 ]

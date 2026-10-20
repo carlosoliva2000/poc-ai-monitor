@@ -2,9 +2,9 @@
 
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, model_validator
 
-from .enums import ClientKind, PlayerStatus, SensorSource
+from .enums import ClientKind, FaultMode, FaultOrigin, PlayerStatus, SensorSource
 from .envelope import Envelope, EventDraft
 from .topics import validate_pattern
 
@@ -50,10 +50,20 @@ class Publish(_Message):
 
 
 class FaultControl(_Message):
-    """Valor de `control` → `fault`: silencia (`muted: true`) o reactiva una fuente."""
+    """Valor de `control` → `fault`: activa (`active: true`) o termina un fallo de una fuente.
+
+    Solo con el modo interactivo encendido. `loss` solo existe para el GPS.
+    """
 
     source: SensorSource
-    muted: StrictBool
+    mode: FaultMode
+    active: StrictBool
+
+    @model_validator(mode="after")
+    def _check_mode(self) -> "FaultControl":
+        if self.mode == FaultMode.LOSS and self.source != SensorSource.GPS:
+            raise ValueError("`loss` solo existe para el GPS")
+        return self
 
 
 class ControlLoad(_Message):
@@ -98,6 +108,12 @@ class ControlWaitAgent(_Message):
     value: StrictBool
 
 
+class ControlInteractive(_Message):
+    op: Literal["control"] = "control"
+    action: Literal["interactive"] = "interactive"
+    value: StrictBool
+
+
 class ControlFault(_Message):
     op: Literal["control"] = "control"
     action: Literal["fault"] = "fault"
@@ -112,6 +128,7 @@ Control = Annotated[
     | ControlReset
     | ControlSpeed
     | ControlWaitAgent
+    | ControlInteractive
     | ControlFault,
     Field(discriminator="action"),
 ]
@@ -129,6 +146,14 @@ class EventMessage(_Message):
     event: Envelope
 
 
+class ActiveFault(_Message):
+    """Un fallo en curso: la fuente, el tipo y quién lo activó."""
+
+    source: SensorSource
+    mode: FaultMode
+    origin: FaultOrigin
+
+
 class PlayerState(_Message):
     """Estado del reproductor, común al mensaje `state` y a `GET /api/state`."""
 
@@ -138,7 +163,8 @@ class PlayerState(_Message):
     sim_time: float
     speed: float
     wait_agent: bool
-    muted_sources: list[SensorSource]
+    interactive: bool
+    active_faults: list[ActiveFault]
     cursor: int
     total_events: int
 

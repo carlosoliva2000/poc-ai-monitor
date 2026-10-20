@@ -44,6 +44,7 @@ class EventType(StrEnum):
     SIMULATION_RESUMED = "SimulationResumed"
     SIMULATION_FINISHED = "SimulationFinished"
     SIMULATION_RESET = "SimulationReset"
+    INTERACTIVE_MODE_CHANGED = "InteractiveModeChanged"
     FAULT_INJECTED = "FaultInjected"
     FAULT_CLEARED = "FaultCleared"
     DETECTION_RAISED = "DetectionRaised"
@@ -64,6 +65,7 @@ class Rule(StrEnum):
     ROUTE_DEVIATION = "ROUTE_DEVIATION"
     SOURCE_DISCREPANCY = "SOURCE_DISCREPANCY"
     SOURCE_SILENT = "SOURCE_SILENT"
+    GPS_DEGRADED = "GPS_DEGRADED"
 
 
 class Severity(StrEnum):
@@ -73,12 +75,13 @@ class Severity(StrEnum):
 
 
 class Cause(StrEnum):
-    """Causas del diagnóstico (`GPS_JAMMING` y `REPLAY` quedan reservadas para el futuro)."""
+    """Causas del diagnóstico (`REPLAY` queda reservada para el futuro)."""
 
     WIND = "WIND"
     HIJACK = "HIJACK"
     GPS_SPOOFING = "GPS_SPOOFING"
     SENSOR_FAULT = "SENSOR_FAULT"
+    GPS_JAMMING = "GPS_JAMMING"
     UNKNOWN = "UNKNOWN"
 
 
@@ -102,6 +105,13 @@ class CompletionReason(StrEnum):
 class PauseReason(StrEnum):
     USER = "user"
     WAITING_AGENT = "waiting_agent"
+
+
+class FaultMode(StrEnum):
+    """Tipo de fallo: `mute` (la fuente no se publica) o `loss` (solo GPS: pérdida de señal)."""
+
+    MUTE = "mute"
+    LOSS = "loss"
 
 
 class FaultOrigin(StrEnum):
@@ -139,6 +149,7 @@ class LabelType(StrEnum):
     HIJACK = "hijack"
     GPS_SPOOFING = "gps_spoofing"
     SOURCE_SILENT = "source_silent"
+    GPS_LOSS = "gps_loss"
 
 
 class ClientKind(StrEnum):

@@ -1,15 +1,17 @@
 ---
 name: route-deviation
-description: Úsala cuando el detector lance ROUTE_DEVIATION (la posición del GPS se aleja de la ruta planificada). Distingue viento, secuestro, recuperación tras un engaño del GPS y causa desconocida.
+description: Úsala cuando el detector lance ROUTE_DEVIATION (la posición del GPS se aleja de la ruta planificada). Distingue viento, secuestro, recuperación tras un engaño o una pérdida del GPS y causa desconocida.
 ---
 # Diagnóstico de una desviación de ruta
 
-Una desviación de ruta significa que el GPS del dron está lejos de la ruta planificada. Puede ser físico (viento), un cambio de destino no autorizado (secuestro) o la consecuencia de que el GPS estaba mintiendo y ha dejado de hacerlo. Sigue los pasos en orden y para en el primero que encaje.
+Una desviación de ruta significa que el GPS del dron está lejos de la ruta planificada. Puede ser físico (viento), un cambio de destino no autorizado (secuestro) o la consecuencia de que el GPS estaba mintiendo o sin señal y ha vuelto a informar bien. Sigue los pasos en orden y para en el primero que encaje.
 
-## Paso 0. ¿Viene de un engaño del GPS que acaba de terminar?
+## Paso 0. ¿Viene de un engaño o una pérdida del GPS que acaba de terminar?
 Mira el estado que te han pasado y, si hace falta, `get_my_alerts`. Si hay una alerta `GPS_SPOOFING` abierta o reciente (o una `SOURCE_DISCREPANCY` que se acaba de cerrar) **y** en `get_track_metrics` el GPS y el radar vuelven a coincidir, esta desviación es la **posición real** que el engaño había ocultado: el GPS ha «saltado» a donde estaba el dron de verdad.
 - Publica una alerta con `cause: GPS_SPOOFING`, `severity: medium`, que diga que el engaño ha terminado y que el dron corrige hacia la ruta, con `supersedes` apuntando a la alerta de spoofing si sigue abierta.
 - Recomendación: verificar la integridad del receptor GPS antes de volver a confiar en él.
+
+Lo mismo si hay una alerta `GPS_JAMMING` o `SENSOR_FAULT` del GPS abierta o reciente (o una detección `GPS_DEGRADED` que se acaba de cerrar) **y** el GPS y el radar vuelven a coincidir: la desviación es la **posición real** que la pérdida del GPS había ocultado (el dron navegó a estima y se desvió). Publica una alerta con **esa misma causa**, `severity: medium`, que diga que el GPS ha vuelto y que el dron corrige hacia la ruta, con `supersedes` apuntando a la alerta anterior si sigue abierta.
 
 ## Paso 1. Métricas del tramo
 Llama a `get_track_metrics(since = sim_time de la detección − 30, until = instante actual)`.
@@ -19,7 +21,7 @@ Llama a `get_track_metrics(since = sim_time de la detección − 30, until = ins
 - **No coinciden**: carga la skill `source-discrepancy` y sigue esa.
 
 ## Paso 3. ¿Es viento?
-Llama a `get_events(source="meteo", last_n=3)`.
+Llama a `get_events(source="meteo", last_n=3)`. Mira el `sim_time` del último `WindReported` frente al instante actual: **si tiene más de 30 s, no puedes confirmar el viento** (la estación puede estar callada). Entonces la causa es `UNKNOWN`, o `WIND` con `confidence` ≤ 0,5 si la deriva es coherente con el último viento conocido; en cualquier caso, dilo en la explicación.
 - Viento **fuerte** si `speed_mps` ≥ 8 o `gust_mps` ≥ 12.
 - El viento empuja **hacia** `from_deg + 180` (mod 360). Ejemplo: `from_deg: 0` (viento del norte) empuja hacia 180 (sur).
 - Compara esa dirección con `drift_direction_deg`. Si el viento es fuerte y la diferencia es ≤ 60°, la causa es **`WIND`**.

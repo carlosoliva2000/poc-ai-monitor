@@ -1,0 +1,15 @@
+{
+  "additionalProperties": false,
+  "description": "El modo interactivo (que permite inyectar fallos en directo) se enciende o se apaga.",
+  "properties": {
+    "interactive": {
+      "title": "Interactive",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "interactive"
+  ],
+  "title": "InteractiveModeChanged",
+  "type": "object"
+}

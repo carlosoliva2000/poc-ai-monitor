@@ -11,6 +11,7 @@ from .enums import (
     CompletionReason,
     ConversationId,
     EventType,
+    FaultMode,
     FaultOrigin,
     GpsFix,
     PauseReason,
@@ -127,17 +128,30 @@ class SimulationReset(Payload):
     pass
 
 
+class InteractiveModeChanged(Payload):
+    """El modo interactivo (que permite inyectar fallos en directo) se enciende o se apaga."""
+
+    interactive: bool
+
+
 class _Fault(Payload):
     source: SensorSource
+    mode: FaultMode
     origin: FaultOrigin
+
+    @model_validator(mode="after")
+    def _check_mode(self) -> "_Fault":
+        if self.mode == FaultMode.LOSS and self.source != SensorSource.GPS:
+            raise ValueError("`loss` solo existe para el GPS")
+        return self
 
 
 class FaultInjected(_Fault):
-    """Fuente silenciada. El agente no ve este evento."""
+    """Fallo activado (fuente silenciada o pérdida de GPS). El agente no ve este evento."""
 
 
 class FaultCleared(_Fault):
-    """Fuente reactivada. El agente no ve este evento."""
+    """Fallo terminado. El agente no ve este evento."""
 
 
 # --- Del detector ----------------------------------------------------------------------------
@@ -167,6 +181,9 @@ class DetectionRaised(Payload):
                 raise ValueError("SOURCE_SILENT exige `source`")
             if self.unit != "s":
                 raise ValueError("SOURCE_SILENT mide segundos: `unit` debe ser 's'")
+        elif self.rule == Rule.GPS_DEGRADED:
+            if self.source != SensorSource.GPS:
+                raise ValueError("GPS_DEGRADED exige `source: gps`")
         elif self.source is not None:
             raise ValueError(f"{self.rule} no lleva `source` (debe ser null)")
         return self
@@ -259,6 +276,7 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.SIMULATION_RESUMED: SimulationResumed,
     EventType.SIMULATION_FINISHED: SimulationFinished,
     EventType.SIMULATION_RESET: SimulationReset,
+    EventType.INTERACTIVE_MODE_CHANGED: InteractiveModeChanged,
     EventType.FAULT_INJECTED: FaultInjected,
     EventType.FAULT_CLEARED: FaultCleared,
     EventType.DETECTION_RAISED: DetectionRaised,

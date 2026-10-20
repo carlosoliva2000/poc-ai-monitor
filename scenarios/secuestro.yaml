@@ -41,4 +41,4 @@ hijack:
   target: {x: 1500.0, y: -1400.0}
   link_hint: {controller_id: UNK-4F2A, rssi_dbm: -79.0, latency_ms: 120.0}
 
-faults: []              # fuentes silenciadas programadas (ver README)
+faults: []              # fallos programados, mute o loss (ver README)

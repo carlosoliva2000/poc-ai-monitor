@@ -2,7 +2,7 @@
   "$defs": {
     "AlertsByCause": {
       "additionalProperties": false,
-      "description": "Siempre con las cinco causas (0 si no hubo alertas).",
+      "description": "Siempre con las seis causas (0 si no hubo alertas).",
       "properties": {
         "WIND": {
           "title": "Wind",
@@ -20,6 +20,10 @@
           "title": "Sensor Fault",
           "type": "integer"
         },
+        "GPS_JAMMING": {
+          "title": "Gps Jamming",
+          "type": "integer"
+        },
         "UNKNOWN": {
           "title": "Unknown",
           "type": "integer"
@@ -30,6 +34,7 @@
         "HIJACK",
         "GPS_SPOOFING",
         "SENSOR_FAULT",
+        "GPS_JAMMING",
         "UNKNOWN"
       ],
       "title": "AlertsByCause",
@@ -45,7 +50,7 @@
     },
     "DetectionsByRule": {
       "additionalProperties": false,
-      "description": "Siempre con las tres reglas (0 si no hubo detecciones).",
+      "description": "Siempre con las cuatro reglas (0 si no hubo detecciones).",
       "properties": {
         "ROUTE_DEVIATION": {
           "title": "Route Deviation",
@@ -58,12 +63,17 @@
         "SOURCE_SILENT": {
           "title": "Source Silent",
           "type": "integer"
+        },
+        "GPS_DEGRADED": {
+          "title": "Gps Degraded",
+          "type": "integer"
         }
       },
       "required": [
         "ROUTE_DEVIATION",
         "SOURCE_DISCREPANCY",
-        "SOURCE_SILENT"
+        "SOURCE_SILENT",
+        "GPS_DEGRADED"
       ],
       "title": "DetectionsByRule",
       "type": "object"
