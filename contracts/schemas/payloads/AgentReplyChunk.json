@@ -1,0 +1,33 @@
+{
+  "$defs": {
+    "ConversationId": {
+      "enum": [
+        "monitor",
+        "report"
+      ],
+      "title": "ConversationId",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "conversation_id": {
+      "$ref": "#/$defs/ConversationId"
+    },
+    "reply_to": {
+      "title": "Reply To",
+      "type": "string"
+    },
+    "delta": {
+      "title": "Delta",
+      "type": "string"
+    }
+  },
+  "required": [
+    "conversation_id",
+    "reply_to",
+    "delta"
+  ],
+  "title": "AgentReplyChunk",
+  "type": "object"
+}

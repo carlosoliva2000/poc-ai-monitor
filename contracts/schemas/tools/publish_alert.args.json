@@ -1,0 +1,93 @@
+{
+  "$defs": {
+    "Cause": {
+      "description": "Causas del diagnóstico (`GPS_JAMMING` y `REPLAY` quedan reservadas para el futuro).",
+      "enum": [
+        "WIND",
+        "HIJACK",
+        "GPS_SPOOFING",
+        "SENSOR_FAULT",
+        "UNKNOWN"
+      ],
+      "title": "Cause",
+      "type": "string"
+    },
+    "Severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Severity",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "detection_ids": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Detection Ids",
+      "type": "array"
+    },
+    "cause": {
+      "$ref": "#/$defs/Cause"
+    },
+    "severity": {
+      "$ref": "#/$defs/Severity"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "summary": {
+      "maxLength": 160,
+      "title": "Summary",
+      "type": "string"
+    },
+    "explanation": {
+      "title": "Explanation",
+      "type": "string"
+    },
+    "recommendation": {
+      "title": "Recommendation",
+      "type": "string"
+    },
+    "evidence_event_ids": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Evidence Event Ids",
+      "type": "array"
+    },
+    "supersedes": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supersedes"
+    }
+  },
+  "required": [
+    "detection_ids",
+    "cause",
+    "severity",
+    "confidence",
+    "summary",
+    "explanation",
+    "recommendation",
+    "evidence_event_ids"
+  ],
+  "title": "PublishAlertArgs",
+  "type": "object"
+}

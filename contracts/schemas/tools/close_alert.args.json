@@ -1,0 +1,19 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "alert_id": {
+      "title": "Alert Id",
+      "type": "string"
+    },
+    "reason": {
+      "title": "Reason",
+      "type": "string"
+    }
+  },
+  "required": [
+    "alert_id",
+    "reason"
+  ],
+  "title": "CloseAlertArgs",
+  "type": "object"
+}

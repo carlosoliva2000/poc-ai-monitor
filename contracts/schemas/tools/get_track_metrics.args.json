@@ -1,0 +1,19 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "since": {
+      "title": "Since",
+      "type": "number"
+    },
+    "until": {
+      "title": "Until",
+      "type": "number"
+    }
+  },
+  "required": [
+    "since",
+    "until"
+  ],
+  "title": "GetTrackMetricsArgs",
+  "type": "object"
+}

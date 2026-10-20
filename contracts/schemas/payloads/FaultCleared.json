@@ -1,0 +1,40 @@
+{
+  "$defs": {
+    "FaultOrigin": {
+      "enum": [
+        "manual",
+        "scenario"
+      ],
+      "title": "FaultOrigin",
+      "type": "string"
+    },
+    "SensorSource": {
+      "description": "Fuentes que se pueden silenciar y en las que puede saltar `SOURCE_SILENT`.",
+      "enum": [
+        "gps",
+        "radar",
+        "meteo",
+        "link",
+        "battery"
+      ],
+      "title": "SensorSource",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Fuente reactivada. El agente no ve este evento.",
+  "properties": {
+    "source": {
+      "$ref": "#/$defs/SensorSource"
+    },
+    "origin": {
+      "$ref": "#/$defs/FaultOrigin"
+    }
+  },
+  "required": [
+    "source",
+    "origin"
+  ],
+  "title": "FaultCleared",
+  "type": "object"
+}

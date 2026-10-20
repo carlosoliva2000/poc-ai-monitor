@@ -1,0 +1,28 @@
+{
+  "$defs": {
+    "ConversationId": {
+      "enum": [
+        "monitor",
+        "report"
+      ],
+      "title": "ConversationId",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "conversation_id": {
+      "$ref": "#/$defs/ConversationId"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "conversation_id",
+    "text"
+  ],
+  "title": "OperatorMessage",
+  "type": "object"
+}

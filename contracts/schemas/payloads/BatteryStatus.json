@@ -1,0 +1,19 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "battery_pct": {
+      "title": "Battery Pct",
+      "type": "number"
+    },
+    "voltage_v": {
+      "title": "Voltage V",
+      "type": "number"
+    }
+  },
+  "required": [
+    "battery_pct",
+    "voltage_v"
+  ],
+  "title": "BatteryStatus",
+  "type": "object"
+}

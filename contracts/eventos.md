@@ -1,6 +1,6 @@
 # Contratos de `poc-ai-monitor`
 
-> **Fuente de verdad** de lo que se intercambian los componentes: eventos, topics, mensajes del WebSocket, API HTTP y tools. Versión 0.2 (16/10/2026: fallos manuales y regla `SOURCE_SILENT`). Cualquier cambio se hace aquí primero y después en `contracts/python` (Pydantic), `contracts/schemas/` (JSON Schema exportado) y en todos los componentes, en el mismo cambio.
+> **Fuente de verdad** de lo que se intercambian los componentes: eventos, topics, mensajes del WebSocket, API HTTP y tools. Versión 0.3 (20/10/2026: `source` y `asset` del sobre, `fix`, `GET /scenarios`, resultado de `get_flight_summary` y `get_track_metrics` sin datos de una fuente, patrón de suscripción de ejemplo corregido en §3; v0.2, 16/10/2026: fallos manuales y regla `SOURCE_SILENT`). Cualquier cambio se hace aquí primero y después en `contracts/python` (Pydantic), `contracts/schemas/` (JSON Schema exportado) y en todos los componentes, en el mismo cambio.
 
 ## 1. Convenciones
 - **Unidades:** metros, segundos, m/s, grados. Plano x,y con origen en la base: **x hacia el este, y hacia el norte**.
@@ -26,6 +26,8 @@
   "payload": { }
 }
 ```
+- `source`: quién publica. Generador: `d1-gps`, `radar-1`, `meteo-1`, `d1-link`, `d1-bat`, `d1-mission`. Reproductor (estado y `FaultInjected`/`FaultCleared`): `platform-player`. Módulo de IA: `ai-detector` (detecciones), `ai-monitor` (`AnomalyDetected`, `AlertClosed`), `ai-report` (`ReportGenerated`), `ai-chat-monitor` / `ai-chat-report` (`AgentReply`, `AgentReplyChunk`), `ai-module` (`AgentActivity`). Web (`OperatorMessage`): `web-operator`.
+- `asset`: `"d1"` en los topics `air.d1` y `ai.d1`; `"zone1"` en `env.zone1`; `null` en el resto (`sim`, `ops`, `ai.monitor`, `ai.report`, `ai.agent`).
 - `seq`: orden global de publicación en la ejecución (lo pone el bus).
 - `causation_id`: id del evento que provocó este (p. ej. la detección que provocó una alerta). `null` si no aplica.
 - `ephemeral: true` solo para trozos de streaming del chat: se reenvían por el WebSocket pero **no** se guardan en el timeline.
@@ -52,7 +54,7 @@ Forma (taxonomía de David, 13/10/2026): `<namespace>.<clasification>.<type>.<do
 | `citadel.pub.evt.ai.monitor.AgentReplyChunk.v1`, `citadel.pub.evt.ai.report.AgentReplyChunk.v1` | Trozo de respuesta en streaming (`ephemeral`) | Módulo de IA |
 | `citadel.pub.evt.ai.agent.AgentActivity.v1` | Aviso de que un agente empieza o termina una invocación (`ephemeral`), para la web | Módulo de IA |
 
-Suscripciones con comodines: `*` = un segmento, `>` = el resto. Ejemplos: `citadel.pub.evt.air.d1.>` (todo lo del dron), `citadel.*.evt.ai.d1.Detection*` **no vale** (los comodines van por segmento entero); usa `citadel.pub.evt.ai.d1.*` y filtra por `type`.
+Suscripciones con comodines: `*` = un segmento, `>` = el resto. Ejemplos: `citadel.pub.evt.air.d1.>` (todo lo del dron), `citadel.*.evt.ai.d1.Detection*` **no vale** (los comodines van por segmento entero); usa `citadel.pub.evt.ai.d1.>` (o `citadel.pub.evt.ai.d1.*.v1`) y filtra por `type`. Ojo: los topics tienen siete segmentos (el último es la versión), así que `citadel.pub.evt.ai.d1.*` **no casa con nada**.
 
 ## 4. Eventos (payload)
 
@@ -69,7 +71,7 @@ Suscripciones con comodines: `*` = un segmento, `>` = el resto. Ejemplos: `citad
 ```json
 { "x": 512.3, "y": 140.8, "alt_m": 60.2, "speed_mps": 15.1, "heading_deg": 81.0, "fix": "3d", "sats": 14, "hdop": 0.8 }
 ```
-`speed_mps` y `heading_deg` son los de navegación del propio dron (respecto al suelo, según su GPS).
+`speed_mps` y `heading_deg` son los de navegación del propio dron (respecto al suelo, según su GPS). `fix`: `"none"` | `"2d"` | `"3d"` (en los escenarios actuales siempre `"3d"`; los otros quedan para el jamming, mejora futura); `sats`: entero; `hdop`: decimal.
 
 **`TrackUpdated`** (`rad-`, cada 2 s) `{ "radar_id": "radar-1", "x": 505.0, "y": 151.2, "speed_mps": 14.2, "course_deg": 83.0, "quality": 0.9 }`
 
@@ -131,7 +133,7 @@ Cliente → plataforma:
 | `hello` | `client: "web" \| "ai-module"` | Primer mensaje |
 | `subscribe` | `patterns: ["citadel.pub.evt.>"]` | Se suscribe (acumula) |
 | `publish` | `event` (sobre sin `seq` ni `ingestion_time`) | Publica en el bus. La plataforma valida el sobre y rechaza topics que no sean de ese cliente (web: solo `ops`; módulo de IA: solo `ai`) |
-| `control` | `action: "load" \| "play" \| "pause" \| "step" \| "reset" \| "speed" \| "wait_agent" \| "fault"`, `value` | `load` con nombre de escenario; `speed` con 0.5/1/2/4/8/16; `wait_agent` con `true`/`false`; `fault` con `{"source": "radar", "muted": true}` (silencia o reactiva una fuente desde el instante actual) |
+| `control` | `action: "load" \| "play" \| "pause" \| "step" \| "reset" \| "speed" \| "wait_agent" \| "fault"`, `value` | `load` con nombre de escenario (si no está generado, la plataforma lo genera antes de cargarlo); `speed` con 0.5/1/2/4/8/16; `wait_agent` con `true`/`false`; `fault` con `{"source": "radar", "muted": true}` (silencia o reactiva una fuente desde el instante actual) |
 
 Plataforma → cliente:
 | `op` | Campos |
@@ -141,7 +143,7 @@ Plataforma → cliente:
 | `error` | `message` |
 
 ## 6. API HTTP (`http://127.0.0.1:8100/api`)
-- `GET /scenarios` → nombres disponibles. `GET /state` → como el mensaje `state`.
+- `GET /scenarios` → `{"scenarios": [{"name": "demo", "description": "…", "generated": true, "duration_s": 556.0}]}`. `generated` = existe `runs/<name>/events.jsonl`; `duration_s` es `null` si no está generado. `load` de un escenario no generado lo genera antes de cargarlo. `GET /state` → como el mensaje `state`.
 - `GET /plan` → `plan.json` del escenario cargado (waypoints y trayectoria planificada). Lo usa la web.
 - `GET /truth` → `truth.json`. **Solo para la capa «verdad» de la web.** Ninguna tool lo usa.
 - `GET /timeline?source=&type=&since=&until=&limit=` → eventos del timeline (sin corte temporal; es para la web y la evaluación).
@@ -150,7 +152,7 @@ Plataforma → cliente:
 ## 7. Tools
 Los esquemas que ve el modelo están en `agent-assets/tools.json` (formato OpenAI). Resultados:
 
-- **`get_events`** → `{"events": [ {"event_id": "met-0008", "type": "WindReported", "sim_time": 80.0, "t": "T+01:20", "speed_mps": 13.8, "gust_mps": 16.2, "from_deg": 352.0} ], "truncated": false}` (cada evento: id, tipo, `sim_time`, `t` y los campos de su payload, sin el resto del sobre). `source` admite `gps`, `radar`, `meteo`, `link`, `battery`, `mission`, `detector`, `monitor`, `operator` (nunca eventos del dominio `sim`: ni estado del reproductor ni fallos). Por defecto `last_n = 10`, máximo 50.
+- **`get_events`** → `{"events": [ {"event_id": "met-0008", "type": "WindReported", "sim_time": 80.0, "t": "T+01:20", "speed_mps": 13.8, "gust_mps": 16.2, "from_deg": 352.0} ], "truncated": false}` (cada evento: id, tipo, `sim_time`, `t` y los campos de su payload, sin el resto del sobre). `source` admite `gps`, `radar`, `meteo`, `link`, `battery`, `mission`, `detector`, `monitor`, `operator` (nunca eventos del dominio `sim`: ni estado del reproductor ni fallos). Por defecto `last_n = 10`, máximo 50. Correspondencia con el `source` del sobre: `gps`→`d1-gps`, `radar`→`radar-1`, `meteo`→`meteo-1`, `link`→`d1-link`, `battery`→`d1-bat`, `mission`→`d1-mission`, `detector`→`ai-detector`, `monitor`→`ai-monitor`, `operator`→`web-operator`.
 - **`get_mission_plan`** → payload de `MissionPlanned` más `next_waypoint` según los `WaypointReached` hasta ahora.
 - **`get_track_metrics(since, until)`** →
 ```json
@@ -163,9 +165,24 @@ Los esquemas que ve el modelo están en `agent-assets/tools.json` (formato OpenA
   "bearing_to_next_waypoint_deg": 71.0, "next_waypoint": "WP2",
   "mean_speed_mps": {"gps": 14.6, "radar": 14.4},
   "samples": {"gps": 30, "radar": 15},
+  "gps_available": true, "radar_available": true,
+  "last_seen_sim_time": {"gps": 90.0, "radar": 90.0},
   "first_event_ids": ["gps-000060", "rad-000030"], "last_event_ids": ["gps-000090", "rad-000045"] }
 ```
-`trend`: `increasing` | `decreasing` | `stable`. `drift_direction_deg`: hacia dónde se aleja del plan (del punto más cercano de la ruta a la posición), con el GPS.
+`trend`: `increasing` | `decreasing` | `stable` (`null` con menos de 3 muestras). `drift_direction_deg`: hacia dónde se aleja del plan (del punto más cercano de la ruta a la posición), con el GPS.
+
+**Sin datos de una fuente en la ventana** no se inventa nada: `gps_available` / `radar_available` son `false`, `samples` lleva el recuento real (0) y `last_seen_sim_time` el `sim_time` del último evento de esa fuente hasta el instante actual (`null` si nunca hubo). Lo que depende de la fuente que falta va a `null`: sin radar, `radar_deviation_from_plan_m`, `gps_radar_distance_m`, `course_deg.radar` y `mean_speed_mps.radar`; sin GPS, `gps_deviation_from_plan_m`, `gps_radar_distance_m`, `course_deg.gps` y `mean_speed_mps.gps`. `drift_direction_deg`, `bearing_to_next_waypoint_deg` y `next_waypoint` salen del GPS: `null` si no hay GPS. Si una fuente tiene muestras solo en parte de la ventana, se calcula con las que haya y `samples` lo refleja. `first_event_ids` / `last_event_ids` solo incluyen las fuentes con muestras.
 - **`get_my_alerts(only_open)`** → `{"alerts": [ {"alert_id": "ai-0003", "cause": "WIND", "severity": "low", "confidence": 0.8, "summary": "…", "status": "open", "sim_time": 84.0} ]}` (`status`: `open` | `closed` | `superseded`)
-- **`get_flight_summary`** (solo informe) → duración, distancia recorrida según GPS y según radar, waypoints alcanzados, `MissionCompleted`, número de detecciones por regla y de alertas por causa.
+- **`get_flight_summary`** (solo informe) →
+```json
+{ "mission_id": "MSN-DEMO", "duration_s": 556.0,
+  "mission_completed": true, "completion_reason": "returned_to_base",
+  "distance_m": {"gps": 7480.5, "radar": 7512.0},
+  "waypoints_planned": ["WP1", "WP2", "WP3", "WP4"],
+  "waypoints_reached": [{"waypoint_id": "WP1", "sim_time": 66.0}],
+  "detections_by_rule": {"ROUTE_DEVIATION": 2, "SOURCE_DISCREPANCY": 1, "SOURCE_SILENT": 0},
+  "alerts_by_cause": {"WIND": 1, "HIJACK": 1, "GPS_SPOOFING": 1, "SENSOR_FAULT": 0, "UNKNOWN": 0},
+  "alerts_open": 0, "alerts_closed": 3 }
+```
+Siempre con todas las claves (0 si no hay). `completion_reason`: `returned_to_base` | `timeout` | `null` (la misión aún no ha terminado). `distance_m.gps` / `.radar` son `null` si esa fuente no tiene muestras. Nunca incluye información del dominio `sim` (fallos inyectados).
 - **`publish_alert`**, **`close_alert`**, **`load_skill`**: las ejecuta el módulo de IA. `publish_alert` devuelve `{"ok": true, "alert_id": "ai-0003"}` o `{"ok": false, "errors": ["…"]}` (validación: Pydantic, ids de evidencia existentes y con `sim_time` ≤ `as_of_sim_time`).

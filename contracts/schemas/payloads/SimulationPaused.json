@@ -1,0 +1,23 @@
+{
+  "$defs": {
+    "PauseReason": {
+      "enum": [
+        "user",
+        "waiting_agent"
+      ],
+      "title": "PauseReason",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "reason": {
+      "$ref": "#/$defs/PauseReason"
+    }
+  },
+  "required": [
+    "reason"
+  ],
+  "title": "SimulationPaused",
+  "type": "object"
+}

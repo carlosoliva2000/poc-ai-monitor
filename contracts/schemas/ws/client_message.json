@@ -1,0 +1,517 @@
+{
+  "$defs": {
+    "ClientKind": {
+      "enum": [
+        "web",
+        "ai-module"
+      ],
+      "title": "ClientKind",
+      "type": "string"
+    },
+    "ControlFault": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "control",
+          "default": "control",
+          "title": "Op",
+          "type": "string"
+        },
+        "action": {
+          "const": "fault",
+          "default": "fault",
+          "title": "Action",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/FaultControl"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "ControlFault",
+      "type": "object"
+    },
+    "ControlLoad": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "control",
+          "default": "control",
+          "title": "Op",
+          "type": "string"
+        },
+        "action": {
+          "const": "load",
+          "default": "load",
+          "title": "Action",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "ControlLoad",
+      "type": "object"
+    },
+    "ControlPause": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "control",
+          "default": "control",
+          "title": "Op",
+          "type": "string"
+        },
+        "action": {
+          "const": "pause",
+          "default": "pause",
+          "title": "Action",
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "title": "Value",
+          "type": "null"
+        }
+      },
+      "title": "ControlPause",
+      "type": "object"
+    },
+    "ControlPlay": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "control",
+          "default": "control",
+          "title": "Op",
+          "type": "string"
+        },
+        "action": {
+          "const": "play",
+          "default": "play",
+          "title": "Action",
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "title": "Value",
+          "type": "null"
+        }
+      },
+      "title": "ControlPlay",
+      "type": "object"
+    },
+    "ControlReset": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "control",
+          "default": "control",
+          "title": "Op",
+          "type": "string"
+        },
+        "action": {
+          "const": "reset",
+          "default": "reset",
+          "title": "Action",
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "title": "Value",
+          "type": "null"
+        }
+      },
+      "title": "ControlReset",
+      "type": "object"
+    },
+    "ControlSpeed": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "control",
+          "default": "control",
+          "title": "Op",
+          "type": "string"
+        },
+        "action": {
+          "const": "speed",
+          "default": "speed",
+          "title": "Action",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "ControlSpeed",
+      "type": "object"
+    },
+    "ControlStep": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "control",
+          "default": "control",
+          "title": "Op",
+          "type": "string"
+        },
+        "action": {
+          "const": "step",
+          "default": "step",
+          "title": "Action",
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "title": "Value",
+          "type": "null"
+        }
+      },
+      "title": "ControlStep",
+      "type": "object"
+    },
+    "ControlWaitAgent": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "control",
+          "default": "control",
+          "title": "Op",
+          "type": "string"
+        },
+        "action": {
+          "const": "wait_agent",
+          "default": "wait_agent",
+          "title": "Action",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "ControlWaitAgent",
+      "type": "object"
+    },
+    "EventDraft": {
+      "additionalProperties": false,
+      "description": "Evento tal como lo escribe el generador o lo publica un cliente: sin `seq` ni\n`ingestion_time`, que pone el bus.",
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "topic": {
+          "title": "Topic",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/EventType"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "asset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset"
+        },
+        "sim_time": {
+          "minimum": 0,
+          "title": "Sim Time",
+          "type": "number"
+        },
+        "event_time": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+          "title": "Event Time",
+          "type": "string"
+        },
+        "causation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Causation Id"
+        },
+        "ephemeral": {
+          "default": false,
+          "title": "Ephemeral",
+          "type": "boolean"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        }
+      },
+      "required": [
+        "event_id",
+        "topic",
+        "type",
+        "source",
+        "sim_time",
+        "event_time",
+        "payload"
+      ],
+      "title": "EventDraft",
+      "type": "object"
+    },
+    "EventType": {
+      "description": "Tipos de evento (último segmento del topic sin la versión).",
+      "enum": [
+        "MissionPlanned",
+        "MissionStarted",
+        "WaypointReached",
+        "MissionCompleted",
+        "PositionUpdated",
+        "TrackUpdated",
+        "WindReported",
+        "LinkStatus",
+        "BatteryStatus",
+        "SimulationStarted",
+        "SimulationPaused",
+        "SimulationResumed",
+        "SimulationFinished",
+        "SimulationReset",
+        "FaultInjected",
+        "FaultCleared",
+        "DetectionRaised",
+        "DetectionUpdated",
+        "DetectionCleared",
+        "AnomalyDetected",
+        "AlertClosed",
+        "ReportGenerated",
+        "OperatorMessage",
+        "AgentReply",
+        "AgentReplyChunk",
+        "AgentActivity"
+      ],
+      "title": "EventType",
+      "type": "string"
+    },
+    "FaultControl": {
+      "additionalProperties": false,
+      "description": "Valor de `control` → `fault`: silencia (`muted: true`) o reactiva una fuente.",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SensorSource"
+        },
+        "muted": {
+          "title": "Muted",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source",
+        "muted"
+      ],
+      "title": "FaultControl",
+      "type": "object"
+    },
+    "Hello": {
+      "additionalProperties": false,
+      "description": "Primer mensaje de cada cliente.",
+      "properties": {
+        "op": {
+          "const": "hello",
+          "default": "hello",
+          "title": "Op",
+          "type": "string"
+        },
+        "client": {
+          "$ref": "#/$defs/ClientKind"
+        }
+      },
+      "required": [
+        "client"
+      ],
+      "title": "Hello",
+      "type": "object"
+    },
+    "Publish": {
+      "additionalProperties": false,
+      "description": "Publica un evento en el bus. Va **sin** `seq` ni `ingestion_time`.",
+      "properties": {
+        "op": {
+          "const": "publish",
+          "default": "publish",
+          "title": "Op",
+          "type": "string"
+        },
+        "event": {
+          "$ref": "#/$defs/EventDraft"
+        }
+      },
+      "required": [
+        "event"
+      ],
+      "title": "Publish",
+      "type": "object"
+    },
+    "SensorSource": {
+      "description": "Fuentes que se pueden silenciar y en las que puede saltar `SOURCE_SILENT`.",
+      "enum": [
+        "gps",
+        "radar",
+        "meteo",
+        "link",
+        "battery"
+      ],
+      "title": "SensorSource",
+      "type": "string"
+    },
+    "Subscribe": {
+      "additionalProperties": false,
+      "description": "Se suscribe a patrones de topic (acumula con los anteriores).",
+      "properties": {
+        "op": {
+          "const": "subscribe",
+          "default": "subscribe",
+          "title": "Op",
+          "type": "string"
+        },
+        "patterns": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Patterns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "patterns"
+      ],
+      "title": "Subscribe",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "control": {
+        "discriminator": {
+          "mapping": {
+            "fault": "#/$defs/ControlFault",
+            "load": "#/$defs/ControlLoad",
+            "pause": "#/$defs/ControlPause",
+            "play": "#/$defs/ControlPlay",
+            "reset": "#/$defs/ControlReset",
+            "speed": "#/$defs/ControlSpeed",
+            "step": "#/$defs/ControlStep",
+            "wait_agent": "#/$defs/ControlWaitAgent"
+          },
+          "propertyName": "action"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ControlLoad"
+          },
+          {
+            "$ref": "#/$defs/ControlPlay"
+          },
+          {
+            "$ref": "#/$defs/ControlPause"
+          },
+          {
+            "$ref": "#/$defs/ControlStep"
+          },
+          {
+            "$ref": "#/$defs/ControlReset"
+          },
+          {
+            "$ref": "#/$defs/ControlSpeed"
+          },
+          {
+            "$ref": "#/$defs/ControlWaitAgent"
+          },
+          {
+            "$ref": "#/$defs/ControlFault"
+          }
+        ]
+      },
+      "hello": "#/$defs/Hello",
+      "publish": "#/$defs/Publish",
+      "subscribe": "#/$defs/Subscribe"
+    },
+    "propertyName": "op"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Hello"
+    },
+    {
+      "$ref": "#/$defs/Subscribe"
+    },
+    {
+      "$ref": "#/$defs/Publish"
+    },
+    {
+      "discriminator": {
+        "mapping": {
+          "fault": "#/$defs/ControlFault",
+          "load": "#/$defs/ControlLoad",
+          "pause": "#/$defs/ControlPause",
+          "play": "#/$defs/ControlPlay",
+          "reset": "#/$defs/ControlReset",
+          "speed": "#/$defs/ControlSpeed",
+          "step": "#/$defs/ControlStep",
+          "wait_agent": "#/$defs/ControlWaitAgent"
+        },
+        "propertyName": "action"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ControlLoad"
+        },
+        {
+          "$ref": "#/$defs/ControlPlay"
+        },
+        {
+          "$ref": "#/$defs/ControlPause"
+        },
+        {
+          "$ref": "#/$defs/ControlStep"
+        },
+        {
+          "$ref": "#/$defs/ControlReset"
+        },
+        {
+          "$ref": "#/$defs/ControlSpeed"
+        },
+        {
+          "$ref": "#/$defs/ControlWaitAgent"
+        },
+        {
+          "$ref": "#/$defs/ControlFault"
+        }
+      ]
+    }
+  ]
+}

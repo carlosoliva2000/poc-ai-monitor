@@ -1,0 +1,90 @@
+{
+  "$defs": {
+    "AlertStatus": {
+      "enum": [
+        "open",
+        "closed",
+        "superseded"
+      ],
+      "title": "AlertStatus",
+      "type": "string"
+    },
+    "AlertSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "alert_id": {
+          "title": "Alert Id",
+          "type": "string"
+        },
+        "cause": {
+          "$ref": "#/$defs/Cause"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/AlertStatus"
+        },
+        "sim_time": {
+          "title": "Sim Time",
+          "type": "number"
+        }
+      },
+      "required": [
+        "alert_id",
+        "cause",
+        "severity",
+        "confidence",
+        "summary",
+        "status",
+        "sim_time"
+      ],
+      "title": "AlertSummary",
+      "type": "object"
+    },
+    "Cause": {
+      "description": "Causas del diagnóstico (`GPS_JAMMING` y `REPLAY` quedan reservadas para el futuro).",
+      "enum": [
+        "WIND",
+        "HIJACK",
+        "GPS_SPOOFING",
+        "SENSOR_FAULT",
+        "UNKNOWN"
+      ],
+      "title": "Cause",
+      "type": "string"
+    },
+    "Severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Severity",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "alerts": {
+      "items": {
+        "$ref": "#/$defs/AlertSummary"
+      },
+      "title": "Alerts",
+      "type": "array"
+    }
+  },
+  "required": [
+    "alerts"
+  ],
+  "title": "MyAlertsResult",
+  "type": "object"
+}

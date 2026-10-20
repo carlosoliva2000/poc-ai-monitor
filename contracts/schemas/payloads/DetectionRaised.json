@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "DetectionWindow": {
+      "additionalProperties": false,
+      "properties": {
+        "since": {
+          "title": "Since",
+          "type": "number"
+        },
+        "until": {
+          "title": "Until",
+          "type": "number"
+        }
+      },
+      "required": [
+        "since",
+        "until"
+      ],
+      "title": "DetectionWindow",
+      "type": "object"
+    },
+    "Rule": {
+      "description": "Reglas del detector.",
+      "enum": [
+        "ROUTE_DEVIATION",
+        "SOURCE_DISCREPANCY",
+        "SOURCE_SILENT"
+      ],
+      "title": "Rule",
+      "type": "string"
+    },
+    "SensorSource": {
+      "description": "Fuentes que se pueden silenciar y en las que puede saltar `SOURCE_SILENT`.",
+      "enum": [
+        "gps",
+        "radar",
+        "meteo",
+        "link",
+        "battery"
+      ],
+      "title": "SensorSource",
+      "type": "string"
+    },
+    "Severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Severity",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "detection_id": {
+      "title": "Detection Id",
+      "type": "string"
+    },
+    "rule": {
+      "$ref": "#/$defs/Rule"
+    },
+    "severity": {
+      "$ref": "#/$defs/Severity"
+    },
+    "value": {
+      "title": "Value",
+      "type": "number"
+    },
+    "threshold": {
+      "title": "Threshold",
+      "type": "number"
+    },
+    "unit": {
+      "title": "Unit",
+      "type": "string"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SensorSource"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "window": {
+      "$ref": "#/$defs/DetectionWindow"
+    },
+    "trigger_event_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Trigger Event Ids",
+      "type": "array"
+    },
+    "message": {
+      "title": "Message",
+      "type": "string"
+    }
+  },
+  "required": [
+    "detection_id",
+    "rule",
+    "severity",
+    "value",
+    "threshold",
+    "unit",
+    "source",
+    "window",
+    "trigger_event_ids",
+    "message"
+  ],
+  "title": "DetectionRaised",
+  "type": "object"
+}

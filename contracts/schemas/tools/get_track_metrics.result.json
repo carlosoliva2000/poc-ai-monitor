@@ -1,0 +1,225 @@
+{
+  "$defs": {
+    "MetricStat": {
+      "additionalProperties": false,
+      "properties": {
+        "mean": {
+          "title": "Mean",
+          "type": "number"
+        },
+        "max": {
+          "title": "Max",
+          "type": "number"
+        },
+        "trend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trend"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "mean",
+        "max",
+        "trend"
+      ],
+      "title": "MetricStat",
+      "type": "object"
+    },
+    "SampleCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "gps": {
+          "title": "Gps",
+          "type": "integer"
+        },
+        "radar": {
+          "title": "Radar",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "gps",
+        "radar"
+      ],
+      "title": "SampleCounts",
+      "type": "object"
+    },
+    "SourcePair": {
+      "additionalProperties": false,
+      "description": "Un valor por fuente de posición; `None` si esa fuente no tiene datos.",
+      "properties": {
+        "gps": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Gps"
+        },
+        "radar": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Radar"
+        }
+      },
+      "required": [
+        "gps",
+        "radar"
+      ],
+      "title": "SourcePair",
+      "type": "object"
+    },
+    "Trend": {
+      "enum": [
+        "increasing",
+        "decreasing",
+        "stable"
+      ],
+      "title": "Trend",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Resultado de `get_track_metrics`. Sin datos de una fuente no se inventa nada: lo que\ndepende de ella va a `None` y `samples` lleva el recuento real.",
+  "properties": {
+    "since": {
+      "title": "Since",
+      "type": "number"
+    },
+    "until": {
+      "title": "Until",
+      "type": "number"
+    },
+    "gps_deviation_from_plan_m": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MetricStat"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "radar_deviation_from_plan_m": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MetricStat"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "gps_radar_distance_m": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MetricStat"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "drift_direction_deg": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Drift Direction Deg"
+    },
+    "course_deg": {
+      "$ref": "#/$defs/SourcePair"
+    },
+    "bearing_to_next_waypoint_deg": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Bearing To Next Waypoint Deg"
+    },
+    "next_waypoint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Waypoint"
+    },
+    "mean_speed_mps": {
+      "$ref": "#/$defs/SourcePair"
+    },
+    "samples": {
+      "$ref": "#/$defs/SampleCounts"
+    },
+    "gps_available": {
+      "title": "Gps Available",
+      "type": "boolean"
+    },
+    "radar_available": {
+      "title": "Radar Available",
+      "type": "boolean"
+    },
+    "last_seen_sim_time": {
+      "$ref": "#/$defs/SourcePair"
+    },
+    "first_event_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "First Event Ids",
+      "type": "array"
+    },
+    "last_event_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Last Event Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "since",
+    "until",
+    "gps_deviation_from_plan_m",
+    "radar_deviation_from_plan_m",
+    "gps_radar_distance_m",
+    "drift_direction_deg",
+    "course_deg",
+    "bearing_to_next_waypoint_deg",
+    "next_waypoint",
+    "mean_speed_mps",
+    "samples",
+    "gps_available",
+    "radar_available",
+    "last_seen_sim_time",
+    "first_event_ids",
+    "last_event_ids"
+  ],
+  "title": "TrackMetrics",
+  "type": "object"
+}

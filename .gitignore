@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Poc-ai-monitor
+runs/*
+!runs/.gitkeep
+.tools/

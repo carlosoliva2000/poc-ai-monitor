@@ -1,0 +1,41 @@
+{
+  "$defs": {
+    "ConversationId": {
+      "enum": [
+        "monitor",
+        "report"
+      ],
+      "title": "ConversationId",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "conversation_id": {
+      "$ref": "#/$defs/ConversationId"
+    },
+    "reply_to": {
+      "title": "Reply To",
+      "type": "string"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    },
+    "tool_calls": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tool Calls",
+      "type": "array"
+    }
+  },
+  "required": [
+    "conversation_id",
+    "reply_to",
+    "text",
+    "tool_calls"
+  ],
+  "title": "AgentReply",
+  "type": "object"
+}

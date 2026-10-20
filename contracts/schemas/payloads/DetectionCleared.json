@@ -1,0 +1,40 @@
+{
+  "$defs": {
+    "Rule": {
+      "description": "Reglas del detector.",
+      "enum": [
+        "ROUTE_DEVIATION",
+        "SOURCE_DISCREPANCY",
+        "SOURCE_SILENT"
+      ],
+      "title": "Rule",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "detection_id": {
+      "title": "Detection Id",
+      "type": "string"
+    },
+    "rule": {
+      "$ref": "#/$defs/Rule"
+    },
+    "duration_s": {
+      "title": "Duration S",
+      "type": "number"
+    },
+    "max_value": {
+      "title": "Max Value",
+      "type": "number"
+    }
+  },
+  "required": [
+    "detection_id",
+    "rule",
+    "duration_s",
+    "max_value"
+  ],
+  "title": "DetectionCleared",
+  "type": "object"
+}

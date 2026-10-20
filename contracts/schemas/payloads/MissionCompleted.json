@@ -1,0 +1,33 @@
+{
+  "$defs": {
+    "CompletionReason": {
+      "enum": [
+        "returned_to_base",
+        "timeout"
+      ],
+      "title": "CompletionReason",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "mission_id": {
+      "title": "Mission Id",
+      "type": "string"
+    },
+    "completed": {
+      "title": "Completed",
+      "type": "boolean"
+    },
+    "reason": {
+      "$ref": "#/$defs/CompletionReason"
+    }
+  },
+  "required": [
+    "mission_id",
+    "completed",
+    "reason"
+  ],
+  "title": "MissionCompleted",
+  "type": "object"
+}

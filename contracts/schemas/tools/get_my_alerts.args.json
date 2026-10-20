@@ -1,0 +1,12 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "only_open": {
+      "default": false,
+      "title": "Only Open",
+      "type": "boolean"
+    }
+  },
+  "title": "GetMyAlertsArgs",
+  "type": "object"
+}

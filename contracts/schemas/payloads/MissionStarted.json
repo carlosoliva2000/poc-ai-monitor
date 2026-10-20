@@ -1,0 +1,14 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "mission_id": {
+      "title": "Mission Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "mission_id"
+  ],
+  "title": "MissionStarted",
+  "type": "object"
+}

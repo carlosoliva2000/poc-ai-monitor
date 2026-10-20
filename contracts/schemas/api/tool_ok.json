@@ -1,0 +1,20 @@
+{
+  "additionalProperties": false,
+  "description": "Respuesta de `POST /api/tools/{name}` si va bien.",
+  "properties": {
+    "ok": {
+      "const": true,
+      "default": true,
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "result": {
+      "title": "Result"
+    }
+  },
+  "required": [
+    "result"
+  ],
+  "title": "ToolOk",
+  "type": "object"
+}

@@ -1,0 +1,68 @@
+{
+  "$defs": {
+    "Waypoint": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "eta_s": {
+          "title": "Eta S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "x",
+        "y",
+        "eta_s"
+      ],
+      "title": "Waypoint",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "mission_id": {
+      "title": "Mission Id",
+      "type": "string"
+    },
+    "cruise_speed_mps": {
+      "title": "Cruise Speed Mps",
+      "type": "number"
+    },
+    "altitude_m": {
+      "title": "Altitude M",
+      "type": "number"
+    },
+    "acceptance_radius_m": {
+      "title": "Acceptance Radius M",
+      "type": "number"
+    },
+    "waypoints": {
+      "items": {
+        "$ref": "#/$defs/Waypoint"
+      },
+      "title": "Waypoints",
+      "type": "array"
+    }
+  },
+  "required": [
+    "mission_id",
+    "cruise_speed_mps",
+    "altitude_m",
+    "acceptance_radius_m",
+    "waypoints"
+  ],
+  "title": "MissionPlanned",
+  "type": "object"
+}

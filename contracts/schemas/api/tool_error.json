@@ -1,0 +1,21 @@
+{
+  "additionalProperties": false,
+  "description": "Respuesta de `POST /api/tools/{name}` si falla (argumentos no válidos, tool desconocida…).",
+  "properties": {
+    "ok": {
+      "const": false,
+      "default": false,
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "error": {
+      "title": "Error",
+      "type": "string"
+    }
+  },
+  "required": [
+    "error"
+  ],
+  "title": "ToolError",
+  "type": "object"
+}

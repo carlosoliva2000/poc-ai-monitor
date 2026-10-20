@@ -1,0 +1,15 @@
+# Configuración de ruff de poc-ai-monitor (copiada de ~/spike1/py/ruff.toml).
+# Equivalente a google-java-format (format) + Checkstyle (lint) del Java: 100 columnas, 4 espacios.
+# ruff no está en los venvs (no cuenta como dependencia): es una herramienta global de uv.
+line-length = 100
+# Cada componente es un proyecto uv con layout src/: sus paquetes (poc_contracts, platform_app,
+# ai_module) son «propios», no terceros (importante para ordenar los imports).
+src = ["contracts/python/src", "platform/src", "ai-module-py/src", "contracts/python/tests"]
+target-version = "py312"
+extend-exclude = [".venv", ".tools", "web", "ref"]
+
+[lint]
+# E/W: pycodestyle (E501 = línea de más de 100, E70x = varias sentencias en una línea)
+# F: pyflakes (imports sin usar, nombres sin definir) · I: imports ordenados · B: bugs probables
+# UP: sintaxis moderna · SIM: simplificaciones · C4: comprensiones
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4"]

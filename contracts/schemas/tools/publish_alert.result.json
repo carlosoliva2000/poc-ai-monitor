@@ -1,0 +1,62 @@
+{
+  "$defs": {
+    "PublishAlertOk": {
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "const": true,
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "alert_id": {
+          "title": "Alert Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "alert_id"
+      ],
+      "title": "PublishAlertOk",
+      "type": "object"
+    },
+    "PublishAlertRejected": {
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "const": false,
+          "default": false,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "errors": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Errors",
+          "type": "array"
+        }
+      },
+      "required": [
+        "errors"
+      ],
+      "title": "PublishAlertRejected",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "false": "#/$defs/PublishAlertRejected",
+      "true": "#/$defs/PublishAlertOk"
+    },
+    "propertyName": "ok"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/PublishAlertOk"
+    },
+    {
+      "$ref": "#/$defs/PublishAlertRejected"
+    }
+  ]
+}

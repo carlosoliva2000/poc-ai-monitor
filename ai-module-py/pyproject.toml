@@ -1,0 +1,19 @@
+[project]
+name = "poc-ai-module"
+version = "0.1.0"
+description = "Módulo de IA de poc-ai-monitor: cliente del bus, detector de reglas y agentes"
+requires-python = ">=3.12"
+dependencies = ["poc-contracts"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv.sources]
+poc-contracts = { path = "../contracts/python", editable = true }
+
+[tool.uv.build-backend]
+module-name = "ai_module"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"

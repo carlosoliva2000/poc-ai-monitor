@@ -1,0 +1,111 @@
+{
+  "$defs": {
+    "EventType": {
+      "description": "Tipos de evento (último segmento del topic sin la versión).",
+      "enum": [
+        "MissionPlanned",
+        "MissionStarted",
+        "WaypointReached",
+        "MissionCompleted",
+        "PositionUpdated",
+        "TrackUpdated",
+        "WindReported",
+        "LinkStatus",
+        "BatteryStatus",
+        "SimulationStarted",
+        "SimulationPaused",
+        "SimulationResumed",
+        "SimulationFinished",
+        "SimulationReset",
+        "FaultInjected",
+        "FaultCleared",
+        "DetectionRaised",
+        "DetectionUpdated",
+        "DetectionCleared",
+        "AnomalyDetected",
+        "AlertClosed",
+        "ReportGenerated",
+        "OperatorMessage",
+        "AgentReply",
+        "AgentReplyChunk",
+        "AgentActivity"
+      ],
+      "title": "EventType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Evento tal como lo escribe el generador o lo publica un cliente: sin `seq` ni\n`ingestion_time`, que pone el bus.",
+  "properties": {
+    "event_id": {
+      "title": "Event Id",
+      "type": "string"
+    },
+    "topic": {
+      "title": "Topic",
+      "type": "string"
+    },
+    "type": {
+      "$ref": "#/$defs/EventType"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "asset": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Asset"
+    },
+    "sim_time": {
+      "minimum": 0,
+      "title": "Sim Time",
+      "type": "number"
+    },
+    "event_time": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+      "title": "Event Time",
+      "type": "string"
+    },
+    "causation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Causation Id"
+    },
+    "ephemeral": {
+      "default": false,
+      "title": "Ephemeral",
+      "type": "boolean"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    }
+  },
+  "required": [
+    "event_id",
+    "topic",
+    "type",
+    "source",
+    "sim_time",
+    "event_time",
+    "payload"
+  ],
+  "title": "EventDraft",
+  "type": "object"
+}

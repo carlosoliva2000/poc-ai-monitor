@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/tools/hook_py.sh",
+            "timeout": 60,
+            "statusMessage": "Formateando Python y pasando ruff..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/tools/hook_py.sh",
+            "timeout": 60,
+            "statusMessage": "Comprobando el estilo del Python antes de terminar..."
+          }
+        ]
+      }
+    ]
+  }
+}

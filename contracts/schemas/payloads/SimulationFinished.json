@@ -1,0 +1,19 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "scenario": {
+      "title": "Scenario",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "scenario",
+    "run_id"
+  ],
+  "title": "SimulationFinished",
+  "type": "object"
+}

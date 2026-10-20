@@ -1,0 +1,19 @@
+[project]
+name = "poc-platform"
+version = "0.1.0"
+description = "Plataforma de poc-ai-monitor: generador, reproductor, bus, timeline, tools de datos, API y WebSocket"
+requires-python = ">=3.12"
+dependencies = ["poc-contracts"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv.sources]
+poc-contracts = { path = "../contracts/python", editable = true }
+
+[tool.uv.build-backend]
+module-name = "platform_app"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"

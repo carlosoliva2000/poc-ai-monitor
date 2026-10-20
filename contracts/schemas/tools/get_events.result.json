@@ -1,0 +1,87 @@
+{
+  "$defs": {
+    "CompactEvent": {
+      "additionalProperties": true,
+      "description": "Evento compacto: id, tipo, `sim_time`, `t` y los campos de su payload (sin el resto del\nsobre). Los campos del payload varían según el tipo, de ahí `extra=\"allow\"`.",
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/EventType"
+        },
+        "sim_time": {
+          "title": "Sim Time",
+          "type": "number"
+        },
+        "t": {
+          "pattern": "^T\\+\\d{2,}:\\d{2}$",
+          "title": "T",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "type",
+        "sim_time",
+        "t"
+      ],
+      "title": "CompactEvent",
+      "type": "object"
+    },
+    "EventType": {
+      "description": "Tipos de evento (último segmento del topic sin la versión).",
+      "enum": [
+        "MissionPlanned",
+        "MissionStarted",
+        "WaypointReached",
+        "MissionCompleted",
+        "PositionUpdated",
+        "TrackUpdated",
+        "WindReported",
+        "LinkStatus",
+        "BatteryStatus",
+        "SimulationStarted",
+        "SimulationPaused",
+        "SimulationResumed",
+        "SimulationFinished",
+        "SimulationReset",
+        "FaultInjected",
+        "FaultCleared",
+        "DetectionRaised",
+        "DetectionUpdated",
+        "DetectionCleared",
+        "AnomalyDetected",
+        "AlertClosed",
+        "ReportGenerated",
+        "OperatorMessage",
+        "AgentReply",
+        "AgentReplyChunk",
+        "AgentActivity"
+      ],
+      "title": "EventType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "events": {
+      "items": {
+        "$ref": "#/$defs/CompactEvent"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "truncated": {
+      "title": "Truncated",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "events",
+    "truncated"
+  ],
+  "title": "GetEventsResult",
+  "type": "object"
+}

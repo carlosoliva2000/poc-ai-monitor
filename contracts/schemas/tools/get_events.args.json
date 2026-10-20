@@ -1,0 +1,104 @@
+{
+  "$defs": {
+    "EventType": {
+      "description": "Tipos de evento (último segmento del topic sin la versión).",
+      "enum": [
+        "MissionPlanned",
+        "MissionStarted",
+        "WaypointReached",
+        "MissionCompleted",
+        "PositionUpdated",
+        "TrackUpdated",
+        "WindReported",
+        "LinkStatus",
+        "BatteryStatus",
+        "SimulationStarted",
+        "SimulationPaused",
+        "SimulationResumed",
+        "SimulationFinished",
+        "SimulationReset",
+        "FaultInjected",
+        "FaultCleared",
+        "DetectionRaised",
+        "DetectionUpdated",
+        "DetectionCleared",
+        "AnomalyDetected",
+        "AlertClosed",
+        "ReportGenerated",
+        "OperatorMessage",
+        "AgentReply",
+        "AgentReplyChunk",
+        "AgentActivity"
+      ],
+      "title": "EventType",
+      "type": "string"
+    },
+    "ToolSource": {
+      "description": "Valores del parámetro `source` de `get_events` (nunca el dominio `sim`).",
+      "enum": [
+        "gps",
+        "radar",
+        "meteo",
+        "link",
+        "battery",
+        "mission",
+        "detector",
+        "monitor",
+        "operator"
+      ],
+      "title": "ToolSource",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "source": {
+      "$ref": "#/$defs/ToolSource"
+    },
+    "type": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EventType"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "last_n": {
+      "default": 10,
+      "title": "Last N",
+      "type": "integer"
+    },
+    "since": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Since"
+    },
+    "until": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Until"
+    }
+  },
+  "required": [
+    "source"
+  ],
+  "title": "GetEventsArgs",
+  "type": "object"
+}

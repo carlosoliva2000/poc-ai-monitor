@@ -1,0 +1,196 @@
+{
+  "$defs": {
+    "AlertsByCause": {
+      "additionalProperties": false,
+      "description": "Siempre con las cinco causas (0 si no hubo alertas).",
+      "properties": {
+        "WIND": {
+          "title": "Wind",
+          "type": "integer"
+        },
+        "HIJACK": {
+          "title": "Hijack",
+          "type": "integer"
+        },
+        "GPS_SPOOFING": {
+          "title": "Gps Spoofing",
+          "type": "integer"
+        },
+        "SENSOR_FAULT": {
+          "title": "Sensor Fault",
+          "type": "integer"
+        },
+        "UNKNOWN": {
+          "title": "Unknown",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "WIND",
+        "HIJACK",
+        "GPS_SPOOFING",
+        "SENSOR_FAULT",
+        "UNKNOWN"
+      ],
+      "title": "AlertsByCause",
+      "type": "object"
+    },
+    "CompletionReason": {
+      "enum": [
+        "returned_to_base",
+        "timeout"
+      ],
+      "title": "CompletionReason",
+      "type": "string"
+    },
+    "DetectionsByRule": {
+      "additionalProperties": false,
+      "description": "Siempre con las tres reglas (0 si no hubo detecciones).",
+      "properties": {
+        "ROUTE_DEVIATION": {
+          "title": "Route Deviation",
+          "type": "integer"
+        },
+        "SOURCE_DISCREPANCY": {
+          "title": "Source Discrepancy",
+          "type": "integer"
+        },
+        "SOURCE_SILENT": {
+          "title": "Source Silent",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ROUTE_DEVIATION",
+        "SOURCE_DISCREPANCY",
+        "SOURCE_SILENT"
+      ],
+      "title": "DetectionsByRule",
+      "type": "object"
+    },
+    "DistanceBySource": {
+      "additionalProperties": false,
+      "properties": {
+        "gps": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Gps"
+        },
+        "radar": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Radar"
+        }
+      },
+      "required": [
+        "gps",
+        "radar"
+      ],
+      "title": "DistanceBySource",
+      "type": "object"
+    },
+    "ReachedWaypoint": {
+      "additionalProperties": false,
+      "properties": {
+        "waypoint_id": {
+          "title": "Waypoint Id",
+          "type": "string"
+        },
+        "sim_time": {
+          "title": "Sim Time",
+          "type": "number"
+        }
+      },
+      "required": [
+        "waypoint_id",
+        "sim_time"
+      ],
+      "title": "ReachedWaypoint",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Resultado de `get_flight_summary`. Nunca incluye información del dominio `sim`.",
+  "properties": {
+    "mission_id": {
+      "title": "Mission Id",
+      "type": "string"
+    },
+    "duration_s": {
+      "title": "Duration S",
+      "type": "number"
+    },
+    "mission_completed": {
+      "title": "Mission Completed",
+      "type": "boolean"
+    },
+    "completion_reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CompletionReason"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "distance_m": {
+      "$ref": "#/$defs/DistanceBySource"
+    },
+    "waypoints_planned": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Waypoints Planned",
+      "type": "array"
+    },
+    "waypoints_reached": {
+      "items": {
+        "$ref": "#/$defs/ReachedWaypoint"
+      },
+      "title": "Waypoints Reached",
+      "type": "array"
+    },
+    "detections_by_rule": {
+      "$ref": "#/$defs/DetectionsByRule"
+    },
+    "alerts_by_cause": {
+      "$ref": "#/$defs/AlertsByCause"
+    },
+    "alerts_open": {
+      "title": "Alerts Open",
+      "type": "integer"
+    },
+    "alerts_closed": {
+      "title": "Alerts Closed",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "mission_id",
+    "duration_s",
+    "mission_completed",
+    "completion_reason",
+    "distance_m",
+    "waypoints_planned",
+    "waypoints_reached",
+    "detections_by_rule",
+    "alerts_by_cause",
+    "alerts_open",
+    "alerts_closed"
+  ],
+  "title": "FlightSummary",
+  "type": "object"
+}

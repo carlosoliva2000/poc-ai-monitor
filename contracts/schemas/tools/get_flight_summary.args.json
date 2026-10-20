@@ -1,0 +1,7 @@
+{
+  "additionalProperties": false,
+  "description": "`get_mission_plan` y `get_flight_summary` no reciben argumentos.",
+  "properties": {},
+  "title": "NoArgs",
+  "type": "object"
+}

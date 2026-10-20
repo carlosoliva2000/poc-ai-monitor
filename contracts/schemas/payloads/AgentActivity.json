@@ -1,0 +1,54 @@
+{
+  "$defs": {
+    "ActivityState": {
+      "enum": [
+        "started",
+        "finished"
+      ],
+      "title": "ActivityState",
+      "type": "string"
+    },
+    "AgentName": {
+      "enum": [
+        "monitor",
+        "report",
+        "chat-monitor",
+        "chat-report"
+      ],
+      "title": "AgentName",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "agent": {
+      "$ref": "#/$defs/AgentName"
+    },
+    "state": {
+      "$ref": "#/$defs/ActivityState"
+    },
+    "invocation_id": {
+      "title": "Invocation Id",
+      "type": "string"
+    },
+    "causation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Causation Id"
+    }
+  },
+  "required": [
+    "agent",
+    "state",
+    "invocation_id",
+    "causation_id"
+  ],
+  "title": "AgentActivity",
+  "type": "object"
+}

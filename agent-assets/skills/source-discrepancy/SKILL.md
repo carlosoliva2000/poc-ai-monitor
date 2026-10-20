@@ -17,6 +17,8 @@ Llama a `get_track_metrics(since = sim_time de la detección − 40, until = ins
 - `radar_deviation_from_plan_m` (dónde está de verdad, respecto al plan);
 - `gps_radar_distance_m` (cuánto discrepan y si crece).
 
+Si `get_track_metrics` devuelve `radar_available: false`, no puedes comprobar el GPS: dilo en la explicación.
+
 ## Paso 2. ¿Es spoofing de GPS?
 Patrón típico:
 - el GPS está **sobre el plan** (`gps_deviation_from_plan_m.mean` < 15);

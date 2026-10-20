@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "scenario": {
+      "title": "Scenario",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "duration_s": {
+      "title": "Duration S",
+      "type": "number"
+    },
+    "total_events": {
+      "title": "Total Events",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "scenario",
+    "run_id",
+    "duration_s",
+    "total_events"
+  ],
+  "title": "SimulationStarted",
+  "type": "object"
+}

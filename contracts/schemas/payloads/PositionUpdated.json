@@ -1,0 +1,59 @@
+{
+  "$defs": {
+    "GpsFix": {
+      "enum": [
+        "none",
+        "2d",
+        "3d"
+      ],
+      "title": "GpsFix",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "x": {
+      "title": "X",
+      "type": "number"
+    },
+    "y": {
+      "title": "Y",
+      "type": "number"
+    },
+    "alt_m": {
+      "title": "Alt M",
+      "type": "number"
+    },
+    "speed_mps": {
+      "title": "Speed Mps",
+      "type": "number"
+    },
+    "heading_deg": {
+      "title": "Heading Deg",
+      "type": "number"
+    },
+    "fix": {
+      "$ref": "#/$defs/GpsFix"
+    },
+    "sats": {
+      "title": "Sats",
+      "type": "integer"
+    },
+    "hdop": {
+      "title": "Hdop",
+      "type": "number"
+    }
+  },
+  "required": [
+    "x",
+    "y",
+    "alt_m",
+    "speed_mps",
+    "heading_deg",
+    "fix",
+    "sats",
+    "hdop"
+  ],
+  "title": "PositionUpdated",
+  "type": "object"
+}

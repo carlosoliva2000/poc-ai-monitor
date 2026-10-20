@@ -1,0 +1,101 @@
+{
+  "$defs": {
+    "PlayerStatus": {
+      "enum": [
+        "idle",
+        "running",
+        "paused",
+        "finished"
+      ],
+      "title": "PlayerStatus",
+      "type": "string"
+    },
+    "SensorSource": {
+      "description": "Fuentes que se pueden silenciar y en las que puede saltar `SOURCE_SILENT`.",
+      "enum": [
+        "gps",
+        "radar",
+        "meteo",
+        "link",
+        "battery"
+      ],
+      "title": "SensorSource",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Se envía al conectar, al cambiar y cada 0,5 s mientras corre.",
+  "properties": {
+    "status": {
+      "$ref": "#/$defs/PlayerStatus"
+    },
+    "scenario": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Scenario"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Run Id"
+    },
+    "sim_time": {
+      "title": "Sim Time",
+      "type": "number"
+    },
+    "speed": {
+      "title": "Speed",
+      "type": "number"
+    },
+    "wait_agent": {
+      "title": "Wait Agent",
+      "type": "boolean"
+    },
+    "muted_sources": {
+      "items": {
+        "$ref": "#/$defs/SensorSource"
+      },
+      "title": "Muted Sources",
+      "type": "array"
+    },
+    "cursor": {
+      "title": "Cursor",
+      "type": "integer"
+    },
+    "total_events": {
+      "title": "Total Events",
+      "type": "integer"
+    },
+    "op": {
+      "const": "state",
+      "default": "state",
+      "title": "Op",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "scenario",
+    "run_id",
+    "sim_time",
+    "speed",
+    "wait_agent",
+    "muted_sources",
+    "cursor",
+    "total_events"
+  ],
+  "title": "StateMessage",
+  "type": "object"
+}

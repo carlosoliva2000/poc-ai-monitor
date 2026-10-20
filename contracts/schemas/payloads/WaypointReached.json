@@ -1,0 +1,19 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "waypoint_id": {
+      "title": "Waypoint Id",
+      "type": "string"
+    },
+    "index": {
+      "title": "Index",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "waypoint_id",
+    "index"
+  ],
+  "title": "WaypointReached",
+  "type": "object"
+}

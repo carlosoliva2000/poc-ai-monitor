@@ -1,0 +1,56 @@
+{
+  "$defs": {
+    "ScenarioInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "generated": {
+          "title": "Generated",
+          "type": "boolean"
+        },
+        "duration_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Duration S"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "generated",
+        "duration_s"
+      ],
+      "title": "ScenarioInfo",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Respuesta de `GET /api/scenarios`.",
+  "properties": {
+    "scenarios": {
+      "items": {
+        "$ref": "#/$defs/ScenarioInfo"
+      },
+      "title": "Scenarios",
+      "type": "array"
+    }
+  },
+  "required": [
+    "scenarios"
+  ],
+  "title": "ScenariosResponse",
+  "type": "object"
+}
