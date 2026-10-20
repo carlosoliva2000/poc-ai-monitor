@@ -1,4 +1,4 @@
-"""`contracts/schemas/` coincide con lo que generan los modelos (regla 2 del CLAUDE.md)."""
+"""`contracts/schemas/` coincide con lo que generan los modelos (cambian en el mismo commit)."""
 
 from pathlib import Path
 

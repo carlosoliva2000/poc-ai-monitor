@@ -1,6 +1,6 @@
 # PoC `poc-ai-monitor`: definición
 
-> Creado el 16/10/2026 a partir de la conversación entre Carlos Oliva y Claude (proyecto CITADEL). Es la referencia de diseño de la PoC: el `CLAUDE.md` de la raíz resume las reglas y este documento explica el porqué. Si algo de aquí contradice a `contracts/eventos.md`, mandan los contratos; avisa a Carlos.
+> Creado el 16/10/2026 (proyecto CITADEL). Es la referencia de diseño de la PoC. Si algo de aquí contradice a `contracts/eventos.md`, mandan los contratos.
 
 ## 1. Para qué es
 
@@ -12,7 +12,7 @@ Lo que se quiere demostrar, en este orden:
 3. La IA **diagnostica causas cruzando fuentes** (GPS, radar, meteorología, enlace de mando), no solo dice «algo va mal».
 4. El diseño se puede **portar a Java** sin reescribir las tools, los prompts ni las skills.
 
-**No es** predecir la trayectoria del dron, ni controlarlo, ni un producto. Plazo: una o dos jornadas de trabajo con Claude Code; se enseña la semana del 19/10/2026.
+**No es** predecir la trayectoria del dron, ni controlarlo, ni un producto. Plazo: una o dos jornadas de trabajo; se enseña la semana del 19/10/2026.
 
 ## 2. Decisiones tomadas (16/10/2026)
 

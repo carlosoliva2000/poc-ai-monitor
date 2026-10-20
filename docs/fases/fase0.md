@@ -90,6 +90,11 @@ Decisiones de implementación que **no estaban en el documento** (dímelo si alg
 - Probado: sobre todo el código (formateó los 19 ficheros, exit 0); sobre un `.py` temporal con `import os` sin usar, dos sentencias en una línea y una línea de 126 columnas (exit 2 y `E501 … (126 > 100)` por stderr; el fichero se borró). Además, `.tools/hook.log` muestra ejecuciones que yo no lancé a mano tras llamadas a Bash, o sea que **se dispara solo en esta sesión** sin reiniciarla (la documentación dice que los cambios en `settings.json` se recogen automáticamente, aunque ese detalle viene de un resumen, no de texto literal).
 - `.gitignore`: añadidos `runs/*`, `!runs/.gitkeep` y `.tools/`.
 
+### 2.6 Instantánea limpia y reglas 15–16 (añadido tras la revisión)
+- `CLAUDE.md`: reglas 15 (instantánea limpia) y 16 (sin referencias a Claude en el proyecto).
+- Antes de copiar, un grep previo encontró tres menciones en ficheros que entran en la instantánea limpia, y se corrigieron **en el repo**: `docs/01_definicion.md` línea 3 (cita de cabecera reescrita sin mencionar `CLAUDE.md` ni a Claude), `docs/01_definicion.md` línea 15 («con Claude Code» eliminado) y el docstring de `contracts/python/tests/test_schemas_up_to_date.py` (citaba `CLAUDE.md`).
+- Resultado del comando de la regla 15 sobre `snapshots-limpias/fase0/` (103 ficheros): `instantánea limpia` (el grep no devolvió ningún fichero).
+
 ## 3. Cómo se ejecuta
 ```bash
 # esquemas JSON (regenera contracts/schemas/)
