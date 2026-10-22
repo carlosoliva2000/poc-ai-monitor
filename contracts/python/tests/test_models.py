@@ -265,6 +265,7 @@ def test_track_metrics_without_radar() -> None:
             "course_deg": {"gps": 95.0, "radar": None},
             "bearing_to_next_waypoint_deg": 71.0, "next_waypoint": "WP2",
             "mean_speed_mps": {"gps": 14.6, "radar": None},
+            "wind": None, "gps_radar": None, "gps_max_step_m": 0.5,
             "samples": {"gps": 30, "radar": 0},
             "gps_available": True, "radar_available": False,
             "last_seen_sim_time": {"gps": 150.0, "radar": 119.0},

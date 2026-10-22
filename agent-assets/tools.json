@@ -33,7 +33,7 @@
     "type": "function",
     "function": {
       "name": "get_track_metrics",
-      "description": "Calcula métricas de la trayectoria entre dos instantes a partir del GPS y del radar: desviación de cada fuente respecto a la ruta planificada, distancia entre GPS y radar, dirección de la deriva, rumbo de avance frente al rumbo al siguiente waypoint y velocidad media. Devuelve también los ids de los eventos usados, para citarlos como evidencia.",
+      "description": "Calcula métricas de la trayectoria entre dos instantes a partir del GPS y del radar: desviación de cada fuente respecto a la ruta planificada, distancia entre GPS y radar, dirección de la deriva, rumbo de avance frente al rumbo al siguiente waypoint, velocidad media y el viento de la misma ventana (velocidad media, racha máxima, hacia dónde empuja y diferencia con la deriva). Devuelve también los ids de los eventos usados, para citarlos como evidencia.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -74,17 +74,47 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "detection_ids": {"type": "array", "items": {"type": "string"}, "description": "Ids de las detecciones que motivan la alerta (det-…)"},
+          "detection_ids": {"type": "array", "items": {"type": "string"}, "description": "Ids de las detecciones que motivan la alerta (det-…). Opcional si solo hay una detección pendiente: el módulo la pone"},
+          "checks": {
+            "type": "object",
+            "description": "Comprobaciones que has hecho antes de elegir la causa; se contrastan con los resultados de las tools. Rellénalas ANTES de elegir cause",
+            "properties": {
+              "gps_alert_recent": {"type": "boolean", "description": "La línea «Alerta del GPS reciente» del estado dice sí"},
+              "gps_radar_disagreed": {"type": "boolean", "description": "gps_radar.disagreed de get_track_metrics (false si no lo has llamado)"},
+              "wind_notable": {"type": "boolean", "description": "wind.notable de get_track_metrics (false si no hay viento o no lo has llamado)"},
+              "wind_with_drift": {"type": "boolean", "description": "wind.with_drift de get_track_metrics (false si no hay viento o no lo has llamado)"},
+              "link_checked": {"type": "boolean", "description": "Has llamado a get_events con source link"},
+              "link_anomalous": {"type": ["boolean", "null"], "description": "El enlace es anómalo (otro controller_id, salto de RSSI de más de 10 dB o latencia muy superior); null si no lo has mirado"}
+            },
+            "required": ["gps_alert_recent", "gps_radar_disagreed", "wind_notable", "wind_with_drift", "link_checked", "link_anomalous"],
+            "additionalProperties": false
+          },
           "cause": {"type": "string", "enum": ["WIND", "HIJACK", "GPS_SPOOFING", "SENSOR_FAULT", "GPS_JAMMING", "UNKNOWN"], "description": "Causa más probable"},
           "severity": {"type": "string", "enum": ["low", "medium", "high"]},
           "confidence": {"type": "number", "description": "Confianza en la causa, de 0 a 1"},
+          "evidence_event_ids": {"type": "array", "items": {"type": "string"}, "description": "De 2 a 6 ids de eventos que hayas visto en las tools (p. ej. met-0010, gps-000106) y respaldan el diagnóstico; van aquí, no en la explicación"},
           "summary": {"type": "string", "description": "Una frase, como máximo 160 caracteres"},
           "explanation": {"type": "string", "description": "Razonamiento con datos concretos y tiempos (T+mm:ss)"},
           "recommendation": {"type": "string", "description": "Qué recomiendas al responsable del dron. Solo recomendar: no puedes actuar"},
-          "evidence_event_ids": {"type": "array", "items": {"type": "string"}, "description": "Ids de los eventos que respaldan el diagnóstico (deben existir)"},
           "supersedes": {"type": "string", "description": "Opcional: alert_id de una alerta tuya anterior a la que esta sustituye"}
         },
-        "required": ["detection_ids", "cause", "severity", "confidence", "summary", "explanation", "recommendation", "evidence_event_ids"]
+        "required": ["checks", "cause", "severity", "confidence", "evidence_event_ids", "summary", "explanation", "recommendation"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "acknowledge_detection",
+      "description": "Responde a una o varias detecciones sin crear una alerta nueva (publica un evento DetectionAcknowledged). Úsala cuando la detección pertenece a una alerta tuya que ya está abierta y no cambia ni su causa ni su severidad (pasa alert_id), o cuando decides que no hace falta alerta (no pases alert_id).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "detection_ids": {"type": "array", "items": {"type": "string"}, "description": "Ids de las detecciones a las que respondes (det-…); deben ser de las que te han pasado. Opcional si solo hay una detección pendiente: el módulo la pone"},
+          "alert_id": {"type": "string", "description": "Opcional: alert_id de la alerta abierta a la que pertenecen. Si no hace falta alerta, no lo pases. En un aviso de cierre de una alerta, el módulo lo pone"},
+          "reason": {"type": "string", "description": "Por qué, con datos"}
+        },
+        "required": ["reason"]
       }
     }
   },
@@ -96,10 +126,10 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "alert_id": {"type": "string"},
+          "alert_id": {"type": "string", "description": "La alerta que cierras. Opcional en un aviso de cierre: el módulo pone la de ese aviso"},
           "reason": {"type": "string", "description": "Por qué se cierra, con datos"}
         },
-        "required": ["alert_id", "reason"]
+        "required": ["reason"]
       }
     }
   },

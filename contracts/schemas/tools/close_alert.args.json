@@ -2,8 +2,16 @@
   "additionalProperties": false,
   "properties": {
     "alert_id": {
-      "title": "Alert Id",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Alert Id"
     },
     "reason": {
       "title": "Reason",
@@ -11,7 +19,6 @@
     }
   },
   "required": [
-    "alert_id",
     "reason"
   ],
   "title": "CloseAlertArgs",

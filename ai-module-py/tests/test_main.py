@@ -31,7 +31,7 @@ def test_run_publishes_the_same_detections_as_the_file(capsys) -> None:
     async def scenario() -> None:
         async with serve(handler, "127.0.0.1", 0) as server:
             port = server.sockets[0].getsockname()[1]
-            task = asyncio.create_task(run(f"http://127.0.0.1:{port}"))
+            task = asyncio.create_task(run(f"http://127.0.0.1:{port}", detector_only=True))
             try:
                 await asyncio.wait_for(done.wait(), 10)
             finally:

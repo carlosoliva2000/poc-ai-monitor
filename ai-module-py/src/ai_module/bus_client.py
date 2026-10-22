@@ -7,7 +7,8 @@ Uso típico:
             ...
             await bus.publish(draft)
 
-Al conectar manda `hello` como `ai-module` y se suscribe a `citadel.pub.evt.>`. Si se cae la
+Al conectar manda `hello` como `ai-module` y se suscribe a `DEFAULT_PATTERNS` (mundo, IA, operador
+y ciclo de vida de la ejecución; no los fallos inyectados ni el modo interactivo). Si se cae la
 conexión, `events()` reconecta solo con una espera creciente y vuelve a suscribirse; después de
 cada conexión llama a `on_connected` (la usa el módulo para pedir el plan de la misión por HTTP si
 arranca con la simulación ya en marcha).
@@ -82,6 +83,25 @@ def _post_tool(platform_url: str, name: str, args: dict[str, Any], timeout_s: fl
     )
     with urllib.request.urlopen(request, timeout=timeout_s) as response:
         return json.loads(response.read())
+
+
+async def call_platform_tool(
+    platform_url: str, name: str, args: dict[str, Any], timeout_s: float = 10.0
+) -> Any:
+    """`POST /api/tools/{name}`: devuelve el `result`; lanza `PlatformToolError` si la plataforma
+    responde `ok: false` o no responde."""
+    try:
+        body = await asyncio.to_thread(_post_tool, platform_url, name, args, timeout_s)
+    except (OSError, urllib.error.URLError, ValueError) as exc:
+        raise PlatformToolError(f"la plataforma no responde: {exc}") from exc
+    if not isinstance(body, dict) or not body.get("ok"):
+        message = body.get("error") if isinstance(body, dict) else None
+        raise PlatformToolError(str(message or f"respuesta inesperada: {body!r}"))
+    return body.get("result")
+
+
+class PlatformToolError(Exception):
+    """Una tool de datos de la plataforma ha fallado (mensaje en español)."""
 
 
 async def fetch_mission_plan(platform_url: str, timeout_s: float = 5.0) -> dict[str, Any] | None:

@@ -18,7 +18,7 @@ Interfaz de la demo. Se parte de la que generó v0 (`/mnt/c/Proyectos/interfaz-d
 - **Telemetría** (`telemetry-strip.tsx`): x, y, velocidad, rumbo, distancia GPS–radar, viento, enlace (`controller_id`), batería.
 - **Timeline de eventos** (`event-timeline.tsx`): todos los eventos con filtros por fuente (ocultar GPS y radar por defecto).
 - **Consola del agente** (`agent-console.tsx`), dos pestañas:
-  - **Monitor:** detecciones del detector, actividad del agente («analizando det-0002…», con `AgentActivity`), alertas (`AnomalyDetected`: causa, severidad, confianza, resumen; desplegable con explicación, recomendación y evidencias) y cierres. Abajo, el chat con el monitor en streaming.
+  - **Monitor:** detecciones del detector, actividad del agente («analizando det-0002…», con `AgentActivity`), alertas (`AnomalyDetected`: causa, severidad, confianza, resumen; desplegable con explicación, recomendación y evidencias), cierres (`AlertClosed`) y reconocimientos (`DetectionAcknowledged`: «sigue la alerta X», «sin alerta», o «sin diagnóstico» si `fallback`). Cada detección tiene respuesta; una cadena de alertas por `supersedes` es una sola alerta. Abajo, el chat con el monitor en streaming.
   - **Informe:** el `ReportGenerated` renderizado en Markdown y el chat con el agente de informe.
   - Distingue claramente quién habla: detector, monitor, informe y operador.
 

@@ -4,42 +4,42 @@ description: Estructura y estilo del informe final del ejercicio. Úsala siempre
 ---
 # Formato del informe final
 
-Escribe en **Markdown**, en español, para un responsable que no ha visto la simulación. Breve: cabe en una pantalla y media. Tiempos como T+mm:ss.
+El informe es un documento en **Markdown**, en español, para un responsable que no ha visto la simulación. Breve: cabe en una pantalla y media. Tiempos como T+mm:ss.
 
-## Estructura (en este orden)
+## Quién escribe qué
+El informe final lo monta el módulo con estas partes, en este orden:
+
+1. **Cabecera** (módulo): misión, escenario, duración, si se completó, waypoints y número de anomalías.
+2. **Resumen** (tú).
+3. **Cronología** (módulo): tabla con las detecciones, las alertas y los cierres, con su hora.
+4. **Anomalías** (módulo y tú): una subsección por anomalía (cada cadena de alertas que se sustituyen entre sí es **una** anomalía), con la hora y la severidad de su primera alerta, los cambios de la última, las evidencias y el estado, escritos por el módulo. Tú escribes solo el «Qué se vio» de cada una.
+5. **Valoración del monitor** (tú).
+6. **Recomendaciones** (tú).
+7. **Limitaciones** (módulo).
+
+## Lo que escribes tú
+Responde **solo** con estos cuatro apartados, con estos títulos exactos y en este orden:
 
 ```markdown
-# Informe de la misión <mission_id>
-
-**Escenario:** <nombre> · **Duración:** <mm:ss> · **Misión completada:** sí/no (<motivo>)
-
 ## Resumen
 3–5 frases: qué pasó, cuántas anomalías hubo, cuál fue la más grave y si el monitor las identificó a tiempo.
 
-## Cronología
-| Tiempo | Fuente | Qué pasó |
-|---|---|---|
-Solo hechos relevantes (despegue, waypoints, inicio y fin de cada anomalía, detecciones, alertas y cierres). Máximo 15 filas.
-
-## Anomalías
-Una subsección por alerta del monitor (las sustituidas, juntas con la que las sustituyó):
-### <causa en palabras> (<severidad>, confianza <x>)
-- **Cuándo:** detección a T+…, alerta a T+… (retraso de diagnóstico: … s de simulación).
-- **Qué se vio:** 2–3 frases con cifras y fuentes.
-- **Evidencias:** ids principales.
-- **Estado:** cerrada a T+… / abierta al final.
+## Qué se vio
+### A1
+2–3 frases con cifras y fuentes (lo que vio el detector y lo que comprobó el monitor). Sin repetir la hora, la severidad ni el estado.
+### A2
+…
 
 ## Valoración del monitor
-Qué diagnósticos están bien respaldados por los datos, cuáles son dudosos y por qué, y si hubo detecciones sin alerta o alertas sin detección. No tienes la verdad del simulador: valora con los eventos.
+Con espíritu crítico, en cuatro viñetas: **Respaldo** (qué comprobaciones sostienen cada causa y qué duda queda), **Retrasos**, **Fallbacks y rechazos** (cifras exactas) y **Ayudas** (cuáles tenía activas y cómo pueden influir en el resultado).
 
 ## Recomendaciones
-2–4 puntos accionables para el responsable del dron o del ejercicio.
-
-## Limitaciones
-Datos simulados; el monitor solo veía lo ocurrido hasta cada instante; lo que no se pudo comprobar.
+1. …
+2. …
 ```
 
 ## Reglas
-- Cada cifra sale de una tool. Si no tienes un dato, escribe «no disponible».
-- No copies el JSON de las tools: tradúcelo a frases.
+- Cada cifra sale de los datos que te entregan. Si no tienes un dato, escribe «no disponible».
+- No escribas horas, severidades, estados ni ids que no estén en los datos; los hechos los pone el módulo.
+- No copies el JSON de los datos: tradúcelo a frases.
 - Sin adornos ni conclusiones que no salgan de los datos.

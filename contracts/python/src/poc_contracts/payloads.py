@@ -203,6 +203,26 @@ class DetectionCleared(Payload):
 # --- Del agente monitor ----------------------------------------------------------------------
 
 
+class AlertChecks(Payload):
+    """Comprobaciones que el monitor declara antes de elegir la causa (para que el operador vea
+    por qué se decidió). El módulo las contrasta con los resultados de las tools de la
+    invocación y con el estado."""
+
+    gps_alert_recent: bool
+    """Hay una alerta del GPS abierta o cerrada hace 60 s de tiempo simulado o menos."""
+    gps_radar_disagreed: bool
+    """`gps_radar.disagreed` del último `get_track_metrics` (falso si no se llamó)."""
+    wind_notable: bool
+    """`wind.notable` del último `get_track_metrics` (falso si no hay viento o no se llamó)."""
+    wind_with_drift: bool
+    """`wind.with_drift` del último `get_track_metrics` (falso si no hay viento o no se llamó)."""
+    link_checked: bool
+    """Se llamó a `get_events` con `source: link` en la invocación."""
+    link_anomalous: bool | None
+    """Enlace anómalo en esos eventos (otro `controller_id`, salto de RSSI > 10 dB o latencia
+    muy superior); `None` si no se miró."""
+
+
 class AnomalyDetected(Payload):
     alert_id: str
     detection_ids: list[str]
@@ -216,12 +236,26 @@ class AnomalyDetected(Payload):
     supersedes: str | None
     as_of_sim_time: float
     fallback: bool
+    checks: AlertChecks | None = None
 
 
 class AlertClosed(Payload):
     alert_id: str
     reason: str
     as_of_sim_time: float
+
+
+class DetectionAcknowledged(Payload):
+    """Respuesta del monitor a una detección que no genera una alerta nueva: `alert_id` es la
+    alerta abierta a la que pertenece, o `None` si no hace falta alerta. `fallback: true` si lo
+    publica el módulo porque el agente no concluyó. El `causation_id` del sobre es el
+    `event_id` del evento de detección al que responde."""
+
+    detection_id: str
+    alert_id: str | None
+    reason: str
+    as_of_sim_time: float
+    fallback: bool
 
 
 # --- Del agente de informe -------------------------------------------------------------------
@@ -282,6 +316,7 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.DETECTION_RAISED: DetectionRaised,
     EventType.DETECTION_UPDATED: DetectionUpdated,
     EventType.DETECTION_CLEARED: DetectionCleared,
+    EventType.DETECTION_ACKNOWLEDGED: DetectionAcknowledged,
     EventType.ANOMALY_DETECTED: AnomalyDetected,
     EventType.ALERT_CLOSED: AlertClosed,
     EventType.REPORT_GENERATED: ReportGenerated,

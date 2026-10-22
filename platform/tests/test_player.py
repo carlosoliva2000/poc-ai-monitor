@@ -192,6 +192,23 @@ def test_reset_reloads_with_new_run_id_and_clean_bus(runs_dir: Path) -> None:
     assert json.loads(old.read_text().splitlines()[-1])["type"] == "SimulationReset"
 
 
+def test_timeline_keeps_appending_after_the_dump(runs_dir: Path) -> None:
+    """Lo que llega después de `SimulationFinished` (respuestas, informe, chats) también queda."""
+    player = make_player(runs_dir)
+    player.load("nominal")
+    player.run_to_end()
+    path = runs_dir / "nominal" / str(player.run_id) / "timeline.jsonl"
+    before = len(path.read_text().splitlines())
+    late = player.bus.publish(cleared(1, player.sim_time))
+    lines = path.read_text().splitlines()
+    assert len(lines) == before + 1 == len(player.bus.timeline)
+    assert json.loads(lines[-1])["event_id"] == late.event_id
+    # al cargar otro escenario el fichero antiguo deja de recibir eventos
+    player.load("viento")
+    player.bus.publish(cleared(2, 1.0))
+    assert len(path.read_text().splitlines()) == before + 2  # solo el SimulationReset de la carga
+
+
 def test_finishing_dumps_the_timeline(runs_dir: Path) -> None:
     player = make_player(runs_dir)
     player.load("nominal")
@@ -403,6 +420,65 @@ def test_wait_agent_pauses_on_detection_and_resumes_on_the_monitor_reply(runs_di
     assert types(player).count("SimulationResumed") == 1
     player.advance(5)
     assert player.sim_time > waiting_at
+
+
+def cleared(number: int, sim_time: float) -> Envelope:
+    from platform_app.generator.events import make_event
+
+    payload = {
+        "detection_id": f"det-{number:04d}",
+        "rule": "ROUTE_DEVIATION",
+        "duration_s": 20.0,
+        "max_value": 40.0,
+    }
+    return make_event(
+        load_scenario("nominal"), EventType.DETECTION_CLEARED, sim_time, number + 50, payload
+    )
+
+
+def test_wait_agent_resumes_with_a_detection_acknowledged(runs_dir: Path) -> None:
+    """Cualquier evento del monitor con el `causation_id` de la detección reanuda, también la
+    respuesta que no crea alerta; un `DetectionUpdated` espera por su propio `event_id`."""
+    from platform_app.generator.events import make_event
+
+    def ack(number: int, detection_id: str, causation_id: str, sim_time: float) -> Envelope:
+        payload = {
+            "detection_id": detection_id,
+            "alert_id": None,
+            "reason": "sin alerta",
+            "as_of_sim_time": sim_time,
+            "fallback": False,
+        }
+        event = make_event(
+            load_scenario("nominal"), EventType.DETECTION_ACKNOWLEDGED, sim_time, number, payload
+        )
+        return event.model_copy(update={"causation_id": causation_id})
+
+    player = make_player(runs_dir)
+    player.load("nominal")
+    player.set_wait_agent(True)
+    player.play()
+    player.advance(10)
+    raised = player.bus.publish(detection(1, player.sim_time))
+    updated = player.bus.publish(detection(2, player.sim_time, EventType.DETECTION_UPDATED))
+    assert player.state().status == PlayerStatus.PAUSED
+    # el `detection_id` no vale: hay que responder al `event_id` de cada evento de detección
+    player.bus.publish(ack(1, "det-0001", "det-0001-no", player.sim_time))
+    assert player.state().status == PlayerStatus.PAUSED
+    player.bus.publish(ack(2, "det-0001", raised.event_id, player.sim_time))
+    assert player.state().status == PlayerStatus.PAUSED
+    player.bus.publish(ack(3, "det-0001", updated.event_id, player.sim_time))
+    assert player.state().status == PlayerStatus.RUNNING
+
+
+def test_wait_agent_does_not_pause_on_a_cleared_detection(runs_dir: Path) -> None:
+    player = make_player(runs_dir)
+    player.load("nominal")
+    player.set_wait_agent(True)
+    player.play()
+    player.advance(10)
+    player.bus.publish(cleared(1, player.sim_time))
+    assert player.state().status == PlayerStatus.RUNNING
 
 
 def test_wait_agent_resumes_after_the_wall_clock_timeout(runs_dir: Path) -> None:

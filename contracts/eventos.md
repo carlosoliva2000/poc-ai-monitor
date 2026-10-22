@@ -1,6 +1,6 @@
 # Contratos de `poc-ai-monitor`
 
-> **Fuente de verdad** de lo que se intercambian los componentes: eventos, topics, mensajes del WebSocket, API HTTP y tools. Versión 0.5 (20/10/2026: simulación en directo y modo interactivo; tipo de fallo `mute`/`loss` (pérdida de GPS) en `control` → `fault`, en `FaultInjected`/`FaultCleared`, en `faults` del YAML y en `state` (`active_faults`, `interactive`); regla `GPS_DEGRADED`, causa `GPS_JAMMING`, evento `InteractiveModeChanged` (ids `plr-` para el estado del reproductor); v0.4: ficheros del generador y YAML de escenario (§8), la ruta de `MissionPlanned` incluye la vuelta a la base; v0.3: `source` y `asset` del sobre, `fix`, `GET /scenarios`, resultado de `get_flight_summary` y `get_track_metrics` sin datos de una fuente, patrón de suscripción de ejemplo corregido en §3; v0.2, 16/10/2026: fallos manuales y regla `SOURCE_SILENT`). Cualquier cambio se hace aquí primero y después en `contracts/python` (Pydantic), `contracts/schemas/` (JSON Schema exportado) y en todos los componentes, en el mismo cambio.
+> **Fuente de verdad** de lo que se intercambian los componentes: eventos, topics, mensajes del WebSocket, API HTTP y tools. Versión 0.8 (21/10/2026: ids opcionales en `publish_alert`, `acknowledge_detection` y `close_alert` (los rellena el módulo); v0.7: hechos calculados en `get_track_metrics` (`wind.notable`, `wind.with_drift`, `gps_radar.disagreed`, `gps_max_step_m`) y `checks` en `publish_alert` y en `AnomalyDetected`; v0.6: respuesta del monitor a cada detección: evento `DetectionAcknowledged`, tool `acknowledge_detection` y fallbacks de §4; `wind` en el resultado de `get_track_metrics`; v0.5, 20/10/2026: simulación en directo y modo interactivo; tipo de fallo `mute`/`loss` (pérdida de GPS) en `control` → `fault`, en `FaultInjected`/`FaultCleared`, en `faults` del YAML y en `state` (`active_faults`, `interactive`); regla `GPS_DEGRADED`, causa `GPS_JAMMING`, evento `InteractiveModeChanged` (ids `plr-` para el estado del reproductor); v0.4: ficheros del generador y YAML de escenario (§8), la ruta de `MissionPlanned` incluye la vuelta a la base; v0.3: `source` y `asset` del sobre, `fix`, `GET /scenarios`, resultado de `get_flight_summary` y `get_track_metrics` sin datos de una fuente, patrón de suscripción de ejemplo corregido en §3; v0.2, 16/10/2026: fallos manuales y regla `SOURCE_SILENT`). Cualquier cambio se hace aquí primero y después en `contracts/python` (Pydantic), `contracts/schemas/` (JSON Schema exportado) y en todos los componentes, en el mismo cambio.
 
 ## 1. Convenciones
 - **Unidades:** metros, segundos, m/s, grados. Plano x,y con origen en la base: **x hacia el este, y hacia el norte**.
@@ -26,7 +26,7 @@
   "payload": { }
 }
 ```
-- `source`: quién publica. Generador: `d1-gps`, `radar-1`, `meteo-1`, `d1-link`, `d1-bat`, `d1-mission`. Reproductor (estado, modo interactivo y `FaultInjected`/`FaultCleared`): `platform-player`. Módulo de IA: `ai-detector` (detecciones), `ai-monitor` (`AnomalyDetected`, `AlertClosed`), `ai-report` (`ReportGenerated`), `ai-chat-monitor` / `ai-chat-report` (`AgentReply`, `AgentReplyChunk`), `ai-module` (`AgentActivity`). Web (`OperatorMessage`): `web-operator`.
+- `source`: quién publica. Generador: `d1-gps`, `radar-1`, `meteo-1`, `d1-link`, `d1-bat`, `d1-mission`. Reproductor (estado, modo interactivo y `FaultInjected`/`FaultCleared`): `platform-player`. Módulo de IA: `ai-detector` (detecciones), `ai-monitor` (`AnomalyDetected`, `AlertClosed`, `DetectionAcknowledged`), `ai-report` (`ReportGenerated`), `ai-chat-monitor` / `ai-chat-report` (`AgentReply`, `AgentReplyChunk`), `ai-module` (`AgentActivity`). Web (`OperatorMessage`): `web-operator`.
 - `asset`: `"d1"` en los topics `air.d1` y `ai.d1`; `"zone1"` en `env.zone1`; `null` en el resto (`sim`, `ops`, `ai.monitor`, `ai.report`, `ai.agent`).
 - `seq`: orden global de publicación en la ejecución (lo pone el bus).
 - `causation_id`: id del evento que provocó este (p. ej. la detección que provocó una alerta). `null` si no aplica.
@@ -47,7 +47,7 @@ Forma: `<namespace>.<clasification>.<type>.<domain>.<routing>.<event>.<version>`
 | `citadel.pub.evt.sim.player.SimulationStarted.v1`, `.SimulationPaused.v1`, `.SimulationResumed.v1`, `.SimulationFinished.v1`, `.SimulationReset.v1`, `.InteractiveModeChanged.v1` | Estado del reproductor y modo interactivo. **El agente no los ve** | Plataforma |
 | `citadel.pub.evt.sim.player.FaultInjected.v1`, `.FaultCleared.v1` | Fallo activado o terminado: fuente silenciada (`mute`) o pérdida de GPS (`loss`), manual o programado. **El agente no los ve** | Plataforma |
 | `citadel.pub.evt.ai.d1.DetectionRaised.v1`, `.DetectionUpdated.v1`, `.DetectionCleared.v1` | Detector de reglas | Módulo de IA |
-| `citadel.pub.evt.ai.d1.AnomalyDetected.v1`, `.AlertClosed.v1` | Agente monitor | Módulo de IA |
+| `citadel.pub.evt.ai.d1.AnomalyDetected.v1`, `.AlertClosed.v1`, `.DetectionAcknowledged.v1` | Agente monitor | Módulo de IA |
 | `citadel.pub.evt.ai.d1.ReportGenerated.v1` | Agente de informe | Módulo de IA |
 | `citadel.pub.evt.ops.monitor.OperatorMessage.v1`, `citadel.pub.evt.ops.report.OperatorMessage.v1` | Pregunta del operador a cada agente | Web |
 | `citadel.pub.evt.ai.monitor.AgentReply.v1`, `citadel.pub.evt.ai.report.AgentReply.v1` | Respuesta completa del chat | Módulo de IA |
@@ -127,14 +127,37 @@ Ejemplo de `GPS_DEGRADED`:
   "explanation": "Entre T+01:20 y T+01:24 el GPS y el radar coinciden (≤ 6 m) y ambos se alejan 35 m del plan hacia el sur (182°). La estación meteo reporta 14 m/s del norte (met-0008). La deriva va a favor del viento.",
   "recommendation": "Sin intervención. Vigilar que recupera la ruta antes de WP3.",
   "evidence_event_ids": ["gps-000084", "rad-000042", "met-0008"],
-  "supersedes": null, "as_of_sim_time": 84.0, "fallback": false }
+  "supersedes": null, "as_of_sim_time": 84.0, "fallback": false,
+  "checks": { "gps_alert_recent": false, "gps_radar_disagreed": false, "wind_notable": true,
+              "wind_with_drift": true, "link_checked": false, "link_anomalous": null } }
 ```
-`cause`: `WIND` | `HIJACK` | `GPS_SPOOFING` | `SENSOR_FAULT` | `GPS_JAMMING` | `UNKNOWN` (reservada para el futuro: `REPLAY`). `supersedes`: `alert_id` de una alerta anterior a la que esta sustituye (p. ej. al cambiar la causa). `fallback: true` si lo publicó el módulo porque el agente no concluyó.
+`cause`: `WIND` | `HIJACK` | `GPS_SPOOFING` | `SENSOR_FAULT` | `GPS_JAMMING` | `UNKNOWN` (reservada para el futuro: `REPLAY`). `supersedes`: `alert_id` de una alerta anterior a la que esta sustituye (p. ej. al cambiar la causa o la severidad); las alertas encadenadas por `supersedes` son **una sola alerta** (un episodio). `fallback: true` si lo publicó el módulo porque el agente no concluyó. `checks` (opcional, `null` en las alertas de fallback): las comprobaciones que el monitor declaró antes de elegir la causa, para que el operador vea por qué se decidió: `gps_alert_recent` (hay una alerta del GPS abierta o cerrada hace 60 s o menos), `gps_radar_disagreed`, `wind_notable` y `wind_with_drift` (los hechos de `get_track_metrics`; falsos si no se llamó), `link_checked` (se miró el enlace con `get_events`) y `link_anomalous` (`null` si no se miró). El módulo comprueba que coinciden con los resultados de las tools de esa invocación (§7).
 
 **`AlertClosed`** `{ "alert_id": "ai-0003", "reason": "La desviación se ha corregido (det-0002 cerrada)", "as_of_sim_time": 130.0 }`
 
+**`DetectionAcknowledged`** (`ai-`, `causation_id` = el `event_id` del evento de detección al que responde)
+```json
+{ "detection_id": "det-0002", "alert_id": "ai-0003", "reason": "Sigue la misma deriva por viento; la alerta ai-0003 ya lo explica", "as_of_sim_time": 258.0, "fallback": false }
+```
+`alert_id`: la alerta abierta a la que pertenece la detección, o `null` si el monitor decide que no hace falta alerta (o no concluye, con `fallback: true`).
+
+**Cada evento de detección recibe respuesta.** Por cada `DetectionRaised`, `DetectionUpdated` y `DetectionCleared`, el monitor publica **al menos un** evento de `ai-monitor` con su `event_id` como `causation_id` (el reproductor, con «esperar al agente», se reanuda con cualquiera). Qué publica:
+
+| Caso | Respuesta |
+|---|---|
+| Alerta nueva | `AnomalyDetected` |
+| Pertenece a una alerta abierta y cambia la causa o la severidad | `AnomalyDetected` con `supersedes` |
+| Pertenece a una alerta abierta y no cambia nada | `DetectionAcknowledged` con `alert_id` |
+| No hace falta alerta | `DetectionAcknowledged` con `alert_id: null` |
+| El agente no concluye (texto final tras un recordatorio, tope de iteraciones, tiempo agotado o error del LLM) en un `DetectionRaised` **sin ninguna alerta abierta** | `AnomalyDetected` con `cause: UNKNOWN` y `fallback: true` |
+| El agente no concluye en cualquier otro caso | `DetectionAcknowledged` con `fallback: true` y `alert_id: null` |
+| `DetectionCleared` y a la alerta le quedan detecciones abiertas, o no tiene alerta, o ya está cerrada | `DetectionAcknowledged` determinista (sin LLM) |
+| `DetectionCleared` de la última detección abierta de una alerta | El LLM decide: `AlertClosed`, o `DetectionAcknowledged` si cree que el problema sigue. Si no concluye, el módulo publica un `AlertClosed` con `reason` «todas sus detecciones se han cerrado» |
+
+Si una alerta incluye varias detecciones del lote, la `AnomalyDetected` responde a la primera y el resto reciben un `DetectionAcknowledged` enlazado a esa alerta. Ninguna de estas respuestas la ve ni la cuenta `get_my_alerts` (solo `AnomalyDetected` y `AlertClosed`).
+
 ### Del agente de informe
-**`ReportGenerated`** `{ "run_id": "…", "markdown": "# Informe…", "alerts_count": 3 }`
+**`ReportGenerated`** `{ "run_id": "…", "markdown": "# Informe…", "alerts_count": 3 }` (`alerts_count`: alertas distintas; una cadena de `supersedes` cuenta como una)
 
 ### Del chat
 **`OperatorMessage`** (`ops-`) `{ "conversation_id": "monitor", "text": "¿Por qué crees que es viento?" }`
@@ -182,12 +205,18 @@ Los esquemas que ve el modelo están en `agent-assets/tools.json` (formato OpenA
   "course_deg": {"gps": 95.0, "radar": 96.0},
   "bearing_to_next_waypoint_deg": 71.0, "next_waypoint": "WP2",
   "mean_speed_mps": {"gps": 14.6, "radar": 14.4},
+  "wind": {"mean_speed_mps": 13.2, "max_gust_mps": 16.2, "from_deg": 352.0, "wind_to_deg": 172.0,
+           "drift_vs_wind_deg": 10.0, "notable": true, "with_drift": true, "samples": 3,
+           "last_event_id": "met-0008"},
+  "gps_radar": {"disagreed": false}, "gps_max_step_m": 14.8,
   "samples": {"gps": 30, "radar": 15},
   "gps_available": true, "radar_available": true,
   "last_seen_sim_time": {"gps": 90.0, "radar": 90.0},
   "first_event_ids": ["gps-000060", "rad-000030"], "last_event_ids": ["gps-000090", "rad-000045"] }
 ```
 `trend`: `increasing` | `decreasing` | `stable` (`null` con menos de 3 muestras). `drift_direction_deg`: hacia dónde se aleja del plan (del punto más cercano de la ruta a la posición), con el GPS.
+`wind`: el viento **de la misma ventana**, calculado para que el modelo no haga aritmética de ángulos: `mean_speed_mps` y `max_gust_mps` (media de las velocidades y racha máxima de los `WindReported` de la ventana), `from_deg` (procedencia: media vectorial de las direcciones ponderada por la velocidad), `wind_to_deg` (hacia dónde empuja: `from_deg` + 180, mod 360), `drift_vs_wind_deg` (diferencia absoluta, de 0 a 180, entre `drift_direction_deg` y `wind_to_deg`; `null` si no hay deriva), `samples` y `last_event_id` (el último `WindReported`, para citarlo). `notable` (`mean_speed_mps` ≥ 5 o `max_gust_mps` ≥ 8) y `with_drift` (`drift_vs_wind_deg` ≤ 45; falso si no hay deriva) son hechos ya calculados. `wind` es `null` si no hay ningún `WindReported` en la ventana (o si todos están en calma total, sin dirección).
+**Hechos calculados:** `gps_radar.disagreed` (`gps_radar_distance_m.max` ≥ 25 m; `gps_radar` es `null` si falta una de las dos fuentes) y `gps_max_step_m` (el mayor aumento de la desviación del GPS respecto al plan entre dos muestras consecutivas, a ≤ 1,5 s, de la ventana; 0 si nunca aumenta, `null` con menos de 2 muestras): en la recuperación del GPS tras un engaño o una pérdida salta decenas de metros de golpe, mientras que el viento y el secuestro alejan al dron como mucho unos 15 m por segundo. Existen para que el modelo no tenga que comparar números.
 
 **Sin datos de una fuente en la ventana** no se inventa nada: `gps_available` / `radar_available` son `false`, `samples` lleva el recuento real (0) y `last_seen_sim_time` el `sim_time` del último evento de esa fuente hasta el instante actual (`null` si nunca hubo). Lo que depende de la fuente que falta va a `null`: sin radar, `radar_deviation_from_plan_m`, `gps_radar_distance_m`, `course_deg.radar` y `mean_speed_mps.radar`; sin GPS, `gps_deviation_from_plan_m`, `gps_radar_distance_m`, `course_deg.gps` y `mean_speed_mps.gps`. `drift_direction_deg`, `bearing_to_next_waypoint_deg` y `next_waypoint` salen del GPS: `null` si no hay GPS. Si una fuente tiene muestras solo en parte de la ventana, se calcula con las que haya y `samples` lo refleja. `first_event_ids` / `last_event_ids` solo incluyen las fuentes con muestras.
 - **`get_my_alerts(only_open)`** → `{"alerts": [ {"alert_id": "ai-0003", "cause": "WIND", "severity": "low", "confidence": 0.8, "summary": "…", "status": "open", "sim_time": 84.0} ]}` (`status`: `open` | `closed` | `superseded`)
@@ -202,8 +231,8 @@ Los esquemas que ve el modelo están en `agent-assets/tools.json` (formato OpenA
   "alerts_by_cause": {"WIND": 1, "HIJACK": 1, "GPS_SPOOFING": 1, "SENSOR_FAULT": 0, "GPS_JAMMING": 0, "UNKNOWN": 0},
   "alerts_open": 0, "alerts_closed": 3 }
 ```
-`waypoints_planned` y `waypoints_reached` no incluyen `BASE`. Siempre con todas las claves (0 si no hay). `completion_reason`: `returned_to_base` | `timeout` | `null` (la misión aún no ha terminado). `distance_m.gps` / `.radar` son `null` si esa fuente no tiene muestras. Nunca incluye información del dominio `sim` (fallos inyectados ni modo interactivo).
-- **`publish_alert`**, **`close_alert`**, **`load_skill`**: las ejecuta el módulo de IA. `publish_alert` devuelve `{"ok": true, "alert_id": "ai-0003"}` o `{"ok": false, "errors": ["…"]}` (validación: Pydantic, ids de evidencia existentes y con `sim_time` ≤ `as_of_sim_time`).
+`waypoints_planned` y `waypoints_reached` no incluyen `BASE`. Siempre con todas las claves (0 si no hay). `alerts_by_cause` cuenta **cadenas**: una cadena de `supersedes` es una sola alerta (la que está en vigor); las sustituidas no se cuentan. `completion_reason`: `returned_to_base` | `timeout` | `null` (la misión aún no ha terminado). `distance_m.gps` / `.radar` son `null` si esa fuente no tiene muestras. Nunca incluye información del dominio `sim` (fallos inyectados ni modo interactivo).
+- **`publish_alert`**, **`acknowledge_detection`**, **`close_alert`**, **`load_skill`**: las ejecuta el módulo de IA. `publish_alert` devuelve `{"ok": true, "alert_id": "ai-0003"}` o `{"ok": false, "errors": ["…"]}` (validación: Pydantic, ids de evidencia existentes y con `sim_time` ≤ `as_of_sim_time`, `detection_ids` existentes, `supersedes` apuntando a una alerta abierta y, sin `supersedes`, ninguna detección que ya esté en una alerta abierta). **Recuperación excluyente:** en un `ROUTE_DEVIATION`, si hay una alerta del GPS reciente (abierta o cerrada hace 60 s o menos) y `gps_radar.disagreed` o `gps_max_step_m` ≥ 30, la única causa aceptada es la de esa alerta, con `supersedes` = esa alerta si sigue abierta. `publish_alert` lleva además un objeto `checks` (obligatorio en `tools.json`, antes de `cause`) con las comprobaciones de `AnomalyDetected`, y un guardrail de coherencia: cada valor de `checks` debe coincidir con los resultados de las tools de la invocación y con el estado, y la causa debe ser coherente (`WIND` exige viento notable y a favor de la deriva; `HIJACK`, haber mirado el enlace; `GPS_SPOOFING`/`GPS_JAMMING`/`SENSOR_FAULT` sobre un `ROUTE_DEVIATION` exigen alerta del GPS reciente y discrepancia GPS–radar o `gps_max_step_m` ≥ 30). **Ids que el módulo rellena:** `detection_ids` es opcional en `publish_alert` y en `acknowledge_detection` cuando el lote tiene una sola detección pendiente (el módulo la pone; con varias, hay que indicarlas), y `alert_id` es opcional en `close_alert` y en `acknowledge_detection` cuando la invocación es un aviso de cierre (el `DetectionCleared` de la última detección abierta de una alerta: el módulo pone esa alerta). Un id equivocado se rechaza indicando el correcto. `acknowledge_detection(detection_ids?, alert_id?, reason)` publica un `DetectionAcknowledged` por detección (el `alert_id`, si se pasa, debe ser una alerta abierta; cada detección debe ser de las que se están atendiendo y no tener aún respuesta). `close_alert` exige una alerta abierta sin detecciones abiertas. Los tres devuelven `ok: false` con `errors` si se rechazan; el módulo es quien pone `as_of_sim_time` (el instante al empezar la invocación).
 
 ## 8. Ficheros del generador
 El generador (`platform/`) lee `scenarios/<nombre>.yaml` y escribe `runs/<nombre>/`: `plan.json`, `truth.json`, `events.jsonl` y `labels.json`. Modelos en `poc_contracts.scenario` y `poc_contracts.run_files`; esquemas en `contracts/schemas/files/`. Los números de los ficheros JSON van redondeados (posiciones y velocidades a 2 decimales en plan y verdad, a 1 en los eventos).

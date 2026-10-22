@@ -35,13 +35,14 @@ def get_flight_summary(ctx: ToolContext, args: NoArgs) -> FlightSummary:
     )
     reached, _ = ctx.events(type=EventType.WAYPOINT_REACHED)
     raised, _ = ctx.events(type=EventType.DETECTION_RAISED)
-    alerts, _ = ctx.events(type=EventType.ANOMALY_DETECTED)
 
     counts_rule = {rule.value: 0 for rule in Rule}
     for e in raised:
         counts_rule[e.payload["rule"]] += 1
     counts_cause = {cause.value: 0 for cause in Cause}
-    for e in alerts:
+    # una cadena de `supersedes` es una sola alerta: se cuenta la que está en vigor
+    in_force = [e for e, s in alert_statuses(ctx) if s != AlertStatus.SUPERSEDED]
+    for e in in_force:
         counts_cause[AnomalyDetected.model_validate(e.payload).cause.value] += 1
     statuses = [s for _, s in alert_statuses(ctx)]
 

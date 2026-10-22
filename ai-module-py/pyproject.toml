@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Módulo de IA de poc-ai-monitor: cliente del bus, detector de reglas y agentes"
 requires-python = ">=3.12"
 dependencies = [
+    "openai>=3.35.1",
     "poc-contracts",
     "pyyaml>=6.0.3",
     "websockets>=17.3",
@@ -24,3 +25,6 @@ module-name = "ai_module"
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]
 build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+markers = ["e2e: extremo a extremo con plataforma y módulo reales y un LLM falso (≈ 45 s)"]

@@ -50,6 +50,7 @@ class EventType(StrEnum):
     DETECTION_RAISED = "DetectionRaised"
     DETECTION_UPDATED = "DetectionUpdated"
     DETECTION_CLEARED = "DetectionCleared"
+    DETECTION_ACKNOWLEDGED = "DetectionAcknowledged"
     ANOMALY_DETECTED = "AnomalyDetected"
     ALERT_CLOSED = "AlertClosed"
     REPORT_GENERATED = "ReportGenerated"

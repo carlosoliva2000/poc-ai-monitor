@@ -1,5 +1,20 @@
 {
   "$defs": {
+    "GpsRadarFact": {
+      "additionalProperties": false,
+      "description": "Hecho calculado sobre `gps_radar_distance_m`.",
+      "properties": {
+        "disagreed": {
+          "title": "Disagreed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "disagreed"
+      ],
+      "title": "GpsRadarFact",
+      "type": "object"
+    },
     "MetricStat": {
       "additionalProperties": false,
       "properties": {
@@ -91,6 +106,68 @@
       ],
       "title": "Trend",
       "type": "string"
+    },
+    "WindStat": {
+      "additionalProperties": false,
+      "description": "Viento de la ventana de `get_track_metrics`, ya calculado para que el modelo no haga\naritmética de ángulos. `from_deg` y `wind_to_deg` son la media vectorial ponderada por la\nvelocidad de los `WindReported` de la ventana; `drift_vs_wind_deg` es la diferencia absoluta\n(0 a 180) entre `drift_direction_deg` y `wind_to_deg` (`None` si no hay deriva).",
+      "properties": {
+        "mean_speed_mps": {
+          "title": "Mean Speed Mps",
+          "type": "number"
+        },
+        "max_gust_mps": {
+          "title": "Max Gust Mps",
+          "type": "number"
+        },
+        "from_deg": {
+          "title": "From Deg",
+          "type": "number"
+        },
+        "wind_to_deg": {
+          "title": "Wind To Deg",
+          "type": "number"
+        },
+        "drift_vs_wind_deg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Drift Vs Wind Deg"
+        },
+        "notable": {
+          "title": "Notable",
+          "type": "boolean"
+        },
+        "with_drift": {
+          "title": "With Drift",
+          "type": "boolean"
+        },
+        "samples": {
+          "title": "Samples",
+          "type": "integer"
+        },
+        "last_event_id": {
+          "title": "Last Event Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mean_speed_mps",
+        "max_gust_mps",
+        "from_deg",
+        "wind_to_deg",
+        "drift_vs_wind_deg",
+        "notable",
+        "with_drift",
+        "samples",
+        "last_event_id"
+      ],
+      "title": "WindStat",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -173,6 +250,37 @@
     "mean_speed_mps": {
       "$ref": "#/$defs/SourcePair"
     },
+    "wind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WindStat"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "gps_radar": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GpsRadarFact"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "gps_max_step_m": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Gps Max Step M"
+    },
     "samples": {
       "$ref": "#/$defs/SampleCounts"
     },
@@ -213,6 +321,9 @@
     "bearing_to_next_waypoint_deg",
     "next_waypoint",
     "mean_speed_mps",
+    "wind",
+    "gps_radar",
+    "gps_max_step_m",
     "samples",
     "gps_available",
     "radar_available",

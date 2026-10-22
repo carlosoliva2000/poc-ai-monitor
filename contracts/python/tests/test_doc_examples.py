@@ -85,6 +85,10 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ),
     ('{ "alert_id": "ai-0003", "detection_ids"', payload_of(T.ANOMALY_DETECTED)),
     ('{ "alert_id": "ai-0003", "reason"', payload_of(T.ALERT_CLOSED)),
+    (
+        '{ "detection_id": "det-0002", "alert_id": "ai-0003", "reason"',
+        payload_of(T.DETECTION_ACKNOWLEDGED),
+    ),
     ('{ "run_id": "…", "markdown"', payload_of(T.REPORT_GENERATED)),
     ('{ "conversation_id": "monitor", "text"', payload_of(T.OPERATOR_MESSAGE)),
     (

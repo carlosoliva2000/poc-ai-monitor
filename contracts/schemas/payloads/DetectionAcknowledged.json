@@ -1,0 +1,42 @@
+{
+  "additionalProperties": false,
+  "description": "Respuesta del monitor a una detección que no genera una alerta nueva: `alert_id` es la\nalerta abierta a la que pertenece, o `None` si no hace falta alerta. `fallback: true` si lo\npublica el módulo porque el agente no concluyó. El `causation_id` del sobre es el\n`event_id` del evento de detección al que responde.",
+  "properties": {
+    "detection_id": {
+      "title": "Detection Id",
+      "type": "string"
+    },
+    "alert_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Alert Id"
+    },
+    "reason": {
+      "title": "Reason",
+      "type": "string"
+    },
+    "as_of_sim_time": {
+      "title": "As Of Sim Time",
+      "type": "number"
+    },
+    "fallback": {
+      "title": "Fallback",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "detection_id",
+    "alert_id",
+    "reason",
+    "as_of_sim_time",
+    "fallback"
+  ],
+  "title": "DetectionAcknowledged",
+  "type": "object"
+}

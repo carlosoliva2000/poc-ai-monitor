@@ -6,7 +6,7 @@ Anotadas el 16/10/2026 durante el diseño. Sirven de lista para la Fase 5 y para
 - **Memoria del monitor, opción A frente a B.** Ahora es la B (una llamada nueva por detección, con el estado inyectado). Probar la A (una conversación durante toda la simulación) y comparar latencia por invocación, tokens, calidad del diagnóstico y si llega al límite de contexto.
 - **Sin `get_track_metrics`.** Desactivarla (`disabled_tools` en `agents.yaml`) y ver si el agente diagnostica solo con `get_events`. Si no, ¿basta con una tool de distancia entre puntos? ¿Escala con varios radares?
 - **Modo guiado:** medir cuántas veces el modelo carga la skill por sí mismo; si falla a menudo, valorar el modo guiado o un modelo mejor.
-- **Modelos:** Qwen3-14B-AWQ, modelos razonadores y Mistral (pendientes R0–R6 de `Spikes_IA_worker_definicion.md`). Fiabilidad de tools con muestreo del modelo (pendiente del spike 0).
+- **Modelos:** ver la sección «Liberar al agente» (más abajo), que sustituye a esta entrada. Pendientes aparte: modelos razonadores y Mistral (R0–R6 de `Spikes_IA_worker_definicion.md`) y la fiabilidad de tools con el muestreo del modelo.
 - **Narración periódica** del monitor (resumen cada N segundos simulados), además de las alertas.
 
 ## Detección
@@ -28,3 +28,47 @@ Anotadas el 16/10/2026 durante el diseño. Sirven de lista para la Fase 5 y para
 
 ## Refactorización
 - **Mover la constante `BASE`** (id del waypoint base) de `generator/controller.py` a `poc_contracts`, para que `tools/summary.py` no dependa del generador.
+
+## Uso exclusivo del LLM por configuración
+Un `llm_max_concurrency` global en `agents.yaml` con un semáforo compartido por el monitor, el informe y los chats, para dar el LLM en exclusiva al monitor (hoy los chats compiten con él por la caché KV de vLLM). Los tiempos máximos de una invocación contarían desde que el monitor consigue el LLM. Sin «esperar al agente», necesita además un mensaje nuevo del módulo a la plataforma en el contrato (para avisar de que el agente está esperando turno). No se implementa ahora.
+
+## Liberar al agente
+Con `Qwen2.5-14B-Instruct-AWQ` el monitor necesita varias **ayudas** (lista y motivos en `docs/fases/fase3.md`, «Ayudas al modelo añadidas en esta fase»). Cada una tiene un interruptor en `agent-assets/agents.yaml` (`monitor.*`, todos activados por defecto) y `eval.md` anota en su cabecera cuáles estaban activas. La mejora es **probar modelos más modernos y quitar las ayudas** hasta ver cuáles sobran.
+
+**Candidatos** (por ejemplo, la familia Qwen3 en variantes *instruct*, aunque tengan menos parámetros):
+- `Qwen/Qwen3-30B-A3B-Instruct-2507`: solo modo *non-thinking* (no genera `<think>`), 30,5 B en total y 3,3 B activos. ⚠️ Con los datos de Qwen, **no cabe en 24 GB** sin cuantizar (Transformers: ≈ 58 GB en BF16, ≈ 30 GB en FP8) y no consta una versión AWQ oficial: habría que comprobar una cuantización de 4 bits de la comunidad antes de contar con ella.
+- `Qwen/Qwen3-14B-AWQ` y `Qwen/Qwen3-8B` (AWQ o FP8): existen oficiales; **tienen modo thinking por defecto**, que se apaga con `chat_template_kwargs: {"enable_thinking": false}` en la petición. ⚠️ El aviso de Qwen: con `--reasoning-parser` ese interruptor no es compatible (vLLM 0.8.5); para desactivar el thinking del todo hay una plantilla de chat propia.
+- ⚠️ Una variante `Qwen3-4B-Instruct-2507` o una `Qwen3-14B-AWQ-2507`: **no verificadas** (no aparecen en las páginas consultadas).
+
+**Antes de empezar, confirmar** (resultados de la consulta; ⚠️ = no confirmado en la documentación):
+- *Parser de tools:* Qwen recomienda `--enable-auto-tool-choice --tool-call-parser hermes` también para Qwen3 («We recommend using Hermes-style tool use for Qwen3»); la lista de modelos de la página de vLLM sobre tool calling menciona Qwen2.5 y QwQ, no Qwen3 (https://qwen.readthedocs.io/en/latest/framework/function_call.html, https://qwen.readthedocs.io/en/latest/deployment/vllm.html, https://docs.vllm.ai/en/latest/features/tool_calling/). `qwen3_xml` es para los Qwen3-Coder, no para Qwen3 general.
+- *Memoria en 24 GB:* la única tabla oficial (https://qwen.readthedocs.io/en/latest/getting_started/speed_benchmark.html) es de Transformers en una H20 de 96 GB, con 30.720 tokens de entrada: Qwen3-8B ≈ 11 GB en AWQ-INT4 (13,6 GB FP8); Qwen3-14B ≈ 15,3 GB en AWQ-INT4 (20,8 GB FP8); Qwen3-30B-A3B ≈ 33 GB en FP8. ⚠️ No hay cifras para 32.768 tokens ni para vLLM (que además reserva memoria según `--gpu-memory-utilization`): hay que medirlo con el servidor real y la caché KV.
+- *Contexto:* ⚠️ sin `--max-model-len` vLLM usa el `max_position_embeddings` del modelo (40.960 en Qwen3; 262.144 en el 2507): pasar siempre `--max-model-len 32768`.
+- *Muestreo:* Qwen recomienda para *non-thinking* temperatura 0,7, `top_p` 0,8, `top_k` 20 y, para los cuantizados, `presence_penalty` 1,5; «no usar decodificación voraz» en thinking. El monitor va a temperatura 0 (decisiones reproducibles): comprobar que no degenera sin ayuda (ver `repetition_penalty` en `agents.yaml`).
+
+**Método.** Una variable cada vez, repitiendo los seis escenarios (`run.py --scenario … --speed 16 --wait-agent --evaluate`) y **comparando los `eval.md`** con el paso anterior (causa por etiqueta, una cadena por episodio, falsas alarmas, fallbacks, tools y skills, latencias). Orden, de la ayuda más intrusiva a la menos:
+1. `coherence_guardrail: false`
+2. `require_checks: false`
+3. `computed_facts: false`
+4. `final_iteration_response_tools_only: false`
+5. `tool_choice: auto`
+6. skills originales (las anteriores a la reescritura para este modelo; están en el historial de git de `agent-assets/skills/`)
+Se para en el primer paso en que algún escenario empeora y se deja esa ayuda puesta. Las que no son ayudas (cierre determinista, solo `detection_id`, `repetition_penalty`) no se tocan.
+
+### Probar el monitor con modelos de Claude
+Para ver hasta dónde llega un modelo potente con **todas las ayudas apagadas** (el techo de lo que el diseño pide al modelo). **Exige una excepción explícita a la regla 1 («solo `localhost`»), que decide Carlos**: los datos del vuelo saldrían de la máquina hacia la API de Anthropic; hay que decidir antes qué datos y con qué condiciones.
+
+**Cómo.** Con el SDK nativo `anthropic`, como un **segundo adaptador en `llm.py`** detrás del mismo puerto (`LlmClient`), eligiéndolo con `provider: vllm | anthropic` en `agents.yaml`. El bucle de tools, las tools, los guardrails y la evaluación **no cambian**. Por qué el SDK nativo y no la capa de compatibilidad con `openai`: la capa ignora `strict`, no admite la caché de prompts y no devuelve el razonamiento (https://platform.claude.com/docs/en/cli-sdks-libraries/libraries/openai-sdk).
+
+**Lo que cambia con los modelos 5.5** (https://platform.claude.com/docs/en/models/sonnet-5-5/migration-guide y https://platform.claude.com/docs/en/models/haiku-5-5/migration-guide, consultadas el 22/10/2026):
+- `temperature`, `top_p` y `top_k` dan **error 400 en Sonnet 5.5**, así que se omiten: hace falta un **perfil de muestreo por proveedor** (hoy `agents.yaml` los fija siempre, regla 6, pensada para vLLM).
+- Sonnet 5.5 **no admite `tool_choice` `any` ni por nombre**: va con `auto` y las tools con `strict: true` (esquema garantizado).
+- El **razonamiento adaptativo** va activado por defecto, con el nivel en `output_config.effort` (`low`…`max`) y un resumen opcional (`display: "summarized"`) para las trazas.
+- ⚠️ **Por comprobar en la documentación:** cómo se devuelven los bloques de razonamiento en un bucle de tools (qué hay que reenviar en la petición siguiente y cómo se guardan en la traza).
+
+**Modelos, en este orden** (https://platform.claude.com/docs/en/models/overview, consultada el 22/10/2026; precios por millón de tokens de entrada / salida):
+1. `claude-haiku-5-5` (desde 0,10 $ / 0,50 $; el más rápido; esfuerzo por defecto `medium`). Es el único de los tres que acepta `tool_choice` `any`, pero entonces **responde sin razonar**: probar primero `auto` + `strict` con razonamiento y, solo si falla el formato, `any`.
+2. Si Haiku no llega, `claude-sonnet-5-5` (2 $ / 10 $; esfuerzo por defecto `high`; solo `auto` + `strict`).
+3. `claude-opus-5-5` (4 $ / 20 $) **solo como techo**, si Sonnet también falla, y **avisando antes** de usarlo.
+
+**Método.** En cada modelo: primero con **todas las ayudas apagadas** (los cinco interruptores de `monitor.*`, `chat.tools_enabled` y, si se quiere medir también el informe, sin los datos inyectados), **una ejecución por escenario** (repetir solo `demo` o lo que falle) y **usando la caché de prompts**. Si un modelo potente falla, **revisar primero el diseño** (datos que faltan, instrucciones contradictorias o etiquetas discutibles, como F3 de `fallos`) antes de encender ninguna ayuda. Medir tokens y coste con lo que ya da `eval.md` (tokens por agente y máximo de prompt); hay que añadirle los tokens de caché y el **coste estimado** con los precios de arriba, y anotarlos en cada `eval.md`.

@@ -50,6 +50,7 @@ EVENT_SPECS: dict[EventType, EventSpec] = {
     _T.DETECTION_RAISED: EventSpec("ai", "d1", "det", "ai-detector"),
     _T.DETECTION_UPDATED: EventSpec("ai", "d1", "det", "ai-detector"),
     _T.DETECTION_CLEARED: EventSpec("ai", "d1", "det", "ai-detector"),
+    _T.DETECTION_ACKNOWLEDGED: EventSpec("ai", "d1", "ai", "ai-monitor"),
     _T.ANOMALY_DETECTED: EventSpec("ai", "d1", "ai", "ai-monitor"),
     _T.ALERT_CLOSED: EventSpec("ai", "d1", "ai", "ai-monitor"),
     _T.REPORT_GENERATED: EventSpec("ai", "d1", "ai", "ai-report"),

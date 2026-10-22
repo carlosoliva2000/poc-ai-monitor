@@ -1,13 +1,4 @@
-## Formato de tu salida (`publish_alert`)
-Tu salida es la llamada a `publish_alert`; se valida antes de publicarse y, si falla, recibirás los errores para corregirlos.
-- `cause`: una de `WIND`, `HIJACK`, `GPS_SPOOFING`, `SENSOR_FAULT`, `GPS_JAMMING` (pérdida o interferencia del GPS), `UNKNOWN`.
-- `severity`:
-  - `low`: causa física y controlada, sin riesgo apreciable (p. ej. viento con el dron corrigiendo).
-  - `medium`: causa desconocida, fallo de sensor o situación que empeora.
-  - `high`: posible ataque, interferencia o pérdida de control (secuestro, spoofing, pérdida de GPS con el dron desviándose).
-- `confidence` (0–1): ≥ 0,8 si al menos dos fuentes independientes encajan con los criterios de la skill; 0,5–0,7 si encajan en parte; < 0,5 si es una conjetura.
-- `summary`: una frase (≤ 160 caracteres) que entienda alguien que no ve los datos.
-- `explanation`: el razonamiento, con cifras, fuentes y tiempos T+mm:ss.
-- `recommendation`: qué recomiendas al responsable del dron. Recuerda que no puedes actuar.
-- `evidence_event_ids`: entre 2 y 6 ids, de al menos dos fuentes cuando sea posible.
-- `detection_ids`: la detección o detecciones que motivan la alerta.
+## Cómo rellenar tus respuestas
+Tu respuesta a cada aviso es una de tres llamadas a tools: `publish_alert` (alerta nueva, o con `supersedes` si cambia la causa o la severidad de una alerta abierta de ese mismo episodio), `acknowledge_detection` (el aviso pertenece a una alerta abierta y no cambia nada, o decides que no hace falta alerta) o `close_alert` (a la alerta no le quedan detecciones abiertas y el problema se ha normalizado).
+
+La severidad es `low` si la causa es física y está controlada (viento con el dron corrigiendo), `medium` si la causa es desconocida, hay un fallo de sensor o la situación empeora, y `high` si puede haber un ataque, una interferencia o una pérdida de control (secuestro, spoofing, pérdida de GPS con el dron desviándose). La causa `GPS_JAMMING` es la pérdida o interferencia del GPS; `UNKNOWN`, cuando los datos no bastan. La confianza es 0,8 o más si al menos dos fuentes independientes encajan con los criterios de la skill, entre 0,5 y 0,7 si encajan en parte y menos de 0,5 si es una conjetura. El resumen es una frase que entienda alguien que no ve los datos (menos de 160 caracteres); la explicación lleva cifras, fuentes y tiempos T+mm:ss; la recomendación es para el responsable del dron (tú no puedes actuar). Antes de elegir la causa, rellena `checks` con lo que has comprobado (se contrasta con los resultados de las tools y con el estado). Como evidencias, cita entre 2 y 6 ids de eventos que hayas visto en las tools, de al menos dos fuentes si puedes.

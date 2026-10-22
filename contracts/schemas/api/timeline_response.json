@@ -111,6 +111,7 @@
         "DetectionRaised",
         "DetectionUpdated",
         "DetectionCleared",
+        "DetectionAcknowledged",
         "AnomalyDetected",
         "AlertClosed",
         "ReportGenerated",

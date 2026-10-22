@@ -1,5 +1,52 @@
 {
   "$defs": {
+    "AlertChecks": {
+      "additionalProperties": false,
+      "description": "Comprobaciones que el monitor declara antes de elegir la causa (para que el operador vea\npor qué se decidió). El módulo las contrasta con los resultados de las tools de la\ninvocación y con el estado.",
+      "properties": {
+        "gps_alert_recent": {
+          "title": "Gps Alert Recent",
+          "type": "boolean"
+        },
+        "gps_radar_disagreed": {
+          "title": "Gps Radar Disagreed",
+          "type": "boolean"
+        },
+        "wind_notable": {
+          "title": "Wind Notable",
+          "type": "boolean"
+        },
+        "wind_with_drift": {
+          "title": "Wind With Drift",
+          "type": "boolean"
+        },
+        "link_checked": {
+          "title": "Link Checked",
+          "type": "boolean"
+        },
+        "link_anomalous": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Link Anomalous"
+        }
+      },
+      "required": [
+        "gps_alert_recent",
+        "gps_radar_disagreed",
+        "wind_notable",
+        "wind_with_drift",
+        "link_checked",
+        "link_anomalous"
+      ],
+      "title": "AlertChecks",
+      "type": "object"
+    },
     "Cause": {
       "description": "Causas del diagnóstico (`REPLAY` queda reservada para el futuro).",
       "enum": [
@@ -26,12 +73,20 @@
   "additionalProperties": false,
   "properties": {
     "detection_ids": {
-      "items": {
-        "type": "string"
-      },
-      "minItems": 1,
-      "title": "Detection Ids",
-      "type": "array"
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Detection Ids"
     },
     "cause": {
       "$ref": "#/$defs/Cause"
@@ -44,6 +99,14 @@
       "minimum": 0,
       "title": "Confidence",
       "type": "number"
+    },
+    "evidence_event_ids": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Evidence Event Ids",
+      "type": "array"
     },
     "summary": {
       "maxLength": 160,
@@ -58,14 +121,6 @@
       "title": "Recommendation",
       "type": "string"
     },
-    "evidence_event_ids": {
-      "items": {
-        "type": "string"
-      },
-      "minItems": 1,
-      "title": "Evidence Event Ids",
-      "type": "array"
-    },
     "supersedes": {
       "anyOf": [
         {
@@ -77,17 +132,27 @@
       ],
       "default": null,
       "title": "Supersedes"
+    },
+    "checks": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AlertChecks"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [
-    "detection_ids",
     "cause",
     "severity",
     "confidence",
+    "evidence_event_ids",
     "summary",
     "explanation",
-    "recommendation",
-    "evidence_event_ids"
+    "recommendation"
   ],
   "title": "PublishAlertArgs",
   "type": "object"

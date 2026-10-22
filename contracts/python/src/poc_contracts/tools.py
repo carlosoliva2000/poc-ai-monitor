@@ -9,7 +9,7 @@ from typing import Annotated, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
 from .enums import AlertStatus, Cause, CompletionReason, EventType, Severity, ToolSource, Trend
-from .payloads import MissionPlanned, Summary
+from .payloads import AlertChecks, MissionPlanned, Summary
 
 
 class _Model(BaseModel):
@@ -49,19 +49,32 @@ class GetMyAlertsArgs(_Model):
 
 
 class PublishAlertArgs(_Model):
-    detection_ids: list[str] = Field(min_length=1)
+    detection_ids: list[str] | None = Field(default=None, min_length=1)
+    """Opcional si el lote tiene una sola detección pendiente: el módulo la rellena."""
     cause: Cause
     severity: Severity
     confidence: float = Field(ge=0, le=1)
+    evidence_event_ids: list[str] = Field(min_length=1)
     summary: Summary
     explanation: str
     recommendation: str
-    evidence_event_ids: list[str] = Field(min_length=1)
     supersedes: str | None = None
+    checks: AlertChecks | None = None
+    """En `tools.json` es obligatorio (va antes de `cause`); aquí es opcional porque el
+    interruptor `require_checks` del monitor puede quitar la obligación."""
+
+
+class AcknowledgeDetectionArgs(_Model):
+    detection_ids: list[str] | None = Field(default=None, min_length=1)
+    """Opcional si el lote tiene una sola detección pendiente: el módulo la rellena."""
+    alert_id: str | None = None
+    """En un aviso de cierre (última detección de una alerta) es opcional: lo rellena el módulo."""
+    reason: str
 
 
 class CloseAlertArgs(_Model):
-    alert_id: str
+    alert_id: str | None = None
+    """Opcional en un aviso de cierre (última detección de una alerta): lo rellena el módulo."""
     reason: str
 
 
@@ -114,6 +127,34 @@ class SampleCounts(_Model):
     radar: int
 
 
+class WindStat(_Model):
+    """Viento de la ventana de `get_track_metrics`, ya calculado para que el modelo no haga
+    aritmética de ángulos. `from_deg` y `wind_to_deg` son la media vectorial ponderada por la
+    velocidad de los `WindReported` de la ventana; `drift_vs_wind_deg` es la diferencia absoluta
+    (0 a 180) entre `drift_direction_deg` y `wind_to_deg` (`None` si no hay deriva)."""
+
+    mean_speed_mps: float
+    max_gust_mps: float
+    from_deg: float
+    wind_to_deg: float
+    """Hacia dónde empuja el viento: `from_deg` + 180 (mod 360)."""
+    drift_vs_wind_deg: float | None
+    notable: bool
+    """Viento notable: velocidad media ≥ 5 m/s o racha máxima ≥ 8 m/s."""
+    with_drift: bool
+    """La deriva va a favor del viento: `drift_vs_wind_deg` ≤ 45 (falso si no hay deriva)."""
+    samples: int
+    last_event_id: str
+    """El último `WindReported` de la ventana, para citarlo como evidencia."""
+
+
+class GpsRadarFact(_Model):
+    """Hecho calculado sobre `gps_radar_distance_m`."""
+
+    disagreed: bool
+    """GPS y radar discrepan en la ventana: `gps_radar_distance_m.max` ≥ 25 m."""
+
+
 class TrackMetrics(_Model):
     """Resultado de `get_track_metrics`. Sin datos de una fuente no se inventa nada: lo que
     depende de ella va a `None` y `samples` lleva el recuento real."""
@@ -128,6 +169,15 @@ class TrackMetrics(_Model):
     bearing_to_next_waypoint_deg: float | None
     next_waypoint: str | None
     mean_speed_mps: SourcePair
+    wind: WindStat | None
+    """El viento de la misma ventana; `None` si no hay ningún `WindReported` en ella."""
+    gps_radar: GpsRadarFact | None
+    """`None` si no hay distancia GPS–radar (falta una de las dos fuentes)."""
+    gps_max_step_m: float | None
+    """El mayor aumento de la desviación del GPS respecto al plan entre dos muestras
+    consecutivas (≤ 1,5 s) de la ventana; 0 si nunca aumenta, `None` con menos de 2 muestras.
+    En una recuperación del GPS salta decenas de metros de golpe; el viento y el secuestro
+    alejan al dron como mucho unos 15 m por segundo."""
     samples: SampleCounts
     gps_available: bool
     radar_available: bool
@@ -215,6 +265,7 @@ TOOL_MODELS: dict[str, tuple[type[BaseModel], type[BaseModel] | None]] = {
     "get_my_alerts": (GetMyAlertsArgs, MyAlertsResult),
     "get_flight_summary": (NoArgs, FlightSummary),
     "publish_alert": (PublishAlertArgs, None),
+    "acknowledge_detection": (AcknowledgeDetectionArgs, None),
     "close_alert": (CloseAlertArgs, None),
     "load_skill": (LoadSkillArgs, None),
 }

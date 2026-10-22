@@ -2,7 +2,9 @@
 
 Guarda los sobres en orden de publicación (`seq`) y mantiene índices por `source` y por `type`.
 Es lo único que consultan las tools de datos y `GET /api/timeline`. Se vuelca a
-`runs/<escenario>/<run_id>/timeline.jsonl` (una línea por `Envelope`).
+`runs/<escenario>/<run_id>/timeline.jsonl` (una línea por `Envelope`). El volcado es incremental:
+después de `dump`, cada evento nuevo (la última respuesta del monitor, el informe, los chats) se
+añade al final del fichero, hasta que el timeline se vacía.
 """
 
 from pathlib import Path
@@ -17,6 +19,7 @@ class Timeline:
         self._by_source: dict[str, list[Envelope]] = {}
         self._by_type: dict[EventType, list[Envelope]] = {}
         self._by_id: dict[str, Envelope] = {}
+        self._sink: Path | None = None  # fichero al que se añaden los eventos nuevos tras `dump`
 
     def __len__(self) -> int:
         return len(self._events)
@@ -26,12 +29,16 @@ class Timeline:
         self._by_source.clear()
         self._by_type.clear()
         self._by_id.clear()
+        self._sink = None
 
     def add(self, event: Envelope) -> None:
         self._events.append(event)
         self._by_source.setdefault(event.source, []).append(event)
         self._by_type.setdefault(event.type, []).append(event)
         self._by_id[event.event_id] = event
+        if self._sink is not None:
+            with self._sink.open("a", encoding="utf-8") as handle:
+                handle.write(event.model_dump_json() + "\n")
 
     def get(self, event_id: str) -> Envelope | None:
         return self._by_id.get(event_id)
@@ -78,8 +85,10 @@ class Timeline:
         return found, truncated
 
     def dump(self, path: Path) -> Path:
-        """Escribe `timeline.jsonl` (crea las carpetas que falten)."""
+        """Escribe `timeline.jsonl` (crea las carpetas que falten) y, a partir de aquí, añade a él
+        cada evento nuevo."""
         path.parent.mkdir(parents=True, exist_ok=True)
         lines = "".join(e.model_dump_json() + "\n" for e in self._events)
         path.write_text(lines, encoding="utf-8")
+        self._sink = path
         return path
