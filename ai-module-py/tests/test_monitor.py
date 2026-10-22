@@ -223,25 +223,30 @@ def test_deterministic_acknowledge_for_a_cleared_that_changes_nothing(tmp_path: 
     assert all(e.type == EventType.DETECTION_ACKNOWLEDGED for e in answers)
     assert answers[0].payload["alert_id"] is None and answers[1].payload["alert_id"] == "ai-0010"
     assert "aún tiene detecciones abiertas (det-0003)" in answers[1].payload["reason"]
+    # la alerta ya cerrada no es «la alerta abierta a la que pertenece»: alert_id nulo
+    assert (
+        answers[2].payload["alert_id"] is None
+        and "ya estaba cerrada" in answers[2].payload["reason"]
+    )
     assert all(t["deterministic"] for t in rt.trace.records)
     assert activity(published) == []  # sin LLM no hay actividad de agente
 
 
 def test_the_last_cleared_of_an_alert_goes_to_the_llm_which_closes_it(tmp_path: Path) -> None:
     script = Script(
-        tool_response(call("close_alert", alert_id="ai-0001", reason="La desviación se corrigió"))
+        tool_response(call("close_alert", alert_id="ai-0090", reason="La desviación se corrigió"))
     )
     rt, published, monitor, llm = setup(tmp_path, script)
     rt.state.apply(raised("det-0001", 5.0))
-    rt.state.apply(alert("ai-0001", ["det-0001"]))
+    rt.state.apply(alert("ai-0090", ["det-0001"]))
     cleared = detection_event("cleared", "det-0001", 30.0)
     run(monitor.handle_batch([cleared]))
     [closed] = responses(published)
     assert closed.type == EventType.ALERT_CLOSED and closed.causation_id == cleared.event_id
-    assert closed.payload["alert_id"] == "ai-0001"
+    assert closed.payload["alert_id"] == "ai-0090"
     assert rt.state.open_alerts() == []
     assert (
-        "era la **última detección abierta** de la alerta ai-0001"
+        "era la **última detección abierta** de la alerta ai-0090"
         in (llm.requests[0]["messages"][1]["content"])
     )
 
@@ -264,7 +269,7 @@ def test_the_llm_may_keep_the_alert_open_and_it_is_respected(tmp_path: Path) -> 
 def test_fallback_close_when_the_last_cleared_ends_without_conclusion(tmp_path: Path) -> None:
     rt, published, monitor, _ = setup(tmp_path, Script("hmm"))
     rt.state.apply(raised("det-0001", 5.0))
-    rt.state.apply(alert("ai-0001", ["det-0001"]))
+    rt.state.apply(alert("ai-0090", ["det-0001"]))
     cleared = detection_event("cleared", "det-0001", 30.0)
     run(monitor.handle_batch([cleared]))
     [closed] = responses(published)

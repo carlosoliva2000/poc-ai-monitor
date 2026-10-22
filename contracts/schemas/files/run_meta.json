@@ -1,0 +1,99 @@
+{
+  "$defs": {
+    "FlagChange": {
+      "additionalProperties": false,
+      "properties": {
+        "sim_time": {
+          "title": "Sim Time",
+          "type": "number"
+        },
+        "value": {
+          "title": "Value",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "sim_time",
+        "value"
+      ],
+      "title": "FlagChange",
+      "type": "object"
+    },
+    "SpeedChange": {
+      "additionalProperties": false,
+      "properties": {
+        "sim_time": {
+          "title": "Sim Time",
+          "type": "number"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "sim_time",
+        "value"
+      ],
+      "title": "SpeedChange",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`run_meta.json` de una ejecución: lo que no está en el timeline. Los valores son los del\nprimer play o paso; los cambios posteriores van en `*_changes`, con el instante.",
+  "properties": {
+    "scenario": {
+      "title": "Scenario",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "speed": {
+      "title": "Speed",
+      "type": "number"
+    },
+    "speed_changes": {
+      "items": {
+        "$ref": "#/$defs/SpeedChange"
+      },
+      "title": "Speed Changes",
+      "type": "array"
+    },
+    "wait_agent": {
+      "title": "Wait Agent",
+      "type": "boolean"
+    },
+    "wait_agent_changes": {
+      "items": {
+        "$ref": "#/$defs/FlagChange"
+      },
+      "title": "Wait Agent Changes",
+      "type": "array"
+    },
+    "interactive": {
+      "title": "Interactive",
+      "type": "boolean"
+    },
+    "interactive_changes": {
+      "items": {
+        "$ref": "#/$defs/FlagChange"
+      },
+      "title": "Interactive Changes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "scenario",
+    "run_id",
+    "speed",
+    "speed_changes",
+    "wait_agent",
+    "wait_agent_changes",
+    "interactive",
+    "interactive_changes"
+  ],
+  "title": "RunMeta",
+  "type": "object"
+}

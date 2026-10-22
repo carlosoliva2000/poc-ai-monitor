@@ -223,3 +223,6 @@ __marimo__/
 # runs/<escenario>/ (salida del generador) se versiona; las carpetas de ejecución, no
 runs/*/*/
 .tools/
+
+# La web tiene su propia carpeta lib/ (código fuente, no artefactos de Python)
+!web/lib/

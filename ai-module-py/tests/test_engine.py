@@ -210,9 +210,13 @@ def test_other_agents_use_their_own_sampling(name: str) -> None:
     llm = FakeLlm(Script(text_response("x")))
     go(make_engine(llm, config=config))
     sampling = llm.requests[0]["sampling"]
-    assert sampling["temperature"] == 0.7 and sampling["top_p"] == 0.8
+    if name == "report":
+        assert sampling["temperature"] == 0.7 and sampling["top_p"] == 0.8
+        assert sampling["extra_body"] == {"top_k": 20, "repetition_penalty": 1.05}
+    else:  # los chats responden sobre hechos
+        assert sampling["temperature"] == 0 and sampling["top_p"] == 1.0
+        assert sampling["extra_body"] == {"top_k": -1, "repetition_penalty": 1.05}
     assert sampling["tool_choice"] == "auto"
-    assert sampling["extra_body"] == {"top_k": 20, "repetition_penalty": 1.05}
 
 
 def test_a_failed_text_attempt_is_not_kept_but_the_next_tool_call_is() -> None:

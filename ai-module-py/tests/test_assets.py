@@ -91,11 +91,15 @@ def test_sampling_is_explicit_for_every_agent() -> None:
         "tool_choice": "required",  # su respuesta es siempre una tool call
         "extra_body": {"top_k": -1, "repetition_penalty": 1.05},
     }
-    for name in ("report", "chat_monitor", "chat_report"):
+    report = ASSETS.agent("report").sampling()
+    assert report["temperature"] == 0.7 and report["top_p"] == 0.8
+    assert report["extra_body"] == {"top_k": 20, "repetition_penalty": 1.05}
+    assert report["tool_choice"] == "auto"  # nunca por nombre
+    for name in ("chat_monitor", "chat_report"):  # los chats responden sobre hechos
         sampling = ASSETS.agent(name).sampling()
-        assert sampling["temperature"] == 0.7 and sampling["top_p"] == 0.8
-        assert sampling["extra_body"] == {"top_k": 20, "repetition_penalty": 1.05}
-        assert sampling["tool_choice"] == "auto"  # nunca por nombre
+        assert sampling["temperature"] == 0.0 and sampling["top_p"] == 1.0
+        assert sampling["extra_body"] == {"top_k": -1, "repetition_penalty": 1.05}
+        assert sampling["tool_choice"] == "auto"
 
 
 def test_final_tools_of_the_monitor_are_the_three_responses() -> None:

@@ -200,6 +200,19 @@ def test_figures_line_is_written_by_the_module_and_status_says_when_detections_e
     )
 
 
+def test_status_only_explains_the_gap_when_the_closure_is_late() -> None:
+    """Esperando al agente el cierre sale a la hora del fin de la detección: sin paréntesis."""
+    state = spoofing_state()
+    state.apply(detection_event("cleared", "det-0005", 135.0))
+    state.alerts["ai-0006"].closed_at = 142.0  # 2 s después de que terminara det-0003 (T+02:20)
+    spoofing = build_facts(state).anomalies[1]
+    assert spoofing.status == "cerrada por el monitor a T+02:22"
+    state.alerts["ai-0006"].closed_at = 150.0
+    assert spoofing.status == (
+        "cerrada por el monitor a T+02:30 (la última detección de la cadena terminó a T+02:20)"
+    )
+
+
 def test_detection_updates_show_as_a_severity_rise_and_keep_the_opening_values() -> None:
     reset_ids()
     state = MonitorState()

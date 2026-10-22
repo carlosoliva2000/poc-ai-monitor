@@ -15,7 +15,7 @@ from poc_contracts.api import ScenarioInfo, ScenariosResponse, ToolError
 from poc_contracts.enums import EventType
 from poc_contracts.envelope import Envelope
 from poc_contracts.payloads import PAYLOAD_MODELS
-from poc_contracts.run_files import LabelsFile, PlanFile, TruthFile
+from poc_contracts.run_files import LabelsFile, PlanFile, RunMeta, TruthFile
 from poc_contracts.scenario import ScenarioConfig
 from poc_contracts.tools import (
     FlightSummary,
@@ -114,6 +114,7 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ),
     ('{ "duration_s": 556.3, "trajectory"', model(TruthFile)),
     ('{ "labels"', model(LabelsFile)),
+    ('{ "scenario": "demo", "run_id"', model(RunMeta)),
 ]
 
 

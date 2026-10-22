@@ -260,10 +260,12 @@ def test_chat_without_tools_carries_alerts_checks_evidence_and_facts(tmp_path: P
     system = request["messages"][0]["content"]
     assert "No tienes tools" in system and "<<" not in system
     assert "ai-0002 WIND (low, confianza 0.85)" in system
-    assert "El viento de 7,2 m/s empuja hacia el sur." in system  # explicación
+    assert "El viento de 7,2 m/s empuja hacia el sur." not in system  # sin la prosa del monitor
     assert "viento notable: sí" in system and "enlace anómalo: no se miró" in system  # checks
     assert "Evidencias: gps-000001, gps-000002" in system
-    assert "consulta del monitor a T+01:46" in system and '"notable":true' in system  # hechos
+    assert (
+        "consulta del monitor a T+01:46" in system and "El viento es notable: sí" in system
+    )  # hechos
     assert rt.trace.records[0]["aids"] == {"chat_tools_enabled": False}
     [reply] = [e for e in published if e.type == EventType.AGENT_REPLY]
     assert reply.payload["tool_calls"] == []
@@ -304,4 +306,27 @@ def test_the_monitor_remembers_the_last_metrics_for_the_chats(tmp_path: Path) ->
     run(monitor.handle_batch([raised()]))
     assert rt.last_metrics == metrics
     assert rt.last_metrics_note == "consulta del monitor a T+00:20 (ventana 1–20 s)"
-    assert 'gps_max_step_m":2.0' in rt.describe_last_facts()
+    assert "Salto brusco del GPS" in rt.describe_last_facts()
+    assert "2,0 m" in rt.describe_last_facts()
+
+
+def test_the_monitor_remembers_the_link_it_looked_at_for_the_chats(tmp_path: Path) -> None:
+    link = [
+        {"event_id": "lnk-0001", "sim_time": 5.0, "controller_id": "GCS-1", "rssi_dbm": -62.0,
+         "latency_ms": 45.0},
+        {"event_id": "lnk-0002", "sim_time": 10.0, "controller_id": "UNK-4F2A", "rssi_dbm": -79.0,
+         "latency_ms": 122.0},
+    ]  # fmt: skip
+    script = Script(
+        tool_response(call("get_events", source="link", last_n=10, until=20.0)),
+        tool_response(call("publish_alert", **without(alert_args(["x"]), "detection_ids"))),
+    )
+    platform = FakePlatform({"get_events": {"events": link, "truncated": False}})
+    rt, _, monitor, _ = setup(tmp_path, script, platform)
+    assert "enlace de mando" not in rt.describe_last_facts()
+    run(monitor.handle_batch([raised()]))
+    assert rt.last_link == link
+    facts = rt.describe_last_facts()
+    assert "El enlace de mando es anómalo: sí (el controlador pasa de GCS-1 a UNK-4F2A" in facts
+    rt.reset_run()
+    assert rt.last_link is None

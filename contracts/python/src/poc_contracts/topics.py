@@ -56,8 +56,8 @@ EVENT_SPECS: dict[EventType, EventSpec] = {
     _T.REPORT_GENERATED: EventSpec("ai", "d1", "ai", "ai-report"),
     _T.OPERATOR_MESSAGE: EventSpec("ops", None, "ops", "web-operator"),
     _T.AGENT_REPLY: EventSpec("ai", None, "ai", None),
-    _T.AGENT_REPLY_CHUNK: EventSpec("ai", None, "ai", None, ephemeral=True),
-    _T.AGENT_ACTIVITY: EventSpec("ai", "agent", "ai", "ai-module", ephemeral=True),
+    _T.AGENT_REPLY_CHUNK: EventSpec("ai", None, "chk", None, ephemeral=True),
+    _T.AGENT_ACTIVITY: EventSpec("ai", "agent", "act", "ai-module", ephemeral=True),
 }
 
 EPHEMERAL_TYPES: frozenset[EventType] = frozenset(

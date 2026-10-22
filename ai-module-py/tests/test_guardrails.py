@@ -123,6 +123,26 @@ def test_supersedes_must_point_to_an_open_alert(state: MonitorState) -> None:
     assert check(alert_args(["det-1"]), state).ok
 
 
+def test_supersedes_must_change_the_cause_or_the_severity(state: MonitorState) -> None:
+    state.apply(alert("ai-1", ["det-1"], cause="GPS_JAMMING"))  # severidad high
+    state.apply(detection_event("updated", "det-1", 8.0))
+    same = check(
+        alert_args(["det-1"], cause="GPS_JAMMING", severity="high", supersedes="ai-1"), state
+    )
+    assert not same.ok
+    assert any(
+        e.startswith("No cambia nada respecto a ai-1") and "usa acknowledge_detection" in e
+        for e in same.errors
+    )
+    # cambia la severidad, o cambia la causa: vale
+    assert check(
+        alert_args(["det-1"], cause="GPS_JAMMING", severity="medium", supersedes="ai-1"), state
+    ).ok
+    assert check(
+        alert_args(["det-1"], cause="SENSOR_FAULT", severity="high", supersedes="ai-1"), state
+    ).ok
+
+
 def test_acknowledge_rules(state: MonitorState) -> None:
     state.apply(alert("ai-1", ["det-1"]))
     state.apply(detection_event("raised", "det-2", 8.0))

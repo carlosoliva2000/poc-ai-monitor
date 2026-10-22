@@ -96,7 +96,7 @@ class Chat:
             values["report_markdown"] = self.report.markdown if self.report else ""
         tools_on = rt.assets.chat_tools_enabled
         if not tools_on:  # sin tools: el sistema lleva las alertas con su razonamiento y los hechos
-            values["alerts_detail"] = rt.state.describe_alerts_detail()
+            values["alerts_detail"] = rt.state.describe_alerts_detail(explanation=False)
             values["last_facts"] = rt.describe_last_facts()
         trace.aids = {"chat_tools_enabled": tools_on}
         system = rt.assets.system_prompt(cfg, notools=not tools_on, **values)

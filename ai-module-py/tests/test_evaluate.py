@@ -7,7 +7,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from ai_module.evaluate import RunData, evaluate, render_markdown, write_evaluation
+from ai_module.evaluate import (
+    RunData,
+    contradicting_rules,
+    evaluate,
+    render_markdown,
+    write_evaluation,
+)
 
 RUNS = Path(__file__).resolve().parents[2] / "runs"
 BASE = datetime(2026, 10, 20, 10, 0, 0)
@@ -85,6 +91,8 @@ class Builder:
         supersedes: str | None = None,
         fallback: bool = False,
         conf: float = 0.8,
+        texts: dict[str, str] | None = None,
+        checks: dict[str, Any] | None = None,
     ) -> dict:
         payload = {
             "alert_id": alert_id,
@@ -99,6 +107,8 @@ class Builder:
             "supersedes": supersedes,
             "as_of_sim_time": t,
             "fallback": fallback,
+            "checks": checks,
+            **(texts or {}),
         }
         return self.ev(
             "AnomalyDetected",
@@ -487,7 +497,7 @@ def test_agent_section_and_no_wait_section(tmp_path: Path) -> None:
     assert s["rejections"] == 1 and s["unseen_evidence"] == 3
     md = render_markdown(ev)
     assert "## 6. Sin esperar al agente" in md and "lotes de más de una detección: 1" in md
-    assert "máximo de prompt en una llamada: 4000" in md and "esperar al agente: False" in md
+    assert "máximo de prompt en una llamada: 4000" in md and "esperar al agente: no" in md
 
 
 def test_write_evaluation_creates_both_files(tmp_path: Path) -> None:
@@ -526,3 +536,110 @@ def test_header_lists_the_aids_that_were_on(tmp_path: Path) -> None:
     assert "guardrail de coherencia: no" in md and "hechos calculados: sí" in md
     b2 = demo_run(tmp_path / "otra")
     assert "Ayudas al modelo: n/d" in render_markdown(evaluate(b2.write()))
+
+
+def test_header_shows_the_run_meta_written_by_the_platform_with_its_changes(
+    tmp_path: Path,
+) -> None:
+    meta = {
+        "wait_agent": True, "wait_agent_changes": [{"sim_time": 120.0, "value": False}],
+        "speed": 4.0, "speed_changes": [{"sim_time": 60.0, "value": 8.0}],
+        "interactive": False, "interactive_changes": [{"sim_time": 30.0, "value": True}],
+    }  # fmt: skip
+    a = demo_run(tmp_path / "a")
+    a.trace = [trace_record()]
+    md = render_markdown(evaluate(a.write(meta)))
+    assert (
+        "esperar al agente: sí → no (a T+02:00) · velocidad: 4× → 8× (a T+01:00) · "
+        "modo interactivo: no → sí (a T+00:30)"
+    ) in md
+    assert "## 6. Sin esperar al agente" in md  # dejó de esperar: hay tramo sin espera
+    b = demo_run(tmp_path / "b")
+    b.trace = [trace_record()]
+    always = render_markdown(evaluate(b.write({"wait_agent": True, "speed": 4.0})))
+    assert "esperar al agente: sí · velocidad: 4×" in always
+    assert "## 6. Sin esperar al agente" not in always
+    nothing = render_markdown(evaluate(demo_run(tmp_path / "c").write()))
+    assert "esperar al agente: n/d · velocidad: n/d · modo interactivo: n/d" in nothing
+
+
+WIND_YES = {"wind_with_drift": True, "gps_radar_disagreed": False}
+
+
+def test_phrases_against_the_drift_contradict_a_drift_in_favour() -> None:
+    for sentence in (
+        "El viento es notable (3,9 m/s) y empuja en dirección contraria a la deriva (4,9°).",
+        "El viento sopla de 299° a 119° contra la deriva (36,4°).",
+        "La deriva del dron va contra el viento.",
+        "El viento empuja en sentido opuesto a la deriva.",
+        "El viento es notable pero no es relevante, y empuja en dirección contraria a la deriva.",
+    ):
+        assert contradicting_rules(sentence, WIND_YES), sentence
+
+
+def test_phrases_that_agree_with_the_checks_are_not_flagged() -> None:
+    for sentence in (
+        "El viento empuja en la dirección de la deriva (4,9°).",
+        "El viento no empuja en dirección contraria a la deriva.",
+        "El viento empuja el dron en dirección contraria a la ruta planificada.",
+        "El dron corrige en sentido contrario al error de rumbo.",
+        "El GPS y el radar discrepan poco (6,8 m).",
+        "El GPS y el radar no discrepan, 6,8 m de distancia.",
+        "El GPS y el radar discrepan ligeramente de la ruta planificada.",
+    ):
+        assert contradicting_rules(sentence, WIND_YES) == [], sentence
+
+
+def test_gps_radar_disagreement_figure_contradicts_a_check_of_no_disagreement() -> None:
+    assert contradicting_rules("El GPS y el radar discrepan 13,8 m.", WIND_YES)
+    assert contradicting_rules("El GPS y el radar discrepan en 13,8 m.", WIND_YES)
+    assert contradicting_rules("La discrepancia entre GPS y radar es de 12 m.", WIND_YES)
+
+
+def test_rules_only_apply_when_the_check_says_so() -> None:
+    drift_against = {"wind_with_drift": False, "gps_radar_disagreed": True}
+    assert (
+        contradicting_rules("El viento empuja en dirección contraria a la deriva.", drift_against)
+        == []
+    )
+    assert contradicting_rules("El GPS y el radar discrepan 13,8 m.", drift_against) == []
+    unknown = {"wind_with_drift": None, "gps_radar_disagreed": None}
+    assert contradicting_rules("El GPS y el radar discrepan 13,8 m.", unknown) == []
+    assert contradicting_rules("El GPS y el radar discrepan 13,8 m.", None) == []
+
+
+def test_contradictions_are_listed_in_the_report_and_the_json(tmp_path: Path) -> None:
+    b = demo_run(tmp_path)
+    r = b.raised("det-0040", 400.0, "ROUTE_DEVIATION")
+    b.alert(
+        "ai-0041",
+        401.0,
+        "WIND",
+        r,
+        ["det-0040"],
+        texts={
+            "summary": "Viento contra la deriva",
+            "explanation": "Todo bien. El GPS y el radar discrepan 13,8 m. Sigue.",
+            "recommendation": "Vigilar.",
+        },
+        checks=WIND_YES,
+    )
+    ev = evaluate(b.write())
+    assert [(c.alert_id, c.field) for c in ev.contradictions] == [
+        ("ai-0041", "resumen"),
+        ("ai-0041", "explicación"),
+    ]
+    md = render_markdown(ev)
+    assert "2 frases que contradicen los checks" in summary(ev)
+    assert "## Frases que contradicen los checks" in md
+    assert "«El GPS y el radar discrepan 13,8 m.»" in md
+    ev2 = write_evaluation(b.folder)
+    data = json.loads((b.folder / "eval.json").read_text(encoding="utf-8"))
+    assert len(data["contradictions"]) == 2 and ev2.contradictions
+
+
+def test_a_run_without_contradictions_says_none(tmp_path: Path) -> None:
+    ev = evaluate(demo_run(tmp_path).write())
+    assert ev.contradictions == []
+    assert "0 frases que contradicen los checks" in summary(ev)
+    assert "## Frases que contradicen los checks\n\nNinguna." in render_markdown(ev)

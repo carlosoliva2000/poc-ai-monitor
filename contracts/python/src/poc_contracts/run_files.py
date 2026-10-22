@@ -1,6 +1,8 @@
-"""Ficheros que escribe el generador en `runs/<escenario>/` (`contracts/eventos.md` §8.2 a §8.4).
+"""Ficheros de `runs/` (`contracts/eventos.md` §8.2 a §8.4 y §8.6).
 
-`events.jsonl` son `EventDraft`; aquí están `plan.json`, `truth.json` y `labels.json`.
+`events.jsonl` son `EventDraft`; aquí están `plan.json`, `truth.json` y `labels.json` (los escribe
+el generador en `runs/<escenario>/`) y `run_meta.json` (lo escribe la plataforma en
+`runs/<escenario>/<run_id>/`).
 """
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -84,3 +86,27 @@ class Label(RunFile):
 
 class LabelsFile(RunFile):
     labels: list[Label]
+
+
+class SpeedChange(RunFile):
+    sim_time: float
+    value: float
+
+
+class FlagChange(RunFile):
+    sim_time: float
+    value: bool
+
+
+class RunMeta(RunFile):
+    """`run_meta.json` de una ejecución: lo que no está en el timeline. Los valores son los del
+    primer play o paso; los cambios posteriores van en `*_changes`, con el instante."""
+
+    scenario: str
+    run_id: str
+    speed: float
+    speed_changes: list[SpeedChange]
+    wait_agent: bool
+    wait_agent_changes: list[FlagChange]
+    interactive: bool
+    interactive_changes: list[FlagChange]

@@ -352,9 +352,10 @@ class MonitorState:
             )
         return "\n".join(lines)
 
-    def describe_alerts_detail(self, max_chars: int = 700) -> str:
-        """Para los chats sin tools: cada alerta con su razonamiento, sus comprobaciones y sus
-        evidencias."""
+    def describe_alerts_detail(self, max_chars: int = 700, *, explanation: bool = True) -> str:
+        """Para los chats sin tools: cada alerta con sus comprobaciones y sus evidencias y, si
+        `explanation`, con el razonamiento en prosa del monitor (que puede contradecir sus propias
+        comprobaciones: los chats lo reciben sin él)."""
         if not self.alerts:
             return "Ninguna."
         lines = []
@@ -364,7 +365,7 @@ class MonitorState:
                 AlertStatus.CLOSED: f"cerrada a {format_t(a.closed_at or 0)}",
                 AlertStatus.SUPERSEDED: f"sustituida por {a.superseded_by}",
             }[a.status]
-            explanation = (
+            prose = (
                 a.explanation
                 if len(a.explanation) <= max_chars
                 else (a.explanation[:max_chars] + "…")
@@ -379,7 +380,8 @@ class MonitorState:
             )
             lines.append(
                 f"- {a.alert_id} {a.cause} ({a.severity}, confianza {a.confidence:g}) a "
-                f"{format_t(a.sim_time)}, {state}: «{a.summary}». Explicación: {explanation} "
+                f"{format_t(a.sim_time)}, {state}: «{a.summary}». "
+                f"{f'Explicación: {prose} ' if explanation else ''}"
                 f"Recomendación: {a.recommendation} Comprobaciones: {checks}. "
                 f"Evidencias: {', '.join(a.evidence_ids) or 'ninguna'}."
             )

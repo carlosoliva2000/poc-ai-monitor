@@ -8,7 +8,12 @@ from poc_contracts.envelope import EventDraft
 
 
 def alert(
-    alert_id: str, detections: list[str], cause: str = "GPS_JAMMING", supersedes=None, t=10.0
+    alert_id: str,
+    detections: list[str],
+    cause: str = "GPS_JAMMING",
+    supersedes=None,
+    t=10.0,
+    severity: str = "high",
 ):
     return EventDraft(
         event_id=alert_id,
@@ -19,7 +24,7 @@ def alert(
         sim_time=t,
         event_time="2026-10-20T10:00:00Z",
         payload={
-            "alert_id": alert_id, "detection_ids": detections, "cause": cause, "severity": "high",
+            "alert_id": alert_id, "detection_ids": detections, "cause": cause, "severity": severity,
             "confidence": 0.8, "summary": "resumen", "explanation": "x", "recommendation": "y",
             "evidence_event_ids": ["gps-000001"], "supersedes": supersedes, "as_of_sim_time": t,
             "fallback": False,

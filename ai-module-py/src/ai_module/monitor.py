@@ -228,7 +228,8 @@ class Monitor:
                 for_llm.append(Pending(event, kind, detection_id, last_open_of=alert.alert_id))
                 continue
             await self._acknowledge(
-                trace, event.event_id, detection_id, alert.alert_id if alert else None, reason,
+                trace, event.event_id, detection_id,
+                alert.alert_id if alert and alert.status.value == "open" else None, reason,
                 as_of, fallback=False,
             )  # fmt: skip
         return for_llm
@@ -271,6 +272,9 @@ class Monitor:
                     f"consulta del monitor a {format_t(inv.as_of)} (ventana {result['since']:g}"
                     f"–{result['until']:g} s)"
                 )
+            if name == "get_events" and args.get("source") == "link" and isinstance(result, dict):
+                rt.last_link = list(result.get("events", []))
+                rt.last_link_note = f"lo miró el monitor a {format_t(inv.as_of)}"
             if name == "get_track_metrics" and not cfg.computed_facts:
                 result = strip_computed_facts(result)  # el módulo los conserva para los checks
             inv.seen_ids |= set(ID_RE.findall(compact_json(result)))

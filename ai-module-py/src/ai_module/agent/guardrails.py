@@ -20,6 +20,7 @@ LINK_RSSI_JUMP_DB = 10.0  # un enlace es anómalo si el RSSI varía más de esto
 LINK_LATENCY_RATIO = 2.5  # o si la latencia máxima supera esta vez la mínima
 RECOVERY_STEP_M = 30.0  # la recuperación del GPS salta al menos esto de golpe
 RECOVERY_CAUSES = ("GPS_SPOOFING", "GPS_JAMMING", "SENSOR_FAULT")
+RECOVERY_SEVERITY = "medium"  # severidad que el guardrail impone a la alerta de recuperación
 
 
 class EventIndex:
@@ -70,17 +71,31 @@ def link_is_anomalous(events: list[dict[str, Any]]) -> bool:
     return bool(latency) and min(latency) > 0 and max(latency) / min(latency) > LINK_LATENCY_RATIO
 
 
-def expected_checks(facts: InvocationFacts, state: MonitorState, as_of: float) -> dict[str, Any]:
-    """Los valores que deben tener los `checks` según las tools de la invocación y el estado."""
-    metrics = facts.metrics or {}
+def metric_facts(metrics: dict[str, Any] | None) -> dict[str, bool]:
+    """Los hechos de un `get_track_metrics` que exigen una comparación, con las reglas de la
+    plataforma (`notable`, `with_drift`, `disagreed`) y el salto de la recuperación. Los usan el
+    guardrail y el texto que se inyecta a los chats, para que digan lo mismo."""
+    metrics = metrics or {}
     wind = metrics.get("wind") or {}
     gps_radar = metrics.get("gps_radar") or {}
+    step = metrics.get("gps_max_step_m")
+    return {
+        "wind_notable": bool(wind.get("notable")),
+        "wind_with_drift": bool(wind.get("with_drift")),
+        "gps_radar_disagreed": bool(gps_radar.get("disagreed")),
+        "gps_jump": step is not None and step >= RECOVERY_STEP_M,
+    }
+
+
+def expected_checks(facts: InvocationFacts, state: MonitorState, as_of: float) -> dict[str, Any]:
+    """Los valores que deben tener los `checks` según las tools de la invocación y el estado."""
+    computed = metric_facts(facts.metrics)
     checked = facts.link_events is not None
     return {
         "gps_alert_recent": state.gps_alert_recent(as_of),
-        "gps_radar_disagreed": bool(gps_radar.get("disagreed")),
-        "wind_notable": bool(wind.get("notable")),
-        "wind_with_drift": bool(wind.get("with_drift")),
+        "gps_radar_disagreed": computed["gps_radar_disagreed"],
+        "wind_notable": computed["wind_notable"],
+        "wind_with_drift": computed["wind_with_drift"],
         "link_checked": checked,
         "link_anomalous": link_is_anomalous(facts.link_events or []) if checked else None,
     }
@@ -166,7 +181,17 @@ def check_coherence(
             # nueva sustituye a la anterior si esta sigue abierta
             still_open = recent.status == AlertStatus.OPEN
             want_supersedes = recent.alert_id if still_open else None
-            if cause != recent.cause or args.supersedes != want_supersedes:
+            if still_open and recent.severity == RECOVERY_SEVERITY:
+                errors.append(
+                    f"Es la recuperación del {recent.cause} de {recent.alert_id}, que ya es "
+                    f"{RECOVERY_SEVERITY}: no cambia nada, usa acknowledge_detection con "
+                    f"alert_id {recent.alert_id}"
+                )
+            elif (
+                cause != recent.cause
+                or args.supersedes != want_supersedes
+                or args.severity.value != RECOVERY_SEVERITY
+            ):
                 how = (
                     f"supersedes {recent.alert_id}"
                     if still_open
@@ -174,7 +199,7 @@ def check_coherence(
                 )
                 errors.append(
                     f"Es la recuperación del {recent.cause} de {recent.alert_id}: publica "
-                    f"cause {recent.cause}, severity medium y {how}"
+                    f"cause {recent.cause}, severity {RECOVERY_SEVERITY} y {how}"
                 )
         elif cause in RECOVERY_CAUSES:
             errors.append(
@@ -268,6 +293,7 @@ def check_publish_alert(
     if args.detection_ids is None:
         return Verdict(errors=[_missing_detection_ids(pending)])
     unseen: list[str] = []
+    no_change: str | None = None
     for event_id in args.evidence_event_ids:
         sim_time = index.get(event_id)
         if sim_time is None:
@@ -295,6 +321,14 @@ def check_publish_alert(
         target = state.alerts.get(args.supersedes)
         if target is None or target.status != AlertStatus.OPEN:
             errors.append(f"supersedes: {args.supersedes!r} no es una alerta abierta")
+        elif args.cause.value == target.cause and args.severity.value == target.severity:
+            # una alerta que sustituye a otra tiene que cambiar algo; si no, es un reconocimiento.
+            # Se comprueba al final: en la recuperación del GPS la regla específica (publicar con
+            # severity medium) debe pasar por delante, o este mensaje mandaría reconocer.
+            no_change = (
+                f"No cambia nada respecto a {target.alert_id} (misma causa y severidad): "
+                f"usa acknowledge_detection con alert_id {target.alert_id}"
+            )
     else:
         for detection_id in args.detection_ids:
             alert = state.alert_of(detection_id)
@@ -308,6 +342,8 @@ def check_publish_alert(
         errors += check_coherence(
             args, facts or InvocationFacts(), state, as_of, require_checks=require_checks
         )
+    if no_change and not errors:
+        errors.append(no_change)
     return Verdict(args=args, errors=errors, unseen_evidence=unseen)
 
 

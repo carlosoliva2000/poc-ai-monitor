@@ -23,8 +23,9 @@ llm:
   tool_choice: auto
 
 # Chats. `tools_enabled: false` (el valor de la demo): los chats no reciben tools y su sistema lleva
-# el estado, las alertas (con explicación, checks y evidencias) y los últimos hechos de
-# get_track_metrics. Con `true` mantienen sus tools (con tool_choice auto el 14B a veces escribe la
+# el estado, las alertas (con recomendación, checks y evidencias; sin la explicación en prosa del
+# monitor, que puede contradecir sus propios checks) y los últimos hechos que consultó el monitor
+# (trayectoria y enlace), cada uno con su sí o no calculado. Con `true` mantienen sus tools (con tool_choice auto el 14B a veces escribe la
 # llamada como texto y contesta sin consultar nada).
 chat:
   tools_enabled: false
@@ -72,8 +73,12 @@ agents:
     max_iterations: 6
     max_invocation_s: 120
     llm_timeout_s: 60
-    temperature: 0.7        # valores recomendados por el modelo: texto más natural
-    top_p: 0.8
+    # Los chats responden sobre hechos (cifras, causas, qué se vio): temperatura 0, como el
+    # monitor, para que la misma pregunta con los mismos datos dé la misma respuesta. Con 0,7 el
+    # chat llegó a decir que un viento a favor de la deriva soplaba «en dirección opuesta».
+    temperature: 0
+    top_p: 1.0
+    top_k: -1               # sin límite: con temperature 0 no influye
     memory: conversation
     max_history_messages: 12
     stream: true
@@ -101,8 +106,9 @@ agents:
     max_iterations: 6
     max_invocation_s: 120
     llm_timeout_s: 60
-    temperature: 0.7
-    top_p: 0.8
+    temperature: 0          # sobre hechos (ver chat_monitor)
+    top_p: 1.0
+    top_k: -1
     memory: conversation
     max_history_messages: 12
     stream: true

@@ -462,25 +462,6 @@ def load_labels(name: str) -> list[dict]:
 # --- programa -------------------------------------------------------------------------------------
 
 
-def write_run_meta(name: str, result: RunResult, args: argparse.Namespace, agents: bool) -> None:
-    """Datos de la ejecución que no están en el timeline (velocidad, esperar al agente, reloj de
-    pared). La evaluación los pone en la cabecera de `eval.md`."""
-    if result.run_id is None:
-        return
-    folder = RUNS_DIR / name / result.run_id
-    folder.mkdir(parents=True, exist_ok=True)
-    meta = {
-        "scenario": name,
-        "run_id": result.run_id,
-        "speed": args.speed,
-        "wait_agent": args.wait_agent,
-        "agents": agents,
-        "wall_s": round(result.wall_s, 1),
-        "asks": [a.text for a in args.ask],
-    }
-    (folder / "run_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n")
-
-
 def evaluate(name: str, run_id: str) -> None:
     """Ejecuta la evaluación del módulo de IA sobre la carpeta de la ejecución."""
     folder = RUNS_DIR / name / run_id
@@ -552,7 +533,6 @@ def main() -> int:
                 found = result.detections
                 raised = sum(d.kind == "Raised" for d in found)
                 print(f"-- {name}: {raised} detecciones abiertas ({result.wall_s:.0f} s de reloj)")
-                write_run_meta(name, result, args, agents)
                 if args.check:
                     for c in check_detections(load_labels(name), found):
                         print(f"   {'✅' if c.ok else '❌'} {c.what}")

@@ -35,6 +35,7 @@ AID_NAMES = {
     "computed_facts": "hechos calculados por la plataforma (viento notable, discrepancia "
     "GPS–radar, salto del GPS)",
 }
+CLOSE_GAP_S = 5.0  # desfase entre el fin de la detección y el cierre a partir del cual se explica
 MISSING = "No disponible: el agente no redactó este apartado."
 LIMITATIONS = (
     "Los datos son simulados y el monitor solo veía lo ocurrido hasta cada instante. Las horas, "
@@ -101,14 +102,17 @@ class Anomaly:
 
     @property
     def status(self) -> str:
-        """Estado final: abierta, o cerrada por el monitor (con cuándo terminó la última detección,
-        que puede ser anterior: el monitor cierra cuando responde al aviso)."""
+        """Estado final: abierta, o cerrada por el monitor. Con «esperar al agente» el cierre sale
+        a la hora en que terminó la última detección; si se desvía más de `CLOSE_GAP_S` (sin
+        esperar, el monitor responde mientras la simulación avanza), se añade cuándo terminó."""
         if self.closed_at is None:
             return "ABIERTA al final"
         text = f"cerrada por el monitor a {format_t(self.closed_at)}"
         ends = [d.closed_at for d in self.detections]
         if ends and None not in ends:
-            text += f" (la última detección de la cadena terminó a {format_t(max(ends))})"  # type: ignore[type-var]
+            last_end = max(e for e in ends if e is not None)
+            if self.closed_at - last_end > CLOSE_GAP_S:
+                text += f" (la última detección de la cadena terminó a {format_t(last_end)})"
         return text
 
     def evidence_ids(self) -> list[str]:

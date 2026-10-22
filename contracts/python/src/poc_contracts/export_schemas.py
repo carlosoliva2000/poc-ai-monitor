@@ -14,7 +14,7 @@ from pydantic import BaseModel, TypeAdapter
 from .api import ScenariosResponse, TimelineResponse, ToolError, ToolOk
 from .envelope import Envelope, EventDraft
 from .payloads import PAYLOAD_MODELS
-from .run_files import LabelsFile, PlanFile, TruthFile
+from .run_files import LabelsFile, PlanFile, RunMeta, TruthFile
 from .scenario import ScenarioConfig
 from .tools import TOOL_MODELS, PublishAlertResult
 from .ws import ClientMessage, ServerMessage, StateMessage
@@ -39,6 +39,7 @@ def build_schemas() -> dict[str, dict[str, Any]]:
         "files/plan.json": PlanFile.model_json_schema(),
         "files/truth.json": TruthFile.model_json_schema(),
         "files/labels.json": LabelsFile.model_json_schema(),
+        "files/run_meta.json": RunMeta.model_json_schema(),
     }
     for event_type, model in PAYLOAD_MODELS.items():
         schemas[f"payloads/{event_type.value}.json"] = model.model_json_schema()

@@ -74,16 +74,16 @@ def test_demo_end_to_end_with_a_fake_llm() -> None:
         # cada petición al servidor llevó el muestreo explícito; el monitor, `required`
         for r in server.requests:
             system = r["messages"][0]["content"]
-            monitor = (
-                "ahora te habla el **operador**" not in system and "informe" not in system[:80]
-            )
+            chat = "ahora te habla el **operador**" in system
+            monitor = not chat and "informe" not in system[:80]
+            facts = monitor or chat  # monitor y chats: sobre hechos, temperatura 0 y sin top_k
             assert r["repetition_penalty"] == 1.05
-            assert r["top_k"] == (-1 if monitor else 20)
+            assert r["top_k"] == (-1 if facts else 20)
             if "tools" in r:  # el informe no lleva tools (y, sin ellas, tampoco tool_choice)
                 assert r["tool_choice"] == ("required" if monitor else "auto")
             else:  # sin tools (el informe y los chats de la demo) tampoco hay tool_choice
                 assert not monitor and "tool_choice" not in r
-            assert r["temperature"] == (0 if monitor else 0.7)
+            assert r["temperature"] == (0 if facts else 0.7)
         # el timeline siguió creciendo después de SimulationFinished (informe y chats)
         lines = (folder / "timeline.jsonl").read_text().splitlines()
         types = [json.loads(line)["type"] for line in lines]

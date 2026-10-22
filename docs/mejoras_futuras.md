@@ -32,6 +32,18 @@ Anotadas el 16/10/2026 durante el diseño. Sirven de lista para la Fase 5 y para
 ## Uso exclusivo del LLM por configuración
 Un `llm_max_concurrency` global en `agents.yaml` con un semáforo compartido por el monitor, el informe y los chats, para dar el LLM en exclusiva al monitor (hoy los chats compiten con él por la caché KV de vLLM). Los tiempos máximos de una invocación contarían desde que el monitor consigue el LLM. Sin «esperar al agente», necesita además un mensaje nuevo del módulo a la plataforma en el contrato (para avisar de que el agente está esperando turno). No se implementa ahora.
 
+## Texto fiable del monitor
+El texto de las alertas (resumen, explicación, recomendación, razón de cierre) lo escribe el modelo y **puede contradecir los `checks` que él mismo declaró**: en la demo de viento decía «GPS y radar discrepan 13,8 m» y «empuja en dirección contraria a la deriva» con `gps_radar_disagreed = no` y `wind_with_drift = sí`. Con temperatura 0 el error se repite siempre. Pedirle que escriba sin nombres de campo (Fase 4.1) lo empeoró, porque `disagreed=false` y `with_drift=true` le servían de ancla; se revirtió (Fase 4.3).
+
+**Lo que hay hoy es provisional, no una solución:**
+- La web quita de lo que muestra los paréntesis que solo contienen `campo=valor` o `campo: valor` (el evento, `eval.md` y el informe conservan el original). Es presentación: **no arregla frases como «discrepan 13,8 m»**.
+- `evaluate.py` mide las «frases que contradicen los checks» con tres reglas simples (contrario a la deriva o al viento con la deriva a favor, «contra la deriva», «discrepan <cifra>» sin «poco» con GPS y radar sin discrepar) y las lista en `eval.md`. **Solo vigila; no impide publicar.** Con reglas tan simples habrá falsos negativos (otras formulaciones) y algún falso positivo.
+
+**Investigar:**
+- **(a) Explicación estructurada.** El código monta con plantillas las frases de hechos (a partir de los `checks` y de `get_track_metrics`, como ya hace el informe) y el modelo solo escribe una interpretación corta. Es lo que se hizo en los chats (Fase 4.2) y en el informe (Fase 3.1), y ahí el fallo desapareció; aquí cambia el contrato (`explanation` pasaría a llevar dos partes) y qué ve la web.
+- **(b) Verificar el texto contra los `checks` antes de publicarlo.** O con reglas (la métrica de `evaluate.py` convertida en guardrail: el rechazo diría la frase y el check que contradice) o con un segundo modelo que haga de juez. Con reglas es determinista pero cubre solo lo que se haya escrito; con juez cubre más, pero es un 14B comprobando a otro 14B (o el mismo) y cuesta una llamada por alerta.
+- **(c) Un modelo mejor.** Ver «Liberar al agente»: comprobar si escribe bien **sin el ancla de los nombres de campo**, es decir, con el prompt de castellano llano de la 4.1 y la métrica en 0.
+
 ## Liberar al agente
 Con `Qwen2.5-14B-Instruct-AWQ` el monitor necesita varias **ayudas** (lista y motivos en `docs/fases/fase3.md`, «Ayudas al modelo añadidas en esta fase»). Cada una tiene un interruptor en `agent-assets/agents.yaml` (`monitor.*`, todos activados por defecto) y `eval.md` anota en su cabecera cuáles estaban activas. La mejora es **probar modelos más modernos y quitar las ayudas** hasta ver cuáles sobran.
 

@@ -2,7 +2,6 @@
 publicación de eventos (que también actualiza el estado y el índice locales) y la actividad.
 """
 
-import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -18,6 +17,7 @@ from .agent.llm import LlmClient
 from .agent.tools import PlatformCall
 from .agent.trace import TraceWriter
 from .bus_client import call_platform_tool
+from .chat_facts import describe_link, describe_metrics
 from .ids import IdAllocator
 from .monitor_state import MonitorState
 from .outbox import EventFactory
@@ -60,6 +60,9 @@ class Runtime:
     last_metrics: dict[str, Any] | None = None
     """Último resultado de `get_track_metrics` del monitor (para los chats sin tools)."""
     last_metrics_note: str = ""
+    last_link: list[dict[str, Any]] | None = None
+    """Últimos eventos de enlace que miró el monitor (para los chats sin tools)."""
+    last_link_note: str = ""
 
     def __post_init__(self) -> None:
         self.factory = EventFactory(self.ids)
@@ -90,19 +93,16 @@ class Runtime:
         self.clock.reset()
         self.scenario = self.run_id = None
         self.last_metrics = None
+        self.last_link = None
         self.trace.path = None
         self.trace.records.clear()
 
     def describe_last_facts(self) -> str:
-        """Los últimos hechos de `get_track_metrics` (para el sistema de un chat sin tools)."""
-        if self.last_metrics is None:
-            return "El monitor todavía no ha consultado las métricas de la trayectoria."
-        keys = ("gps_deviation_from_plan_m", "radar_deviation_from_plan_m", "gps_radar_distance_m",
-                "drift_direction_deg", "wind", "gps_radar", "gps_max_step_m")  # fmt: skip
-        facts = {k: self.last_metrics.get(k) for k in keys}
-        return f"{self.last_metrics_note}: " + json.dumps(
-            facts, ensure_ascii=False, separators=(",", ":")
-        )
+        """Los últimos hechos que consultó el monitor (trayectoria y enlace), cada uno con su
+        interpretación (sí/no), para el sistema de un chat sin tools."""
+        text = describe_metrics(self.last_metrics, self.last_metrics_note)
+        link = describe_link(self.last_link, self.last_link_note)
+        return f"{text}\n{link}" if link else text
 
     # --- Publicación ----------------------------------------------------------------------
 

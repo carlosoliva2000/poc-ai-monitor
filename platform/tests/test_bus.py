@@ -43,7 +43,7 @@ def activity(number: int) -> EventDraft:
         "causation_id": None,
     }
     return EventDraft(
-        event_id=f"ai-{number:04d}",
+        event_id=f"act-{number:04d}",
         topic=topic_for(EventType.AGENT_ACTIVITY),
         type=EventType.AGENT_ACTIVITY,
         source="ai-module",

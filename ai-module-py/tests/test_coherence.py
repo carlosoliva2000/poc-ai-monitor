@@ -258,6 +258,67 @@ def test_exclusive_recovery_when_the_gps_alert_is_already_closed(state: MonitorS
     assert any("no es una alerta abierta" in e for e in check(bad, state, facts).errors)
 
 
+def test_gps_recovery_must_be_published_with_severity_medium(state: MonitorState) -> None:
+    """Además de la causa y del `supersedes`, la recuperación se publica con `severity medium`."""
+    state.apply(alert("ai-1", ["det-1"], cause="GPS_SPOOFING"))  # severidad high
+    state.apply(detection_event("raised", "det-2", 9.0))
+    facts = InvocationFacts(metrics=metrics(disagreed=True))
+    both = checks(gps_alert_recent=True, gps_radar_disagreed=True)
+    expected = (
+        "Es la recuperación del GPS_SPOOFING de ai-1: publica cause GPS_SPOOFING, "
+        "severity medium y supersedes ai-1"
+    )
+    for severity in ("high", "low"):
+        # con `high` (la de la alerta) la regla de la recuperación pasa por delante de «No cambia
+        # nada»: si no, el rechazo mandaría reconocer y la recuperación perdería su `supersedes`
+        wrong = alert_args(
+            ["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", severity=severity, checks=both
+        )
+        assert check(wrong, state, facts).errors == [expected], severity
+    ok = alert_args(
+        ["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", severity="medium", checks=both
+    )
+    assert check(ok, state, facts).ok
+
+
+def test_gps_recovery_with_a_closed_alert_also_needs_severity_medium(state: MonitorState) -> None:
+    state.apply(alert("ai-1", ["det-1"], cause="GPS_JAMMING"))
+    state.apply(detection_event("cleared", "det-1", 8.0))
+    state.apply(closed("ai-1", t=9.0))
+    state.apply(detection_event("raised", "det-2", 10.0))
+    facts = InvocationFacts(metrics=metrics(step=90.0))
+    high = alert_args(
+        ["det-2"], cause="GPS_JAMMING", severity="high", checks=checks(gps_alert_recent=True)
+    )
+    assert check(high, state, facts).errors == [
+        "Es la recuperación del GPS_JAMMING de ai-1: publica cause GPS_JAMMING, severity medium "
+        "y sin supersedes (ai-1 ya está cerrada)"
+    ]
+
+
+def test_recovery_of_a_gps_alert_that_is_already_medium_is_an_acknowledgement(
+    state: MonitorState,
+) -> None:
+    """La regla excluyente pide `severity medium` con `supersedes`; si la alerta ya es de esa
+    severidad no cambia nada, y las dos reglas no pueden contradecirse: se dice que reconozca."""
+    state.apply(alert("ai-1", ["det-1"], cause="GPS_SPOOFING", severity="medium"))
+    state.apply(detection_event("raised", "det-2", 9.0))
+    facts = InvocationFacts(metrics=metrics(disagreed=True))
+    both = checks(gps_alert_recent=True, gps_radar_disagreed=True)
+    same = alert_args(
+        ["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", severity="medium", checks=both
+    )
+    assert check(same, state, facts).errors == [
+        "Es la recuperación del GPS_SPOOFING de ai-1, que ya es medium: no cambia nada, "
+        "usa acknowledge_detection con alert_id ai-1"
+    ]
+    other = alert_args(["det-2"], cause="SENSOR_FAULT", supersedes="ai-1", checks=both)
+    assert check(other, state, facts).errors == [
+        "Es la recuperación del GPS_SPOOFING de ai-1, que ya es medium: no cambia nada, "
+        "usa acknowledge_detection con alert_id ai-1"
+    ]
+
+
 def test_gps_recovery_without_a_recent_gps_alert_is_rejected(state: MonitorState) -> None:
     args = alert_args(
         ["det-1"], cause="GPS_JAMMING", severity="high", checks=checks(gps_radar_disagreed=True)
@@ -517,7 +578,7 @@ def test_ephemeral_events_are_not_valid_evidence() -> None:
     index = EventIndex()
     index.add(
         EventDraft(
-            event_id="ai-0042",
+            event_id="act-0042",
             topic="citadel.pub.evt.ai.agent.AgentActivity.v1",
             type=EventType.AGENT_ACTIVITY,
             source="ai-module",
@@ -533,7 +594,7 @@ def test_ephemeral_events_are_not_valid_evidence() -> None:
             },  # fmt: skip
         )
     )
-    assert index.get("ai-0042") is None
+    assert index.get("act-0042") is None
 
 
 def test_a_wrong_cause_on_a_recovery_with_a_closed_gps_alert_says_there_is_no_supersedes(

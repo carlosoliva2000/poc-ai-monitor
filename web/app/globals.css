@@ -1,0 +1,108 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: 'IBM Plex Sans', 'IBM Plex Sans Fallback', ui-sans-serif, system-ui;
+  --font-mono: 'IBM Plex Mono', 'IBM Plex Mono Fallback', ui-monospace, monospace;
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-grid: var(--grid);
+  --color-warning: var(--warning);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+:root {
+  color-scheme: light;
+  --background: oklch(0.955 0.008 240);
+  --foreground: oklch(0.25 0.045 255);
+  --card: oklch(0.99 0.003 240);
+  --card-foreground: oklch(0.25 0.045 255);
+  --popover: oklch(0.99 0.003 240);
+  --popover-foreground: oklch(0.25 0.045 255);
+  --primary: oklch(0.46 0.17 262);
+  --primary-foreground: oklch(0.99 0.003 240);
+  --secondary: oklch(0.925 0.012 245);
+  --secondary-foreground: oklch(0.25 0.045 255);
+  --muted: oklch(0.925 0.012 245);
+  --muted-foreground: oklch(0.5 0.03 255);
+  --accent: oklch(0.68 0.18 48);
+  --accent-foreground: oklch(0.99 0.003 240);
+  --destructive: oklch(0.57 0.21 25);
+  --destructive-foreground: oklch(0.99 0.003 240);
+  --warning: oklch(0.68 0.18 48);
+  --border: oklch(0.87 0.015 245);
+  --input: oklch(0.87 0.015 245);
+  --ring: oklch(0.46 0.17 262);
+  --grid: oklch(0.9 0.014 245);
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .md-body {
+    @apply text-sm leading-relaxed text-foreground;
+  }
+  .md-body h1 {
+    @apply mb-2 mt-1 text-base font-semibold;
+  }
+  .md-body h2 {
+    @apply mb-1.5 mt-4 border-b border-border pb-1 text-sm font-semibold;
+  }
+  .md-body h3 {
+    @apply mb-1 mt-3 text-sm font-semibold;
+  }
+  .md-body p {
+    @apply my-1.5;
+  }
+  .md-body ul {
+    @apply my-1.5 list-disc pl-5;
+  }
+  .md-body ol {
+    @apply my-1.5 list-decimal pl-5;
+  }
+  .md-body table {
+    @apply my-2 w-full border-collapse text-xs;
+  }
+  .md-body th,
+  .md-body td {
+    @apply border border-border px-1.5 py-1 text-left align-top;
+  }
+  .md-body th {
+    @apply bg-muted font-medium;
+  }
+  .md-body code {
+    @apply rounded-sm bg-muted px-1 font-mono text-[11px];
+  }
+}

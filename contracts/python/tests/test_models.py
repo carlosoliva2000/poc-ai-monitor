@@ -79,14 +79,16 @@ def test_chat_topic_follows_conversation_id() -> None:
 
 def test_ephemeral_types() -> None:
     chunk = {"conversation_id": "monitor", "reply_to": "ops-0004", "delta": "Porque la"}
-    assert draft(EventType.AGENT_REPLY_CHUNK, chunk, "ai-0011", ConversationId.MONITOR)["ephemeral"]
+    assert draft(EventType.AGENT_REPLY_CHUNK, chunk, "chk-0011", ConversationId.MONITOR)[
+        "ephemeral"
+    ]
     activity = {
         "agent": "report",
         "state": "started",
         "invocation_id": "inv-0001",
         "causation_id": None,
     }
-    event = draft(EventType.AGENT_ACTIVITY, activity, "ai-0012")
+    event = draft(EventType.AGENT_ACTIVITY, activity, "act-0012")
     assert event["ephemeral"] and event["asset"] is None
     EventDraft.model_validate(event)
 

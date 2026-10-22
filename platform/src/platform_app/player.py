@@ -36,7 +36,7 @@ from poc_contracts.enums import (
     SensorSource,
 )
 from poc_contracts.envelope import Envelope, EventDraft
-from poc_contracts.run_files import PlanFile, TruthFile
+from poc_contracts.run_files import PlanFile, RunMeta, TruthFile
 from poc_contracts.scenario import ScenarioConfig
 from poc_contracts.ws import SPEEDS, ActiveFault, PlayerState
 
@@ -56,6 +56,7 @@ WAIT_AGENT_TIMEOUT_S = 90.0  # reloj de pared
 AI_PATTERN = "citadel.pub.evt.ai.>"
 MONITOR_SOURCE = "ai-monitor"
 INTERACTIVE_OFF_MESSAGE = "el modo interactivo está apagado: actívalo para inyectar fallos"
+META_KEYS = ("speed", "wait_agent", "interactive")
 
 
 class PlayerError(Exception):
@@ -99,6 +100,7 @@ class Player:
         self._dumped = False
         self._waiting_for: set[str] = set()
         self._wait_deadline = 0.0
+        self._history: dict[str, list[dict]] = {key: [] for key in META_KEYS}
         bus.subscribe(AI_PATTERN, self._on_ai_event)
 
     # --- Estado -------------------------------------------------------------------------------
@@ -173,6 +175,8 @@ class Player:
         if self.config is not None:
             self._plr(EventType.SIMULATION_RESET, {})
             self._dump_timeline()
+        was_interactive = self.interactive
+        self.interactive = False  # cada carga empieza con el modo interactivo apagado
         self.bus.reset()
         self.config = config
         self.plan = run.plan
@@ -188,6 +192,7 @@ class Player:
         self._started = False
         self._dumped = False
         self._waiting_for.clear()
+        self._history = {key: [] for key in META_KEYS}
         self._status = PlayerStatus.IDLE
         self._plr(
             EventType.SIMULATION_STARTED,
@@ -198,8 +203,8 @@ class Player:
                 "total_events": self.total_events,
             },
         )
-        if self.interactive:  # el timeline nuevo empieza sabiendo que el modo está encendido
-            self._plr(EventType.INTERACTIVE_MODE_CHANGED, {"interactive": True})
+        if was_interactive:  # queda registrado en el timeline nuevo que se ha apagado
+            self._plr(EventType.INTERACTIVE_MODE_CHANGED, {"interactive": False})
         self._notify()
 
     def reset(self) -> None:
@@ -222,7 +227,55 @@ class Player:
         path = self.runs_dir / self.config.name / str(self.run_id) / "timeline.jsonl"
         self.bus.timeline.dump(path)
         self._dumped = True
+        self._write_meta()
         log.info("timeline written to %s", path)
+
+    # --- Datos de la ejecución (`run_meta.json`) ------------------------------------------------
+
+    def _mark_started(self) -> None:
+        """La ejecución arranca (primer play o paso): se guardan los valores iniciales."""
+        if self._started:
+            return
+        self._started = True
+        values = {
+            "speed": self.speed,
+            "wait_agent": self.wait_agent,
+            "interactive": self.interactive,
+        }
+        for key in META_KEYS:
+            self._history[key] = [{"sim_time": 0.0, "value": values[key]}]
+        self._write_meta()
+
+    def _record(self, key: str, value: float | bool) -> None:
+        """Anota un cambio de velocidad, de «esperar al agente» o del modo interactivo durante la
+        ejecución (los anteriores al primer play no cuentan: son el valor inicial)."""
+        if not self._started or self.config is None:
+            return
+        history = self._history[key]
+        if history and history[-1]["value"] == value:
+            return
+        history.append({"sim_time": round(self.sim_time, 1), "value": value})
+        self._write_meta()
+
+    def _write_meta(self) -> None:
+        """`runs/<escenario>/<run_id>/run_meta.json`: lo que no está en el timeline y la evaluación
+        pone en la cabecera de `eval.md` (valores iniciales y sus cambios con el instante)."""
+        if self.config is None or not self._started:
+            return
+        fields: dict = {"scenario": self.config.name, "run_id": self.run_id}
+        for key in META_KEYS:
+            history = self._history[key]
+            fields[key] = history[0]["value"]
+            fields[f"{key}_changes"] = history[1:]
+        meta = RunMeta.model_validate(fields)
+        folder = self.runs_dir / self.config.name / str(self.run_id)
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "run_meta.json").write_text(
+                meta.model_dump_json(indent=2) + "\n", encoding="utf-8"
+            )
+        except OSError:
+            log.exception("could not write run_meta.json")
 
     def shutdown(self) -> None:
         """Al parar el servidor: no se pierde el timeline de una ejecución a medias."""
@@ -238,7 +291,7 @@ class Player:
             return
         was_paused = self._status == PlayerStatus.PAUSED
         self._waiting_for.clear()
-        self._started = True
+        self._mark_started()
         self._status = PlayerStatus.RUNNING
         if was_paused:
             self._plr(EventType.SIMULATION_RESUMED, {})
@@ -260,7 +313,7 @@ class Player:
         if self._status == PlayerStatus.RUNNING:
             self._pause(PauseReason.USER)
         self._waiting_for.clear()
-        self._started = True
+        self._mark_started()
         while not self._queue and not sim.finished:
             self._queue.extend(sim.step())
         if self._queue:
@@ -275,10 +328,12 @@ class Player:
         if speed not in SPEEDS:
             raise PlayerError(f"velocidad no válida: {speed} (valores: {SPEEDS})")
         self.speed = speed
+        self._record("speed", speed)
         self._notify()
 
     def set_wait_agent(self, value: bool) -> None:
         self.wait_agent = value
+        self._record("wait_agent", value)
         if not value and self._waiting_for:
             self._stop_waiting()
         self._notify()
@@ -287,6 +342,7 @@ class Player:
         if value == self.interactive:
             return
         self.interactive = value
+        self._record("interactive", value)
         if self.config is not None:
             self._plr(EventType.INTERACTIVE_MODE_CHANGED, {"interactive": value})
         self._notify()
@@ -365,8 +421,13 @@ class Player:
     # --- Esperar al agente --------------------------------------------------------------------
 
     def _on_ai_event(self, event: Envelope) -> None:
-        """Pausa ante una detección y reanuda cuando el monitor responde a todas."""
-        if event.type in (EventType.DETECTION_RAISED, EventType.DETECTION_UPDATED):
+        """Pausa ante un evento de detección (nueva, actualizada o cerrada) y reanuda cuando el
+        monitor responde a todos con un evento que lleve su `event_id` como `causation_id`."""
+        if event.type in (
+            EventType.DETECTION_RAISED,
+            EventType.DETECTION_UPDATED,
+            EventType.DETECTION_CLEARED,
+        ):
             if not self.wait_agent:
                 return
             if self._status == PlayerStatus.RUNNING:

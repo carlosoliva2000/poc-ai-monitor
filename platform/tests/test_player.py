@@ -169,27 +169,89 @@ def test_stepping_then_playing_gives_the_same_events(runs_dir: Path) -> None:
 
 def test_reset_reloads_with_new_run_id_and_clean_bus(runs_dir: Path) -> None:
     player = make_player(runs_dir)
-    player.set_interactive(True)  # se conserva entre reinicios
     player.load("nominal")
     first_run = player.run_id
-    player.set_speed(4)
+    player.set_speed(4)  # la velocidad se conserva; el modo interactivo no
+    player.set_interactive(True)
     player.play()
     player.advance(30)
     player.reset()
     assert player.run_id != first_run
     assert player.state().status == PlayerStatus.IDLE
-    assert player.state().interactive and player.state().speed == 4
+    assert not player.state().interactive and player.state().speed == 4
     timeline = player.bus.timeline.all()
     assert [e.seq for e in timeline] == [1, 2]
-    assert [e.type for e in timeline] == [
-        EventType.SIMULATION_STARTED,
+    assert [(e.type, e.payload) for e in timeline][1] == (
         EventType.INTERACTIVE_MODE_CHANGED,
-    ]
+        {"interactive": False},
+    )
     assert [e.event_id for e in timeline] == ["plr-0001", "plr-0002"]
     assert player.state().cursor == 0 and player.sim_time == 0.0
     # la ejecución a medias dejó su timeline, con el SimulationReset al final
     old = runs_dir / "nominal" / str(first_run) / "timeline.jsonl"
     assert json.loads(old.read_text().splitlines()[-1])["type"] == "SimulationReset"
+
+
+def test_load_turns_interactive_off_and_says_so_in_the_new_timeline(runs_dir: Path) -> None:
+    player = make_player(runs_dir)
+    player.set_interactive(True)  # antes de cargar nada: no hay timeline donde anotarlo
+    player.load("nominal")
+    assert not player.state().interactive
+    assert [e.type.value for e in player.bus.timeline.all()] == [
+        "SimulationStarted",
+        "InteractiveModeChanged",
+    ]
+    assert player.bus.timeline.all()[1].payload == {"interactive": False}
+    # con el modo ya apagado, cargar no publica nada más
+    player.load("viento")
+    assert [e.type.value for e in player.bus.timeline.all()] == ["SimulationStarted"]
+    player.set_interactive(True)
+    player.load("nominal")
+    assert not player.state().interactive
+    assert of_type(player, EventType.INTERACTIVE_MODE_CHANGED)[-1].payload == {"interactive": False}
+    with pytest.raises(PlayerError, match="modo interactivo está apagado"):
+        player.fault(SensorSource.RADAR, FaultMode.MUTE, True)
+
+
+def read_meta(runs_dir: Path, player: Player) -> dict:
+    path = runs_dir / str(player.scenario) / str(player.run_id) / "run_meta.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_run_meta_is_written_by_the_player_with_the_changes_during_the_run(
+    runs_dir: Path,
+) -> None:
+    # `runs_dir` es de toda la sesión: un `run_id` propio evita chocar con otras pruebas
+    player = make_player(runs_dir, run_id_factory=lambda: "20990101-000001")
+    player.load("nominal")
+    player.set_speed(4)  # antes del primer play: es el valor inicial
+    player.set_wait_agent(True)
+    assert not (runs_dir / "nominal" / str(player.run_id)).exists()  # sin ejecución, sin fichero
+    player.play()
+    assert read_meta(runs_dir, player) == {
+        "scenario": "nominal", "run_id": player.run_id,
+        "speed": 4.0, "speed_changes": [],
+        "wait_agent": True, "wait_agent_changes": [],
+        "interactive": False, "interactive_changes": [],
+    }  # fmt: skip
+    player.advance(30)
+    player.set_speed(8)
+    player.set_speed(8)  # sin cambio: nada
+    player.set_wait_agent(False)
+    player.set_interactive(True)
+    player.advance(10)
+    player.set_interactive(False)
+    meta = read_meta(runs_dir, player)
+    assert meta["speed"] == 4.0 and meta["speed_changes"] == [{"sim_time": 30.0, "value": 8.0}]
+    assert meta["wait_agent_changes"] == [{"sim_time": 30.0, "value": False}]
+    assert meta["interactive_changes"] == [
+        {"sim_time": 30.0, "value": True},
+        {"sim_time": 40.0, "value": False},
+    ]
+    # al terminar se vuelve a escribir junto al timeline
+    player.run_to_end()
+    folder = runs_dir / "nominal" / str(player.run_id)
+    assert (folder / "timeline.jsonl").exists() and read_meta(runs_dir, player) == meta
 
 
 def test_timeline_keeps_appending_after_the_dump(runs_dir: Path) -> None:
@@ -259,8 +321,8 @@ def test_interactive_mode_changes_are_published_once(runs_dir: Path) -> None:
 
 def test_manual_mute_drops_the_source_and_keeps_the_trajectory(runs_dir: Path) -> None:
     player = make_player(runs_dir)
-    player.set_interactive(True)
     player.load("nominal")
+    player.set_interactive(True)
     player.play()
     player.advance(30)
     player.fault(SensorSource.RADAR, FaultMode.MUTE, True)
@@ -297,8 +359,8 @@ def test_manual_mute_drops_the_source_and_keeps_the_trajectory(runs_dir: Path) -
 def test_manual_gps_loss_changes_the_trajectory_and_publishes_fix_none(runs_dir: Path) -> None:
     baseline = generate(load_scenario("viento")).truth
     player = make_player(runs_dir)
-    player.set_interactive(True)
     player.load("viento")
+    player.set_interactive(True)
     player.play()
     player.advance(90)
     player.fault(SensorSource.GPS, FaultMode.LOSS, True)
@@ -326,6 +388,7 @@ def test_manual_fault_errors(runs_dir: Path) -> None:
     with pytest.raises(PlayerError, match="ningún escenario"):
         player.fault(SensorSource.RADAR, FaultMode.MUTE, True)
     player.load("fallos")
+    player.set_interactive(True)
     player.play()
     player.advance(125)  # el mute del radar del escenario está activo
     with pytest.raises(PlayerError, match="ya tiene un fallo"):
@@ -471,13 +534,57 @@ def test_wait_agent_resumes_with_a_detection_acknowledged(runs_dir: Path) -> Non
     assert player.state().status == PlayerStatus.RUNNING
 
 
-def test_wait_agent_does_not_pause_on_a_cleared_detection(runs_dir: Path) -> None:
+def test_wait_agent_pauses_on_a_cleared_detection_and_resumes_with_the_alert_closed(
+    runs_dir: Path,
+) -> None:
+    """El cierre de una detección también espera: se reanuda con el `AlertClosed` (o cualquier
+    respuesta del monitor) que lleve el `event_id` del `DetectionCleared`."""
+    from platform_app.generator.events import make_event
+
     player = make_player(runs_dir)
     player.load("nominal")
     player.set_wait_agent(True)
     player.play()
     player.advance(10)
-    player.bus.publish(cleared(1, player.sim_time))
+    closing = player.bus.publish(cleared(1, player.sim_time))
+    assert player.state().status == PlayerStatus.PAUSED
+    assert of_type(player, EventType.SIMULATION_PAUSED)[-1].payload == {"reason": "waiting_agent"}
+    waiting_at = player.sim_time
+    player.advance(30)
+    assert player.sim_time == waiting_at
+    payload = {"alert_id": "ai-0003", "reason": "cerrada", "as_of_sim_time": waiting_at}
+    closed = make_event(
+        load_scenario("nominal"), EventType.ALERT_CLOSED, waiting_at, 9, payload
+    ).model_copy(update={"causation_id": closing.event_id})
+    player.bus.publish(closed)
+    assert player.state().status == PlayerStatus.RUNNING
+    player.advance(5)
+    assert player.sim_time > waiting_at
+
+
+def test_wait_agent_resumes_a_cleared_detection_with_a_deterministic_acknowledgement(
+    runs_dir: Path,
+) -> None:
+    from platform_app.generator.events import make_event
+
+    player = make_player(runs_dir)
+    player.load("nominal")
+    player.set_wait_agent(True)
+    player.play()
+    player.advance(10)
+    closing = player.bus.publish(cleared(1, player.sim_time))
+    assert player.state().status == PlayerStatus.PAUSED
+    payload = {
+        "detection_id": "det-0001",
+        "alert_id": None,
+        "reason": "sin alerta",
+        "as_of_sim_time": player.sim_time,
+        "fallback": False,
+    }
+    ack = make_event(
+        load_scenario("nominal"), EventType.DETECTION_ACKNOWLEDGED, player.sim_time, 9, payload
+    ).model_copy(update={"causation_id": closing.event_id})
+    player.bus.publish(ack)
     assert player.state().status == PlayerStatus.RUNNING
 
 

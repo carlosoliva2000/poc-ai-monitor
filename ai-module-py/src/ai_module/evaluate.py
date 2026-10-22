@@ -16,10 +16,12 @@ respuesta de fallback es «sin diagnóstico». Acierta si la causa está en
 
 import argparse
 import json
+import re
 import statistics
 import sys
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -105,6 +107,88 @@ def synthetic_labels(events: list[Event]) -> list[Label]:
 
 def accepted_causes(label: Label) -> set[str]:
     return {label.expected_cause.value, *(c.value for c in label.also_accepted_causes)}
+
+
+# --- Frases que contradicen los checks -----------------------------------------------------------
+#
+# El texto de las alertas lo escribe el modelo y nada lo verifica contra los `checks` que el mismo
+# modelo declaró (el guardrail solo contrasta los `checks` con las tools). Esta métrica lo vigila
+# con reglas simples y explícitas, sin LLM; las frases se listan en `eval.md` para revisarlas.
+
+SENTENCE_SPLIT = re.compile(r"(?<=[.;!?])\s+|\n+")
+OPPOSITE = re.compile(r"\b(?:contrari|opuest)\w*", re.IGNORECASE)
+WIND_OR_DRIFT = re.compile(r"\b(?:deriva|viento)\b", re.IGNORECASE)
+AGAINST = re.compile(r"\bcontra\s+(?:de\s+)?(?:la\s+deriva|el\s+viento|él)\b", re.IGNORECASE)
+DISAGREE_FIGURE = re.compile(
+    r"\bdiscrepan\s+(?:(?:en|de|unos|hasta|alrededor\s+de)\s+)?\d"
+    r"|\bdiscrepancia\b[^.;]{0,40}\bes\s+de\s+\d",
+    re.IGNORECASE,
+)
+# «contraria a la ruta» no habla de la deriva (los checks no dicen nada de la ruta): no cuenta.
+TO_ROUTE = re.compile(r"\s*(?:a|al)\s+(?:la\s+|el\s+)?(?:ruta|plan)\b", re.IGNORECASE)
+NEGATED_BEFORE = re.compile(r"\bno\b[^,;()]{0,35}$", re.IGNORECASE)
+ALERT_TEXT_FIELDS = (
+    ("summary", "resumen"),
+    ("explanation", "explicación"),
+    ("recommendation", "recomendación"),
+)
+RULE_OPPOSITE = "contrario a la deriva o al viento, con la deriva a favor"
+RULE_DISAGREE = "GPS y radar discrepan con una cifra, sin que discrepen"
+
+
+def _near_wind_or_drift(sentence: str, start: int, end: int, window: int = 60) -> bool:
+    return WIND_OR_DRIFT.search(sentence, max(0, start - window), end + window) is not None
+
+
+def contradicting_rules(sentence: str, checks: dict[str, Any] | None) -> list[str]:
+    """Reglas que incumple una frase frente a los `checks` de su alerta (vacío si ninguna)."""
+    if not checks:
+        return []
+    rules: list[str] = []
+    if checks.get("wind_with_drift") is True:
+        for m in [*OPPOSITE.finditer(sentence), *AGAINST.finditer(sentence)]:
+            negated = NEGATED_BEFORE.search(sentence[: m.start()]) is not None
+            about_route = TO_ROUTE.match(sentence, m.end()) is not None
+            if (
+                not negated
+                and not about_route
+                and _near_wind_or_drift(sentence, m.start(), m.end())
+            ):
+                rules.append(RULE_OPPOSITE)
+                break
+    if (
+        checks.get("gps_radar_disagreed") is False
+        and DISAGREE_FIGURE.search(sentence)
+        and not re.search(r"\bpoco\b|\bno\s+discrepa", sentence, re.IGNORECASE)
+    ):
+        rules.append(RULE_DISAGREE)
+    return rules
+
+
+@dataclass
+class Contradiction:
+    """Una frase del texto de una alerta que choca con los `checks` de esa misma alerta."""
+
+    alert_id: str
+    sim_time: float
+    field: str
+    rule: str
+    sentence: str
+
+
+def contradictions(alerts: list[Event]) -> list[Contradiction]:
+    found: list[Contradiction] = []
+    for alert in alerts:
+        p = alert["payload"]
+        for key, label in ALERT_TEXT_FIELDS:
+            for sentence in SENTENCE_SPLIT.split(p[key]):
+                for rule in contradicting_rules(sentence, p.get("checks")):
+                    found.append(
+                        Contradiction(
+                            p["alert_id"], alert["sim_time"], label, rule, sentence.strip()
+                        )
+                    )
+    return found
 
 
 # --- Modelo de la ejecución --------------------------------------------------------------------
@@ -479,6 +563,7 @@ class Evaluation:
     fallbacks: int
     overall: str
     open_alerts: list[Event]
+    contradictions: list[Contradiction]
 
 
 def evaluate(folder: Path) -> Evaluation:
@@ -503,6 +588,7 @@ def evaluate(folder: Path) -> Evaluation:
         agents.get("monitor", {}).get("fallbacks", 0),
         overall,
         data.open_alerts_at_end(),
+        contradictions(list(data.alerts.values())),
     )
 
 
@@ -513,7 +599,8 @@ def summary_line(ev: Evaluation) -> str:
         f"{ev.overall} {ok}/{len(ev.results)} anomalías y fallos diagnosticados · "
         f"{false} falsas alarmas · {ev.fallbacks} fallbacks · {ev.timeouts} esperas agotadas · "
         f"{len(ev.unanswered)} detecciones sin respuesta · "
-        f"{len(ev.open_alerts)} alertas abiertas al final"
+        f"{len(ev.open_alerts)} alertas abiertas al final · "
+        f"{len(ev.contradictions)} frases que contradicen los checks"
     )
 
 
@@ -539,6 +626,31 @@ def aids_line(aids: dict[str, Any] | None) -> str:
     return "- Ayudas al modelo: " + " · ".join(parts)
 
 
+def meta_text(meta: dict[str, Any], key: str, fmt: Callable[[Any], str]) -> str:
+    """Valor inicial de `speed`, `wait_agent` o `interactive` y sus cambios durante la ejecución
+    (`<clave>_changes`, con el instante), p. ej. «4× → 8× (a T+02:00)»; `n/d` si no hay datos."""
+    if key not in meta:
+        return "n/d"
+    text = fmt(meta[key])
+    for change in meta.get(f"{key}_changes", []):
+        text += f" → {fmt(change['value'])} (a {fmt_t(change['sim_time'])})"
+    return text
+
+
+def _yes_no(value: Any) -> str:
+    return "sí" if value else "no"
+
+
+def _speed(value: Any) -> str:
+    return f"{value:g}×"
+
+
+def waited_all_run(meta: dict[str, Any]) -> bool:
+    """«Esperar al agente» estuvo encendido durante toda la ejecución."""
+    changes = meta.get("wait_agent_changes", [])
+    return bool(meta.get("wait_agent", False)) and all(c["value"] for c in changes)
+
+
 def header(ev: Evaluation) -> list[str]:
     data = ev.data
     first = next((t for t in data.trace if t["agent"] == "monitor"), None)
@@ -558,7 +670,9 @@ def header(ev: Evaluation) -> list[str]:
         f" · repetition_penalty {extra.get('repetition_penalty', 'n/d')}"
         f" · max_tokens {s.get('max_tokens', 'n/d')}",
         f"- `guided_mode`: {first['guided_mode'] if first else 'n/d'} · esperar al agente: "
-        f"{data.meta.get('wait_agent', 'n/d')} · velocidad: {data.meta.get('speed', 'n/d')}× · "
+        f"{meta_text(data.meta, 'wait_agent', _yes_no)} · velocidad: "
+        f"{meta_text(data.meta, 'speed', _speed)} · modo interactivo: "
+        f"{meta_text(data.meta, 'interactive', _yes_no)} · "
         f"duración en reloj: {_num(wall, ' s', 0)}",
         aids_line(first.get("aids") if first else None),
     ]
@@ -656,6 +770,17 @@ def false_section(ev: Evaluation) -> list[str]:
     return lines
 
 
+def contradictions_section(ev: Evaluation) -> list[str]:
+    lines = ["", "## Frases que contradicen los checks", ""]
+    if not ev.contradictions:
+        return lines + ["Ninguna."]
+    lines.append(f"{len(ev.contradictions)} (el evento conserva el texto original):")
+    lines.append("")
+    for c in ev.contradictions:
+        lines.append(f"- {c.alert_id} a {fmt_t(c.sim_time)}, {c.field} ({c.rule}): «{c.sentence}»")
+    return lines
+
+
 def agents_section(ev: Evaluation) -> list[str]:
     lines = ["", "## 4. Agente", ""]
     if not ev.agents:
@@ -701,7 +826,7 @@ def waits_section(ev: Evaluation) -> list[str]:
 
 
 def no_wait_section(ev: Evaluation) -> list[str]:
-    if ev.data.meta.get("wait_agent", False) or not ev.agents:
+    if waited_all_run(ev.data.meta) or not ev.agents:
         return []
     s = no_wait_stats(ev.data)
     return [
@@ -738,6 +863,7 @@ def render_markdown(ev: Evaluation) -> str:
         labels_section(ev),
         responses_section(ev),
         false_section(ev),
+        contradictions_section(ev),
         agents_section(ev),
         waits_section(ev),
         no_wait_section(ev),
@@ -771,6 +897,7 @@ def to_json(ev: Evaluation) -> dict[str, Any]:
         "timeouts": ev.timeouts,
         "unanswered": [i.detection_id for i in ev.unanswered],
         "open_alerts": [a["payload"]["alert_id"] for a in ev.open_alerts],
+        "contradictions": [asdict(c) for c in ev.contradictions],
         "agents": ev.agents,
         "waits": ev.wait_list,
     }
