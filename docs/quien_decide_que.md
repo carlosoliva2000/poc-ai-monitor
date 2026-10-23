@@ -50,6 +50,9 @@ De la más a la menos intrusiva. Todas con interruptor en `agents.yaml` (`monito
 
 **No son ayudas** y se quedan con cualquier modelo: la respuesta garantizada a cada aviso y los fallbacks, los cierres deterministas, el corte temporal, que el modelo nunca vea la verdad, los mensajes de rechazo accionables, `repetition_penalty` y `top_k` explícitos, las trazas y la evaluación contra etiquetas.
 
+## 3 bis. Qué pone cada perfil de modelo (Fase 6)
+Para comparar modelos sin tocar `agent-assets/` (huella `e28d071e856efb09`), `model-profiles/<nombre>.yaml` fija **fuera** de esa carpeta: el modelo y el servidor, el muestreo de cada agente, si razona, `max_tokens`, los tiempos máximos (y la espera de la plataforma) y los interruptores de las ayudas del §3. **No cambia quién decide qué** (§1 y §2): los prompts, las skills, las tools, los guardrails y el detector son los mismos. Cada ejecución guarda `profile.json` y `eval.md` anota el perfil, su huella y los parámetros efectivos. Con razonamiento, la traza guarda el texto y los tokens del razonamiento; el modelo lo ve en el bucle de tools, pero **no** tras el recordatorio del motor (mensaje de usuario).
+
 ## 4. Qué contar al equipo
 1. Con un 14B local, **el formato** de las tool calls fue lo primero en fallar; `required` lo resolvió (que haya una llamada bien formada; no que vengan todos los campos obligatorios: eso lo reclaman los guardrails).
 2. El modelo **no ejecuta un árbol de decisión largo** leyendo una skill, aunque tenga los números: salta a la conclusión que más se parece a lo que ve.

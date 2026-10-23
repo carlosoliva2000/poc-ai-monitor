@@ -1,11 +1,17 @@
 """Comprobación previa del servidor LLM.
 
-    uv run --project ai-module-py python -m ai_module.llm_check [--latency CARPETA…]
+    uv run --project ai-module-py python -m ai_module.llm_check [--profile PERFIL]
+    uv run --project ai-module-py python -m ai_module.llm_check --latency CARPETA…
 
 Comprueba contra el vLLM real lo que el módulo da por hecho: tool calls con y sin streaming,
 `stream_options.include_usage`, `timeout` de `AsyncOpenAI`, parámetros de `extra_body` y
 `max_tokens`; y, con `--latency CARPETA…`, resume la latencia de las invocaciones del monitor
 guardadas en las trazas de esas ejecuciones (para fijar `max_invocation_s` y `llm_timeout_s`).
+
+Con `--profile PERFIL` usa el modelo del perfil y, si su servidor tiene parser de razonamiento,
+añade las pruebas de razonamiento: se pide y se apaga por petición, `required` con razonamiento,
+streaming, y **si la plantilla recibe el razonamiento que se le devuelve** en el mensaje del
+asistente (comparando `usage.prompt_tokens` sin el campo y con `reasoning` o `reasoning_content`).
 """
 
 import argparse
@@ -21,6 +27,8 @@ import openai
 from openai import AsyncOpenAI
 
 from .agent.assets import Assets
+from .agent.llm import REASONING_INPUT_FIELD, reasoning_of, reasoning_tokens_of
+from .agent.profiles import DEFAULT_PROFILES, load_profile
 
 TOOL = {
     "type": "function",
@@ -37,7 +45,167 @@ TOOL = {
 MESSAGES = [{"role": "user", "content": "¿Qué tiempo hace en Madrid? Usa la herramienta."}]
 
 
-async def check_all(base_url: str, api_key: str, model: str) -> list[tuple[str, bool, str]]:
+REASONING_SAMPLING: dict[str, Any] = {
+    "temperature": 0.6, "top_p": 0.95, "extra_body": {"top_k": 20},
+}  # fmt: skip
+WEATHER = {
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "Returns the weather of a city.",
+        "parameters": {
+            "type": "object",
+            "properties": {"city": {"type": "string"}},
+            "required": ["city"],
+        },
+    },
+}
+# Un razonamiento largo y reconocible: si la plantilla lo pinta, el prompt crece en unos
+# cientos de tokens.
+FAKE_REASONING = " ".join(
+    f"Step {i}: the user asked for the weather in Madrid, so I must call get_weather."
+    for i in range(30)
+)
+
+
+async def check_reasoning(client: AsyncOpenAI, model: str) -> list[tuple[str, bool, str]]:
+    """Pruebas de razonamiento (servidor con `--reasoning-parser`)."""
+    results: list[tuple[str, bool, str]] = []
+
+    def kwargs(enable: bool, **extra: Any) -> dict[str, Any]:
+        sampling = {**REASONING_SAMPLING, "extra_body": {
+            "top_k": 20, "chat_template_kwargs": {"enable_thinking": enable},
+        }}  # fmt: skip
+        return {"model": model, **sampling, **extra}
+
+    async def attempt(name: str, check: Any) -> None:
+        try:
+            ok, detail = await check()
+        except Exception as exc:
+            ok, detail = False, f"{type(exc).__name__}: {exc}"
+        results.append((name, ok, detail))
+
+    question = [{"role": "user", "content": "What is 17 times 23? Answer briefly."}]
+    weather = [{"role": "user", "content": "What is the weather in Madrid? Use the tool."}]
+
+    async def thinking_on() -> tuple[bool, str]:
+        r = await client.chat.completions.create(messages=question, max_tokens=1500, **kwargs(True))
+        message = r.choices[0].message
+        reasoning = reasoning_of(message)
+        tokens = reasoning_tokens_of(r.usage)
+        detail = (
+            f"reasoning={len(reasoning)} chars, content={(message.content or '')[:40]!r}, "
+            f"completion_tokens={r.usage.completion_tokens if r.usage else '?'}, "
+            f"usage reasoning_tokens={tokens if tokens is not None else 'not reported'}"
+        )
+        return bool(reasoning.strip()) and "<think>" not in (message.content or ""), detail
+
+    async def thinking_off() -> tuple[bool, str]:
+        r = await client.chat.completions.create(messages=question, max_tokens=300, **kwargs(False))
+        message = r.choices[0].message
+        reasoning = reasoning_of(message)
+        return (
+            not reasoning.strip(),
+            f"reasoning={len(reasoning)} chars, content={message.content!r}",
+        )
+
+    async def required_with_reasoning() -> tuple[bool, str]:
+        r = await client.chat.completions.create(
+            messages=weather,
+            tools=[WEATHER],
+            tool_choice="required",
+            max_tokens=1500,
+            **kwargs(True),
+        )
+        message = r.choices[0].message
+        calls = message.tool_calls or []
+        reasoning = reasoning_of(message)
+        return bool(calls) and bool(reasoning.strip()), (
+            f"tool_calls={len(calls)}, reasoning={len(reasoning)} chars"
+        )
+
+    async def stream_reasoning() -> tuple[bool, str]:
+        stream = await client.chat.completions.create(
+            messages=question, max_tokens=1500, stream=True,
+            stream_options={"include_usage": True}, **kwargs(True),
+        )  # fmt: skip
+        reasoning = content = ""
+        async for chunk in stream:
+            if chunk.choices:
+                reasoning += reasoning_of(chunk.choices[0].delta)
+                content += chunk.choices[0].delta.content or ""
+        return bool(
+            reasoning.strip()
+        ), f"delta.reasoning={len(reasoning)} chars, content={len(content)} chars"
+
+    def conversation(field: str | None, *, reminder: bool) -> list[dict[str, Any]]:
+        assistant: dict[str, Any] = {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": '{"city": "Madrid"}'},
+                }
+            ],
+        }
+        if field:
+            assistant[field] = FAKE_REASONING
+        messages = [
+            *weather,
+            assistant,
+            {"role": "tool", "tool_call_id": "call-1", "content": '{"temp_c": 21}'},
+        ]
+        if reminder:  # el recordatorio del motor es un mensaje de usuario
+            messages.append({"role": "user", "content": "Reminder: answer with the result."})
+        return messages
+
+    async def prompt_tokens(field: str | None, reminder: bool) -> int:
+        r = await client.chat.completions.create(
+            messages=conversation(field, reminder=reminder), tools=[WEATHER], max_tokens=1,
+            **kwargs(True),
+        )  # fmt: skip
+        return r.usage.prompt_tokens if r.usage else -1
+
+    async def template_receives_reasoning() -> tuple[bool, str]:
+        base = await prompt_tokens(None, False)
+        grown: dict[str, int] = {}
+        for field in ("reasoning", "reasoning_content"):
+            grown[field] = await prompt_tokens(field, False) - base
+        # unas 30 frases de ~16 tokens: si la plantilla lo pinta, crece ≥ 200 tokens
+        works = [f for f, extra in grown.items() if extra >= 200]
+        detail = (
+            f"prompt_tokens without the field={base}; extra with `reasoning`={grown['reasoning']}, "
+            f"with `reasoning_content`={grown['reasoning_content']}; "
+            f"used by the engine: `{REASONING_INPUT_FIELD}`"
+        )
+        return REASONING_INPUT_FIELD in works, detail
+
+    async def reasoning_after_reminder() -> tuple[bool, str]:
+        """Informativo: tras un mensaje de usuario la plantilla deja de pintar el razonamiento."""
+        base = await prompt_tokens(None, True)
+        extra = await prompt_tokens(REASONING_INPUT_FIELD, True) - base
+        return True, (
+            f"with a final user message (the engine's reminder), the field adds {extra} tokens "
+            f"({'it is NOT shown to the model' if extra < 50 else 'it is still shown'})"
+        )
+
+    await attempt("razonamiento pedido (`enable_thinking: true`)", thinking_on)
+    await attempt("razonamiento apagado (`enable_thinking: false`)", thinking_off)
+    await attempt("`tool_choice: required` con razonamiento", required_with_reasoning)
+    await attempt("streaming entrega `delta.reasoning`", stream_reasoning)
+    await attempt(
+        f"la plantilla recibe el razonamiento devuelto (`{REASONING_INPUT_FIELD}`)",
+        template_receives_reasoning,
+    )
+    await attempt("el recordatorio (mensaje de usuario) corta la cadena", reasoning_after_reminder)
+    return results
+
+
+async def check_all(
+    base_url: str, api_key: str, model: str, reasoning: bool = False
+) -> list[tuple[str, bool, str]]:
     client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=60, max_retries=0)
     base: dict[str, Any] = {"model": model, "messages": MESSAGES, "temperature": 0, "top_p": 1.0}
     results: list[tuple[str, bool, str]] = []
@@ -154,6 +322,8 @@ async def check_all(base_url: str, api_key: str, model: str) -> list[tuple[str, 
     await attempt(
         "temperature 0 con `top_k -1`: respuestas idénticas", temperature_zero_is_deterministic
     )
+    if reasoning:
+        results += await check_reasoning(client, model)
     return results
 
 
@@ -196,15 +366,19 @@ def latency_summary(folders: list[Path]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", help="perfil de model-profiles/ (modelo y razonamiento)")
     parser.add_argument("--latency", nargs="*", type=Path, help="carpetas runs/<esc>/<run_id>")
     args = parser.parse_args(argv)
     if args.latency:
         print(latency_summary(args.latency))
         return 0
-    assets = Assets()
+    profile = load_profile(args.profile, DEFAULT_PROFILES) if args.profile else None
+    assets = Assets(profile=profile)
     llm = assets.llm
-    print(f"openai {openai.__version__} · {llm.base_url} · {llm.model}")
-    results = asyncio.run(check_all(llm.base_url, llm.api_key, llm.model))
+    reasoning = bool(profile and profile.server.get("reasoning_parser"))
+    name = f" · perfil {profile.name}" if profile else ""
+    print(f"openai {openai.__version__} · {llm.base_url} · {llm.model}{name}")
+    results = asyncio.run(check_all(llm.base_url, llm.api_key, llm.model, reasoning))
     for name, ok, detail in results:
         print(f"{'✅' if ok else '❌'} {name}: {detail}")
     return 0 if all(ok for _, ok, _ in results) else 1

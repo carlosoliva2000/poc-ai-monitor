@@ -9,44 +9,16 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
 
 import pytest
-from fake_llm_server import FakeLlmServer
 
 import ai_module.agent.llm as llm_module
 from ai_module.agent.llm import OpenAiLlm
+from ai_module.testing.fake_llm import FakeLlmServer
+from ai_module.testing.fake_llm import demo_policy as policy
 
 REPO = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.e2e
-
-
-def policy(body: dict[str, Any]) -> dict[str, Any]:
-    """Decisión del LLM falso según el prompt: monitor, informe o chat."""
-    system = body["messages"][0]["content"]
-    messages = body["messages"]
-    if "report agent" in system:
-        text = "## Resumen\n\nInforme de prueba.\n\n## Valoración del monitor\n\nSegún los eventos."
-        return {"content": text}
-    if "now the human **operator** is talking to you" in system:
-        return {"content": "Respuesta de prueba del chat con datos."}
-    user = messages[1]["content"]
-    pending = list(dict.fromkeys(re.findall(r"(?:detection|New detection) (det-\d+)", user)))
-    last_open = re.search(r"of alert (ai-\d+)", user)
-    open_alert = re.search(r"Open alerts: (ai-\d+)", user)
-    if last_open:
-        return {"tool_calls": [("close_alert", {"alert_id": last_open.group(1), "reason": "ok"})]}
-    if open_alert:
-        args = {"detection_ids": pending, "alert_id": open_alert.group(1), "reason": "igual"}
-        return {"tool_calls": [("acknowledge_detection", args)]}
-    triggers = re.search(r'"trigger_event_ids":\[([^\]]*)\]', user)
-    ids = re.findall(r'"([^"]+)"', triggers.group(1) if triggers else "") or ["gps-000001"]
-    checks = {"gps_alert_recent": False, "gps_radar_disagreed": False, "wind_notable": False,
-              "wind_with_drift": False, "link_checked": False, "link_anomalous": None}  # fmt: skip
-    alert = {"detection_ids": pending, "checks": checks, "cause": "UNKNOWN", "severity": "medium",
-             "confidence": 0.4, "summary": "prueba", "explanation": "e", "recommendation": "r",
-             "evidence_event_ids": ids[:2]}  # fmt: skip
-    return {"tool_calls": [("publish_alert", alert)]}
 
 
 def test_demo_end_to_end_with_a_fake_llm() -> None:

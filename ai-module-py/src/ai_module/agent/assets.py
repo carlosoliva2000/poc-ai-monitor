@@ -13,6 +13,8 @@ from typing import Any
 
 import yaml
 
+from .profiles import DEFAULT_WAIT_S, Profile, assets_fingerprint
+
 # agent-assets/ junto al código del repositorio (ai-module-py/src/ai_module/agent/assets.py)
 DEFAULT_ASSETS = Path(__file__).resolve().parents[4] / "agent-assets"
 MARKER_RE = re.compile(r"<<(\w+)>>")
@@ -48,6 +50,9 @@ class AgentConfig:
     repetition_penalty: float
     max_tokens: int
     tool_choice: str
+    presence_penalty: float = 0.0
+    reasoning: bool | None = None
+    """Razonamiento por petición (`enable_thinking`); `None` = no se envía (modelo sin él)."""
     objective_prompt: str | None = None
     output_prompt: str | None = None
     system_prompt_notools: str | None = None
@@ -95,12 +100,34 @@ class AgentConfig:
 
     def sampling(self) -> dict[str, Any]:
         """Parámetros de muestreo de **cada** petición (los no estándar, en `extra_body`)."""
+        extra_body: dict[str, Any] = {
+            "top_k": self.top_k,
+            "repetition_penalty": self.repetition_penalty,
+        }
+        if self.reasoning is not None:
+            extra_body["chat_template_kwargs"] = {"enable_thinking": self.reasoning}
         return {
             "temperature": self.temperature,
             "top_p": self.top_p,
+            "presence_penalty": self.presence_penalty,
             "max_tokens": self.max_tokens,
             "tool_choice": self.tool_choice,
-            "extra_body": {"top_k": self.top_k, "repetition_penalty": self.repetition_penalty},
+            "extra_body": extra_body,
+        }
+
+    def effective(self) -> dict[str, Any]:
+        """Parámetros efectivos del agente (muestreo, razonamiento, tiempos y ayudas)."""
+        return {
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "top_k": self.top_k,
+            "repetition_penalty": self.repetition_penalty,
+            "presence_penalty": self.presence_penalty,
+            "max_tokens": self.max_tokens,
+            "reasoning": self.reasoning,
+            "max_invocation_s": self.max_invocation_s,
+            "llm_timeout_s": self.llm_timeout_s,
+            "aids": self.aids() if self.name == "monitor" else None,
         }
 
 
@@ -138,12 +165,15 @@ def _strip_comments(text: str) -> str:
 
 
 class Assets:
-    def __init__(self, root: Path = DEFAULT_ASSETS) -> None:
+    def __init__(self, root: Path = DEFAULT_ASSETS, profile: Profile | None = None) -> None:
         self.root = root
+        self.profile = profile
         try:
             raw = yaml.safe_load((root / "agents.yaml").read_text(encoding="utf-8"))
         except OSError as exc:
             raise AssetError(f"cannot read {root / 'agents.yaml'}: {exc}") from exc
+        if profile is not None:
+            raw = profile.apply(raw)  # en memoria: agents.yaml no se toca
         self._raw: dict[str, Any] = raw
         self.llm = LlmSettings(
             base_url=raw["llm"]["base_url"],
@@ -187,6 +217,20 @@ class Assets:
         """Una skill sin su cabecera (para inyectarla en un prompt)."""
         text = self.skills[name].content
         return re.sub(r"^---\n.*?\n---\n", "", text, count=1, flags=re.S).strip()
+
+    def profile_info(self) -> dict[str, Any]:
+        """Contenido de `profile.json`: perfil, huellas y parámetros efectivos de cada agente."""
+        profile = self.profile
+        return {
+            "profile": profile.name if profile else None,
+            "profile_fingerprint": profile.short if profile else None,
+            "assets_fingerprint": assets_fingerprint(self.root)[:16],
+            "model": self.llm.model,
+            "server": profile.server if profile else None,
+            "wait_agent_timeout_s": profile.wait_agent_timeout_s if profile else DEFAULT_WAIT_S,
+            "chat_tools_enabled": self.chat_tools_enabled,
+            "agents": {name: self.agent(name).effective() for name in self._raw["agents"]},
+        }
 
     @property
     def chat_tools_enabled(self) -> bool:
@@ -253,6 +297,8 @@ class Assets:
             top_p=float(pick("top_p")),
             top_k=int(pick("top_k", -1)),
             repetition_penalty=float(pick("repetition_penalty", 1.0)),
+            presence_penalty=float(pick("presence_penalty", 0.0)),
+            reasoning=None if pick("reasoning") is None else bool(pick("reasoning")),
             max_tokens=int(pick("max_tokens")),
             tool_choice=str(pick("tool_choice", "auto")),
             guided_mode=bool(spec.get("guided_mode", False)),

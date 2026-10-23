@@ -37,6 +37,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
+import yaml
 from websockets.exceptions import WebSocketException
 from websockets.sync.client import ClientConnection, connect
 
@@ -131,15 +132,17 @@ def http_get(url: str, timeout: float = 2.0) -> dict | None:
         return None
 
 
-def start_platform(port: int) -> subprocess.Popen:
+def start_platform(port: int, wait_timeout_s: float | None = None) -> subprocess.Popen:
     if http_get(f"http://127.0.0.1:{port}/api/state") is not None:
         raise SystemExit(
             f"el puerto {port} ya está en uso (¿hay una plataforma en marcha? usa --platform)"
         )
+    command = [sys.executable, "-m", "platform_app.app", "--port", str(port)]
+    if wait_timeout_s is not None:
+        command += ["--wait-timeout", str(wait_timeout_s)]
     proc = subprocess.Popen(
-        [sys.executable, "-m", "platform_app.app", "--port", str(port)],
-        cwd=REPO_ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )  # fmt: skip
+        command, cwd=REPO_ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
     deadline = time.monotonic() + PLATFORM_READY_TIMEOUT_S
     while time.monotonic() < deadline:
         if proc.poll() is not None:
@@ -152,7 +155,11 @@ def start_platform(port: int) -> subprocess.Popen:
 
 
 def start_ai_module(
-    platform_url: str, *, detector_only: bool = False, llm_url: str | None = None
+    platform_url: str,
+    *,
+    detector_only: bool = False,
+    llm_url: str | None = None,
+    profile: str | None = None,
 ) -> subprocess.Popen:
     """Arranca el módulo de IA (proceso aparte) y espera a que esté conectado y suscrito."""
     command = ["uv", "run", "--project", str(REPO_ROOT / "ai-module-py"), "python", "-m",
@@ -161,6 +168,8 @@ def start_ai_module(
         command.append("--detector-only")
     if llm_url:
         command += ["--llm-url", llm_url]
+    if profile:
+        command += ["--profile", profile]
     proc = subprocess.Popen(
         command, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         bufsize=1,
@@ -180,6 +189,17 @@ def start_ai_module(
     if not ready.wait(AI_READY_TIMEOUT_S):
         log.warning("the AI module did not report being connected in %.0f s", AI_READY_TIMEOUT_S)
     return proc
+
+
+def profile_wait_timeout(profile: str) -> float | None:
+    """Espera de la plataforma que fija el perfil (`platform.wait_agent_timeout_s`), si la fija."""
+    path = REPO_ROOT / "model-profiles" / f"{profile}.yaml"
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except OSError as exc:
+        raise SystemExit(f"cannot read profile {profile}: {exc}") from exc
+    value = data.get("platform", {}).get("wait_agent_timeout_s")
+    return None if value is None else float(value)
 
 
 def stop(proc: subprocess.Popen | None) -> None:
@@ -496,6 +516,12 @@ def main() -> int:
     )
     parser.add_argument("--llm-url", help="URL del servidor LLM (se pasa al módulo de IA)")
     parser.add_argument(
+        "--profile", help="perfil de model-profiles/ (se pasa al módulo de IA y fija la espera)"
+    )
+    parser.add_argument(
+        "--wait-timeout", type=float, help="espera al agente de la plataforma, en segundos"
+    )
+    parser.add_argument(
         "--platform", help="URL de una plataforma ya en marcha (si no, arranca una)"
     )
     parser.add_argument("--no-ai", action="store_true", help="no arrancar el módulo de IA")
@@ -517,9 +543,14 @@ def main() -> int:
     failed = False
     try:
         if args.platform is None:
-            platform_proc = start_platform(args.port)
+            wait = args.wait_timeout
+            if wait is None and args.profile:
+                wait = profile_wait_timeout(args.profile)
+            platform_proc = start_platform(args.port, wait)
         if not args.no_ai:
-            ai_proc = start_ai_module(url, detector_only=args.detector_only, llm_url=args.llm_url)
+            ai_proc = start_ai_module(
+                url, detector_only=args.detector_only, llm_url=args.llm_url, profile=args.profile
+            )
         ws_url = url.replace("http", "ws", 1).rstrip("/") + "/ws"
         with connect(ws_url, open_timeout=5) as ws:
             ws.send(json.dumps({"op": "hello", "client": "web"}))

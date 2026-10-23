@@ -2,6 +2,7 @@
 publicación de eventos (que también actualiza el estado y el índice locales) y la actividad.
 """
 
+import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -83,7 +84,20 @@ class Runtime:
             return False
         self.scenario, self.run_id = scenario, run_id
         self.trace.path = self.runs_dir / scenario / run_id / "llm_trace.jsonl"
+        self._write_profile_info()
         return True
+
+    def _write_profile_info(self) -> None:
+        """`profile.json` de la ejecución: perfil, huellas y parámetros efectivos de cada agente."""
+        folder = self.run_dir
+        if folder is None:
+            return
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            text = json.dumps(self.assets.profile_info(), ensure_ascii=False, indent=2)
+            (folder / "profile.json").write_text(text + "\n", encoding="utf-8")
+        except OSError:
+            log.exception("could not write profile.json")
 
     def reset_run(self) -> None:
         """Nueva simulación o reinicio: todo el estado de la ejecución vuelve a cero."""

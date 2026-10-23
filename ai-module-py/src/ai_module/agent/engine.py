@@ -9,6 +9,12 @@ El bucle termina cuando:
 - el modelo responde con texto sin pedir tools (respuesta final; el monitor recibe antes un
   recordatorio), o
 - se agotan las iteraciones o el tiempo, o el LLM falla.
+
+Razonamiento: el de cada paso se guarda en la traza y, dentro de la invocación, se devuelve al
+modelo en el mensaje del asistente (`LlmResponse.assistant_message`), porque la plantilla de Qwen3
+solo lo muestra en el bucle de tools si se le devuelve. **El recordatorio es un mensaje de
+usuario y corta esa cadena**: la plantilla solo pinta el razonamiento de los mensajes posteriores
+al último mensaje de usuario, así que tras un recordatorio el modelo deja de ver el anterior.
 """
 
 import asyncio
@@ -245,4 +251,6 @@ def _call_trace(index: int, response: LlmResponse) -> CallTrace:
         completion_tokens=response.completion_tokens,
         finish_reason=response.finish_reason,
         content=response.content,
+        reasoning=response.reasoning,
+        reasoning_tokens=response.reasoning_tokens,
     )

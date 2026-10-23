@@ -686,3 +686,80 @@ def test_notable_wind_contradicts_a_check_of_no_notable_wind() -> None:
     # solo se aplica si el check dice que no hay viento notable
     assert contradicting_rules("The wind is notable.", {"wind_notable": True}) == []
     assert contradicting_rules("The wind is notable.", {"wind_notable": None}) == []
+
+
+def test_non_latin_characters_are_counted_per_agent_and_symbols_are_not(tmp_path: Path) -> None:
+    from ai_module.evaluate import non_latin_chars
+
+    assert non_latin_chars("T+01:46 → 5 m · 3° — ×é ñ") == []
+    assert len(non_latin_chars("suggesting不稳定。")) == 4
+    b = demo_run(tmp_path)
+    b.events[1]["payload"]["summary"] = "unstable连接"
+    b.trace.append(
+        trace_record(
+            calls=[
+                {
+                    "index": 1, "latency_s": 1.0, "prompt_tokens": 10, "completion_tokens": 5,
+                    "finish_reason": "length", "content": "", "tool_calls": [],
+                    "reasoning": "think 思考", "reasoning_tokens": 4,
+                }
+            ]
+        )
+    )  # fmt: skip
+    folder = b.write()
+    ev = evaluate(folder)
+    assert ev.non_latin["monitor"]["texts_with_non_latin"] == 1
+    assert ev.non_latin["monitor"]["chars"] == 2
+    assert ev.non_latin["report"]["texts_with_non_latin"] == 0
+    assert ev.non_latin["reasoning"]["chars"] == 2
+    stats = ev.agents["monitor"]
+    assert stats["length_cuts"] == 1 and stats["reasoning_tokens"] == 4
+    assert stats["reasoning_tokens_reported"] is True
+    text = render_markdown(ev)
+    assert "## Caracteres no latinos" in text and "Respuestas cortadas por longitud: 1" in text
+
+
+def test_header_shows_the_profile_and_the_platform_wait_of_the_profile_sets_the_timeout(
+    tmp_path: Path,
+) -> None:
+    b = demo_run(tmp_path)
+    folder = b.write()
+    info = {
+        "profile": "qwen3-14b-think",
+        "profile_fingerprint": "abcd1234abcd1234",
+        "assets_fingerprint": "e28d071e856efb09",
+        "wait_agent_timeout_s": 330.0,
+        "chat_tools_enabled": False,
+        "agents": {
+            "monitor": {
+                "temperature": 0.6, "top_p": 0.95, "top_k": 20, "repetition_penalty": 1.0,
+                "presence_penalty": 1.5, "max_tokens": 4000, "reasoning": True,
+                "max_invocation_s": 300.0, "llm_timeout_s": 90.0,
+            }
+        },
+    }  # fmt: skip
+    (folder / "profile.json").write_text(json.dumps(info))
+    ev = evaluate(folder)
+    text = render_markdown(ev)
+    info["model"] = "Qwen/Qwen3-14B-AWQ"  # sin traza del monitor, el modelo sale del perfil
+    (folder / "profile.json").write_text(json.dumps(info))
+    text = render_markdown(evaluate(folder))
+    assert "Modelo: `Qwen/Qwen3-14B-AWQ`" in text
+    assert "`qwen3-14b-think`" in text and "abcd1234abcd1234" in text and "e28d071e856efb09" in text
+    assert "| monitor | 0.6 | 0.95 | 20 | 1 | 1.5 | 4000 | sí | 300 s | 90 s |" in text
+    from ai_module.evaluate import wait_cap
+
+    assert wait_cap(ev.data) == 329.0
+    assert (
+        json.loads(json.dumps(__import__("ai_module.evaluate").evaluate.to_json(ev), default=str))[
+            "profile"
+        ]["profile"]
+        == "qwen3-14b-think"
+    )
+
+
+def test_a_run_without_profile_json_uses_the_default_wait_cap(tmp_path: Path) -> None:
+    from ai_module.evaluate import wait_cap
+
+    ev = evaluate(demo_run(tmp_path).write())
+    assert wait_cap(ev.data) == 89.0 and "Perfil: n/d" in render_markdown(ev)

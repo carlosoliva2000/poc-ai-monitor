@@ -37,8 +37,8 @@ def test_every_request_carries_explicit_sampling_and_the_tools_as_they_are() -> 
     result, _, trace = go(make_engine(llm))
     request = llm.requests[0]
     assert request["sampling"] == {
-        "temperature": 0.0, "top_p": 1.0, "max_tokens": 800, "tool_choice": "required",
-        "extra_body": {"top_k": -1, "repetition_penalty": 1.05},
+        "temperature": 0.0, "top_p": 1.0, "presence_penalty": 0.0, "max_tokens": 800,
+        "tool_choice": "required", "extra_body": {"top_k": -1, "repetition_penalty": 1.05},
     }  # fmt: skip
     offered = [t["function"]["name"] for t in request["tools"]]
     assert offered == [t["function"]["name"] for t in ASSETS.tool_schemas(CONFIG.active_tools)]
@@ -256,3 +256,60 @@ def test_agents_without_final_tools_keep_offering_everything_to_the_end() -> Non
     llm = FakeLlm(Script(tool_response(call("get_my_alerts"))))
     go(make_engine(llm, config=config))
     assert len({len(r["tools"]) for r in llm.requests}) == 1
+
+
+def reasoning_response(base: Any, reasoning: str, tokens: int | None = None) -> Any:
+    return replace(base, reasoning=reasoning, reasoning_tokens=tokens)
+
+
+def test_reasoning_is_kept_in_the_trace_and_returned_to_the_model_in_the_assistant_message() -> (
+    None
+):
+    first = reasoning_response(tool_response(call("get_events", source="gps")), "I need the GPS", 7)
+    llm = FakeLlm(Script(first, reasoning_response(text_response("listo"), "Now I can answer", 9)))
+    _, messages, trace = go(make_engine(llm))
+    # el segundo envío lleva el razonamiento del primer paso en el mensaje del asistente
+    assistant = [m for m in llm.requests[1]["messages"] if m["role"] == "assistant"][0]
+    assert assistant["reasoning_content"] == "I need the GPS"
+    assert [c.reasoning for c in trace.calls] == ["I need the GPS", "Now I can answer"]
+    assert [c.reasoning_tokens for c in trace.calls] == [7, 9]
+    assert trace.to_dict()["calls"][0]["reasoning"] == "I need the GPS"
+    assert messages[-1]["reasoning_content"] == "Now I can answer"
+
+
+def test_a_message_without_reasoning_has_no_reasoning_field() -> None:
+    llm = FakeLlm(Script(tool_response(call("get_events", source="gps")), text_response("listo")))
+    _, messages, trace = go(make_engine(llm))
+    assert all("reasoning_content" not in m for m in messages)
+    assert trace.calls[0].reasoning == "" and trace.calls[0].reasoning_tokens is None
+
+
+def test_the_reminder_is_a_user_message_after_the_reasoning_of_the_previous_steps() -> None:
+    """El recordatorio es un mensaje de usuario: la plantilla de Qwen3 deja de mostrar el
+    razonamiento anterior a él. El intento fallido (solo texto) no se guarda, ni su razonamiento."""
+    llm = FakeLlm(
+        Script(
+            reasoning_response(tool_response(call("get_events", source="gps")), "step one"),
+            reasoning_response(text_response("sin tool"), "step two"),
+            tool_response(call("close_alert", alert_id="ai-0001", reason="x")),
+        )
+    )
+    _, messages, trace = go(
+        make_engine(llm), is_done=lambda: len(llm.requests) >= 3, reminder=lambda: "remind"
+    )
+    roles = [m["role"] for m in messages]
+    assert roles.index("user", 1) > roles.index("assistant")  # el recordatorio va después
+    assert not any(m.get("reasoning_content") == "step two" for m in messages)
+    assert trace.calls[1].reasoning == "step two"  # en la traza sí queda
+
+
+def test_reasoning_is_not_streamed_to_the_callback() -> None:
+    llm = FakeLlm(Script(reasoning_response(text_response("answer text"), "secret thoughts")))
+    seen: list[str] = []
+
+    async def on_delta(delta: str) -> None:
+        seen.append(delta)
+
+    config = replace(ASSETS.agent("chat_monitor"), stream=True)
+    go(make_engine(llm, config=config), on_delta=on_delta)
+    assert "secret" not in "".join(seen)

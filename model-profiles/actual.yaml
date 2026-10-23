@@ -1,0 +1,8 @@
+# Perfil de referencia: el modelo y la configuración de agent-assets/agents.yaml, sin cambios.
+description: Qwen2.5-14B-Instruct-AWQ como hasta ahora (sin razonamiento)
+server:
+  model: Qwen/Qwen2.5-14B-Instruct-AWQ
+  tool_call_parser: hermes
+  reasoning_parser: null
+  max_model_len: 32768
+  extra_args: []

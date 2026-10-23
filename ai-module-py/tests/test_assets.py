@@ -87,6 +87,7 @@ def test_sampling_is_explicit_for_every_agent() -> None:
     assert monitor == {
         "temperature": 0.0,
         "top_p": 1.0,
+        "presence_penalty": 0.0,
         "max_tokens": 800,
         "tool_choice": "required",  # su respuesta es siempre una tool call
         "extra_body": {"top_k": -1, "repetition_penalty": 1.05},

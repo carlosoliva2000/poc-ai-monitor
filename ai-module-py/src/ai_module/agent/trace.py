@@ -25,6 +25,8 @@ class CallTrace:
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     restricted_tools: list[str] | None = None
     """Tools ofrecidas en esta llamada si se redujeron (última iteración), si no `None`."""
+    reasoning: str = ""
+    reasoning_tokens: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -36,6 +38,8 @@ class CallTrace:
             "content": self.content,
             "tool_calls": self.tool_calls,
             "restricted_tools": self.restricted_tools,
+            "reasoning": self.reasoning,
+            "reasoning_tokens": self.reasoning_tokens,
         }
 
 

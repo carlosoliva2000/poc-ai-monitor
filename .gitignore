@@ -226,3 +226,11 @@ runs/*/*/
 
 # La web tiene su propia carpeta lib/ (código fuente, no artefactos de Python)
 !web/lib/
+
+# Servidores vLLM lanzados por tools/vllm/serve.sh (PID, logs, memoria en reposo)
+runs/_servers/
+
+# Experimentos de tools/experiments/run_matrix.py: solo se versionan los compare.md
+experiments/**
+!experiments/*/
+!experiments/*/compare.md

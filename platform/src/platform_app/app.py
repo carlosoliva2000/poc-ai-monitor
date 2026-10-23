@@ -349,11 +349,16 @@ def create_app(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Platform: player, bus, API and WebSocket")
     parser.add_argument("--port", type=int, default=PORT, help=f"port (default {PORT})")
+    parser.add_argument(
+        "--wait-timeout", type=float, help="seconds the player waits for the agent (default 90)"
+    )
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
-    uvicorn.run(create_app(), host=HOST, port=args.port, log_level="info")
+    uvicorn.run(
+        create_app(wait_timeout_s=args.wait_timeout), host=HOST, port=args.port, log_level="info"
+    )
 
 
 if __name__ == "__main__":

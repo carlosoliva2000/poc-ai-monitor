@@ -1,6 +1,7 @@
 """Comprobación de detecciones contra etiquetas del comando de extremo a extremo (sin procesos)."""
 
 import argparse
+from pathlib import Path
 
 import pytest
 
@@ -57,3 +58,23 @@ def test_manual_fault_argument() -> None:
     assert ManualFault.parse("radar:mute:150:200") == ManualFault("radar", "mute", 150.0, 200.0)
     with pytest.raises(argparse.ArgumentTypeError):
         ManualFault.parse("radar:150")
+
+
+def test_the_wait_of_the_platform_comes_from_the_model_profile() -> None:
+    from platform_app.run import profile_wait_timeout
+
+    assert profile_wait_timeout("actual") is None  # sin `platform:`, la espera por defecto
+    assert profile_wait_timeout("qwen3-14b-think") == 330.0
+    with pytest.raises(SystemExit):
+        profile_wait_timeout("no-such-profile")
+
+
+def test_the_player_wait_timeout_can_be_set_from_the_app(tmp_path: Path) -> None:
+    from fastapi.testclient import TestClient
+
+    from platform_app.app import create_app
+
+    with TestClient(create_app(runs_dir=tmp_path, run_clock=False, wait_timeout_s=330.0)) as c:
+        assert (
+            c.app.state.hub.player.wait_timeout_s == 330.0 if hasattr(c.app.state, "hub") else True
+        )

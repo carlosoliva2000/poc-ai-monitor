@@ -1,0 +1,37 @@
+# Qwen3 con razonamiento y el muestreo que recomienda Qwen para el modo thinking:
+# temperature 0.6, top_p 0.95, top_k 20, min_p 0, presence_penalty 1.5 en cuantizados, y no usar
+# decodificación voraz. Ficha (sección Best Practices, consultada el 23/10/2026):
+# https://huggingface.co/Qwen/Qwen3-30B-A3B-GPTQ-Int4
+# max_tokens incluye el razonamiento. LOS TIEMPOS SON PROVISIONALES: se fijarán con lo medido en la
+# primera ejecución con razonamiento. Condición: max_invocation_s del monitor + 15 < espera.
+description: Qwen/Qwen3-30B-A3B-GPTQ-Int4, con razonamiento, muestreo de Qwen
+server:
+  model: Qwen/Qwen3-30B-A3B-GPTQ-Int4
+  tool_call_parser: hermes
+  reasoning_parser: qwen3    # el razonamiento queda activado en el servidor; cada petición lo enciende o apaga
+  max_model_len: 32768
+  extra_args: []
+sampling:
+  temperature: 0.6
+  top_p: 0.95
+  top_k: 20
+  repetition_penalty: 1.0
+  presence_penalty: 1.5
+  max_tokens: 4000
+  reasoning: true
+agents:
+  monitor:
+    max_invocation_s: 300
+    llm_timeout_s: 90
+  chat_monitor:
+    max_invocation_s: 240
+    llm_timeout_s: 120
+  chat_report:
+    max_invocation_s: 240
+    llm_timeout_s: 120
+  report:
+    max_tokens: 6000
+    max_invocation_s: 300
+    llm_timeout_s: 240
+platform:
+  wait_agent_timeout_s: 330

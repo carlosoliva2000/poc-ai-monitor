@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .agent.assets import DEFAULT_ASSETS, Assets
 from .agent.llm import OpenAiLlm
+from .agent.profiles import DEFAULT_PROFILES, load_profile
 from .bus_client import DEFAULT_PLATFORM, BusClient, fetch_mission_plan
 from .detector import Detector
 from .module import AiModule
@@ -30,8 +31,10 @@ async def run(
     assets_dir: Path = DEFAULT_ASSETS,
     runs_dir: Path = DEFAULT_RUNS,
     llm_url: str | None = None,
+    profile: str | None = None,
 ) -> None:
-    assets = Assets(assets_dir)
+    chosen = load_profile(profile, DEFAULT_PROFILES) if profile else None
+    assets = Assets(assets_dir, chosen)
     llm = OpenAiLlm(llm_url or assets.llm.base_url, assets.llm.api_key, assets.llm.model)
     detector = Detector()
 
@@ -64,6 +67,7 @@ def main(argv: list[str] | None = None) -> None:
         "--detector-only", action="store_true", help="rule-based detector only, no agents"
     )
     parser.add_argument("--llm-url", help="LLM server URL (default: the one in agents.yaml)")
+    parser.add_argument("--profile", help="perfil de model-profiles/ (modelo, muestreo, tiempos)")
     parser.add_argument("--assets", type=Path, default=DEFAULT_ASSETS, help="carpeta agent-assets/")
     parser.add_argument(
         "--runs", type=Path, default=DEFAULT_RUNS, help="runs/ folder where traces are saved"
@@ -81,6 +85,7 @@ def main(argv: list[str] | None = None) -> None:
                 assets_dir=args.assets,
                 runs_dir=args.runs,
                 llm_url=args.llm_url,
+                profile=args.profile,
             )
         )
     log.info("stopped")

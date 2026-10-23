@@ -11,6 +11,9 @@ Eres el agente que construye la PoC `poc-ai-monitor` del proyecto CITADEL (Indra
 contracts/        eventos.md (fuente de verdad) + python/ (modelos Pydantic, paquete local) + schemas/ (JSON Schema exportado)
 platform/         Python: simulador incremental (generador y reproductor en directo), controlador, gráficas, visor, bus, timeline, tools de datos, API y WebSocket
 ai-module-py/     Python: cliente del bus, detector de reglas, motor de agente, monitor, informe, chats, guardrails, trazas, evaluación
+model-profiles/   Perfiles de modelo (servidor, muestreo, razonamiento, tiempos, ayudas) que se aplican sobre agents.yaml sin tocar agent-assets/
+tools/            vllm/serve.sh (servidor de un perfil) y experiments/run_matrix.py (matriz de ejecuciones y compare.md)
+experiments/      Salida de run_matrix (no se versiona, salvo compare.md)
 agent-assets/     Compartido con el futuro módulo Java: prompts/, skills/, tools.json
 web/              JS: la interfaz de v0 adaptada (Next.js)
 scenarios/        nominal, wind, hijack, spoofing, faults y demo (YAML con semilla)
@@ -21,7 +24,7 @@ Cada carpeta de componente tiene su propio `CLAUDE.md` con lo específico.
 
 ## Entorno
 - WSL 2, Ubuntu 24.04. Python 3.12 con **`uv`** (un proyecto por componente: `platform/` y `ai-module-py/`, que dependen de `contracts/python` como ruta local). Node y pnpm para la web: compruébalos en la Fase 0; si faltan y hace falta `sudo`, **no lo uses**: dile a Carlos el comando exacto y espera.
-- **vLLM** en `http://127.0.0.1:8000/v1` con `Qwen/Qwen2.5-14B-Instruct-AWQ`, `--max-model-len 32768`, `--enable-auto-tool-choice --tool-call-parser hermes`. **Lo arranca y lo para Carlos. Tú no lo arrancas, no lo paras y no lo configuras.** Hace falta desde la Fase 3; en las fases 0–2 puede estar parado (en la Fase 0, si no responde, anótalo y sigue).
+- **vLLM** en `http://127.0.0.1:8000/v1`, por defecto con el perfil `actual` (`Qwen/Qwen2.5-14B-Instruct-AWQ`, `--max-model-len 32768`, `--enable-auto-tool-choice --tool-call-parser hermes`). Puedes arrancar y parar vLLM solo con `tools/vllm/serve.sh` y solo con los perfiles de `model-profiles/`. Un servidor cada vez. Antes de arrancar, comprueba que el puerto 8000 está libre; si hay un servidor que no has lanzado tú, para y avisa: nunca lo mates. Guarda el PID del que lances y déjalo parado al terminar. Prohibidos los modelos híbridos de 27B (Qwen3.5-27B y amd/Qwen3.8-27B: cuelgan vLLM y han tirado Windows). Si Windows, WSL o vLLM se cuelgan, para y avisa; no repitas el mismo intento. Red solo para lo que ya esté en la caché de Hugging Face (`HF_HUB_OFFLINE=1`); si un modelo no está descargado, pregunta. Hace falta desde la Fase 3; en las fases 0–2 puede estar parado (en la Fase 0, si no responde, anótalo y sigue).
 - Puertos: plataforma **8100** (API + `/ws`), web **3000**, vLLM 8000. Todo en `127.0.0.1`.
 - Puedes **leer** (sin modificar) `~/spike1/` (herramientas de formato: `py/ruff.toml`, `py/hook_py.sh`, `.claude/settings.json`) y `/mnt/c/Proyectos/interfaz-de-simulacion-dron/` (la interfaz de v0, que se copia a `web/`).
 
@@ -60,6 +63,6 @@ Las fases 0 y 1 van en secuencia, en la sesión principal. Con los contratos con
 
 ## Cuándo parar y preguntar
 - vLLM no responde o responde distinto de lo descrito.
-- Algo exige `sudo`, tocar vLLM o salir de las carpetas permitidas.
+- Algo exige `sudo`, arrancar vLLM fuera de `serve.sh` o de los perfiles, o salir de las carpetas permitidas.
 - Hace falta cambiar un contrato, o un escenario no puede producir lo que pide la tabla 4.4 de la definición.
-- El modelo no consigue diagnosticar una anomalía tras ajustar prompts y skills de forma razonable (documenta qué probaste; **no** cambies de modelo).
+- El modelo no consigue diagnosticar una anomalía tras ajustar prompts y skills de forma razonable (documenta qué probaste; **no** cambies de modelo fuera de los perfiles de `model-profiles/`).

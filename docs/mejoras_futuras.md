@@ -58,6 +58,8 @@ Con `Qwen2.5-14B-Instruct-AWQ` el monitor necesita varias **ayudas** (lista y mo
 - *Contexto:* ⚠️ sin `--max-model-len` vLLM usa el `max_position_embeddings` del modelo (40.960 en Qwen3; 262.144 en el 2507): pasar siempre `--max-model-len 32768`.
 - *Muestreo:* Qwen recomienda para *non-thinking* temperatura 0,7, `top_p` 0,8, `top_k` 20 y, para los cuantizados, `presence_penalty` 1,5; «no usar decodificación voraz» en thinking. El monitor va a temperatura 0 (decisiones reproducibles): comprobar que no degenera sin ayuda (ver `repetition_penalty` en `agents.yaml`).
 
+**Infraestructura (Fase 6):** los perfiles de `model-profiles/` ya permiten cambiar modelo, muestreo, razonamiento, tiempos y estos interruptores sin tocar `agents.yaml`, y `tools/experiments/run_matrix.py` repite y compara (`docs/fases/fase6.md`).
+
 **Método.** Una variable cada vez, repitiendo los seis escenarios (`run.py --scenario … --speed 16 --wait-agent --evaluate`) y **comparando los `eval.md`** con el paso anterior (causa por etiqueta, una cadena por episodio, falsas alarmas, fallbacks, tools y skills, latencias). Orden, de la ayuda más intrusiva a la menos:
 1. `coherence_guardrail: false`
 2. `require_checks: false`

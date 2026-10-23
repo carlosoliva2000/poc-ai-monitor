@@ -19,6 +19,7 @@ import json
 import re
 import statistics
 import sys
+import unicodedata
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -277,6 +278,10 @@ class RunData:
         self.meta: dict[str, Any] = (
             json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
         )
+        profile_path = folder / "profile.json"
+        self.profile: dict[str, Any] = (
+            json.loads(profile_path.read_text(encoding="utf-8")) if profile_path.exists() else {}
+        )
         labels_path = folder.parent / "labels.json"
         file_labels = (
             LabelsFile.model_validate_json(labels_path.read_text(encoding="utf-8")).labels
@@ -507,6 +512,12 @@ def agent_stats(trace: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             "max_prompt_tokens": max((c["prompt_tokens"] for c in calls), default=0),
             "latency_mean": statistics.fmean(latencies) if latencies else 0.0,
             "latency_p50": percentile(latencies, 0.5),
+            "latency_p95": percentile(latencies, 0.95),
+            "length_cuts": sum(1 for c in calls if c.get("finish_reason") == "length"),
+            "reasoning_calls": sum(1 for c in calls if c.get("reasoning")),
+            "reasoning_chars": sum(len(c.get("reasoning") or "") for c in calls),
+            "reasoning_tokens": sum(c.get("reasoning_tokens") or 0 for c in calls),
+            "reasoning_tokens_reported": any(c.get("reasoning_tokens") is not None for c in calls),
             "latency_max": max(latencies, default=0.0),
             "tools": dict(tools),
             "skills_by_model": model_skills,
@@ -520,6 +531,63 @@ def agent_stats(trace: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             "end_reasons": dict(Counter(t["end_reason"] for t in records)),
         }
     return stats
+
+
+def wait_cap(data: RunData) -> float:
+    """Espera que se considera agotada: la de la plataforma (la del perfil) menos un segundo."""
+    wait = data.profile.get("wait_agent_timeout_s")
+    return float(wait) - 1.0 if wait else WAIT_CAP_S
+
+
+FULL_SCRIPT_PREFIXES = (
+    "CJK", "IDEOGRAPHIC", "FULLWIDTH", "HALFWIDTH", "HIRAGANA", "KATAKANA", "HANGUL",
+)  # fmt: skip
+
+
+def non_latin_chars(text: str) -> list[str]:
+    """Letras que no son latinas y signos CJK. Los símbolos del módulo (→ · ° × —) no cuentan."""
+    out = []
+    for ch in text:
+        name = unicodedata.name(ch, "")
+        if name.startswith(FULL_SCRIPT_PREFIXES) or (
+            unicodedata.category(ch).startswith("L") and not name.startswith("LATIN")
+        ):
+            out.append(ch)
+    return out
+
+
+def non_latin_stats(data: RunData) -> dict[str, dict[str, Any]]:
+    """Por agente (monitor, informe y chats), cuántos textos llevan caracteres no latinos."""
+    texts: dict[str, list[str]] = {
+        "monitor": [], "report": [], "chat-monitor": [], "chat-report": [],
+    }  # fmt: skip
+    for e in data.events:
+        p = e["payload"]
+        if e["source"] == "ai-monitor" and e["type"] == "AnomalyDetected":
+            texts["monitor"] += [p["summary"], p["explanation"], p["recommendation"]]
+        elif e["source"] == "ai-monitor" and e["type"] in ("AlertClosed", "DetectionAcknowledged"):
+            texts["monitor"].append(p["reason"])
+        elif e["type"] == "ReportGenerated":
+            texts["report"].append(p["markdown"])
+        elif e["type"] == "AgentReply":
+            texts.setdefault(f"chat-{p['conversation_id']}", []).append(p["text"])
+    out: dict[str, dict[str, Any]] = {}
+    for agent, items in texts.items():
+        found = [chars for chars in (non_latin_chars(text) for text in items if text) if chars]
+        out[agent] = {
+            "texts": sum(1 for text in items if text),
+            "texts_with_non_latin": len(found),
+            "chars": sum(len(chars) for chars in found),
+            "examples": ["".join(chars[:12]) for chars in found[:3]],
+        }
+    reasoning = [c.get("reasoning") or "" for t in data.trace for c in t["calls"]]
+    out["reasoning"] = {
+        "texts": sum(1 for r in reasoning if r),
+        "texts_with_non_latin": sum(1 for r in reasoning if non_latin_chars(r)),
+        "chars": sum(len(non_latin_chars(r)) for r in reasoning),
+        "examples": [],
+    }
+    return out
 
 
 def waits(data: RunData) -> list[dict[str, Any]]:
@@ -590,6 +658,7 @@ class Evaluation:
     overall: str
     open_alerts: list[Event]
     contradictions: list[Contradiction]
+    non_latin: dict[str, dict[str, Any]]
 
 
 def evaluate(folder: Path) -> Evaluation:
@@ -610,11 +679,12 @@ def evaluate(folder: Path) -> Evaluation:
         [i for i in data.items if not i.responses],
         agents,
         wait_list,
-        sum(1 for w in wait_list if w["wall_s"] >= WAIT_CAP_S),
+        sum(1 for w in wait_list if w["wall_s"] >= wait_cap(data)),
         agents.get("monitor", {}).get("fallbacks", 0),
         overall,
         data.open_alerts_at_end(),
         contradictions(list(data.alerts.values())),
+        non_latin_stats(data),
     )
 
 
@@ -677,6 +747,32 @@ def waited_all_run(meta: dict[str, Any]) -> bool:
     return bool(meta.get("wait_agent", False)) and all(c["value"] for c in changes)
 
 
+def profile_lines(info: dict[str, Any]) -> list[str]:
+    """Perfil, huellas y parámetros efectivos por agente (de `profile.json`)."""
+    if not info:
+        return ["- Perfil: n/d (ejecución sin `profile.json`)"]
+    wait = info.get("wait_agent_timeout_s")
+    name = info.get("profile") or "ninguno (agents.yaml tal cual)"
+    lines = [
+        f"- Perfil: `{name}` · huella del perfil: {info.get('profile_fingerprint') or 'n/d'} · "
+        f"huella de `agent-assets`: {info.get('assets_fingerprint', 'n/d')} · espera de la "
+        f"plataforma: {_num(wait, ' s', 0)} · chats con tools: "
+        f"{_yes_no(info.get('chat_tools_enabled'))}",
+        "",
+        "| Agente | temperature | top_p | top_k | repetition | presence | max_tokens | "
+        "razonamiento | invocación máx. | llamada máx. |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for agent, a in info.get("agents", {}).items():
+        reasoning = "n/d" if a.get("reasoning") is None else _yes_no(a["reasoning"])
+        lines.append(
+            f"| {agent} | {a['temperature']:g} | {a['top_p']:g} | {a['top_k']} | "
+            f"{a['repetition_penalty']:g} | {a['presence_penalty']:g} | {a['max_tokens']} | "
+            f"{reasoning} | {a['max_invocation_s']:g} s | {a['llm_timeout_s']:g} s |"
+        )
+    return lines
+
+
 def header(ev: Evaluation) -> list[str]:
     data = ev.data
     first = next((t for t in data.trace if t["agent"] == "monitor"), None)
@@ -690,10 +786,11 @@ def header(ev: Evaluation) -> list[str]:
         "",
         f"**{summary_line(ev)}**",
         "",
-        f"- Modelo: `{first['model'] if first else 'n/d'}` · "
+        f"- Modelo: `{first['model'] if first else data.profile.get('model', 'n/d')}` · "
         f"temperature {s.get('temperature', 'n/d')}"
         f" · top_p {s.get('top_p', 'n/d')} · top_k {extra.get('top_k', 'n/d')}"
         f" · repetition_penalty {extra.get('repetition_penalty', 'n/d')}"
+        f" · presence_penalty {s.get('presence_penalty', 'n/d')}"
         f" · max_tokens {s.get('max_tokens', 'n/d')}",
         f"- `guided_mode`: {first['guided_mode'] if first else 'n/d'} · esperar al agente: "
         f"{meta_text(data.meta, 'wait_agent', _yes_no)} · velocidad: "
@@ -701,6 +798,7 @@ def header(ev: Evaluation) -> list[str]:
         f"{meta_text(data.meta, 'interactive', _yes_no)} · "
         f"duración en reloj: {_num(wall, ' s', 0)}",
         aids_line(first.get("aids") if first else None),
+        *profile_lines(data.profile),
     ]
 
 
@@ -829,7 +927,27 @@ def agents_section(ev: Evaluation) -> list[str]:
             f"recordatorios: {s['reminders']} · fallbacks: {s['fallbacks']} · cierres de fallback: "
             f"{s['fallback_closes']} · evidencias no vistas: {s['unseen_evidence']}",
             f"- Cómo terminaron: {s['end_reasons']}",
+            f"- Respuestas cortadas por longitud: {s['length_cuts']} · razonamiento: "
+            f"{s['reasoning_calls']} llamadas, {s['reasoning_chars']} caracteres, "
+            + (
+                f"{s['reasoning_tokens']} tokens"
+                if s["reasoning_tokens_reported"]
+                else "tokens n/d"
+            ),
         ]
+    return lines
+
+
+def non_latin_section(ev: Evaluation) -> list[str]:
+    lines = [
+        "", "## Caracteres no latinos", "",
+        "| Texto | Textos | Con no latinos | Caracteres |", "|---|---|---|---|",
+    ]  # fmt: skip
+    for agent, s in ev.non_latin.items():
+        examples = f" (p. ej. «{' / '.join(s['examples'])}»)" if s["examples"] else ""
+        lines.append(
+            f"| {agent} | {s['texts']} | {s['texts_with_non_latin']}{examples} | {s['chars']} |"
+        )
     return lines
 
 
@@ -840,7 +958,7 @@ def waits_section(ev: Evaluation) -> list[str]:
     durations = [w["wall_s"] for w in ev.wait_list]
     lines.append(
         f"{len(durations)} esperas · media {_num(statistics.fmean(durations), ' s')} · máxima "
-        f"{_num(max(durations), ' s')} · {ev.timeouts} agotadas (≥ {WAIT_CAP_S:g} s)."
+        f"{_num(max(durations), ' s')} · {ev.timeouts} agotadas (≥ {wait_cap(ev.data):g} s)."
     )
     lines += ["", "| T+ | Espera (reloj) | Chat en curso |", "|---|---|---|"]
     for w in ev.wait_list:
@@ -890,6 +1008,7 @@ def render_markdown(ev: Evaluation) -> str:
         responses_section(ev),
         false_section(ev),
         contradictions_section(ev),
+        non_latin_section(ev),
         agents_section(ev),
         waits_section(ev),
         no_wait_section(ev),
@@ -910,6 +1029,14 @@ def to_json(ev: Evaluation) -> dict[str, Any]:
                 "type": r.label.type.value,
                 "verdict": r.verdict,
                 "chains": r.chains,
+                "causes": [i.cause() for i in sorted(r.raised, key=lambda i: i.event["sim_time"])],
+                "closures": sum(
+                    1
+                    for i in ev.data.items
+                    if i.label is r.label
+                    for x in i.responses
+                    if x.kind == "cierre"
+                ),
                 "first_detection": r.first_detection.event["sim_time"]
                 if r.first_detection
                 else None,
@@ -924,6 +1051,8 @@ def to_json(ev: Evaluation) -> dict[str, Any]:
         "unanswered": [i.detection_id for i in ev.unanswered],
         "open_alerts": [a["payload"]["alert_id"] for a in ev.open_alerts],
         "contradictions": [asdict(c) for c in ev.contradictions],
+        "non_latin": ev.non_latin,
+        "profile": ev.data.profile or None,
         "agents": ev.agents,
         "waits": ev.wait_list,
     }
