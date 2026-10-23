@@ -80,15 +80,15 @@ Respaldada por las comprobaciones, pero tardó.
 def test_report_is_published_saved_and_counts_chains(tmp_path: Path) -> None:
     llm = FakeLlm(Script(text_response(NARRATIVE)))
     rt, published = make_runtime(tmp_path, llm, FakePlatform({"get_flight_summary": SUMMARY}))
-    rt.set_run("viento", "20261021-000000")
+    rt.set_run("wind", "20261021-000000")
     rt.state.apply(detection_event("raised", "det-1", 5.0))
     rt.state.apply(alert("ai-0001", ["det-1"], cause="WIND", t=6.0))
     rt.state.apply(alert("ai-0002", ["det-1"], cause="WIND", supersedes="ai-0001", t=20.0))
     rt.clock.observe(100.0)
     report = ReportAgent(rt, Monitor(rt))
-    markdown = run(report.generate("viento", "20261021-000000", "plr-0009"))
+    markdown = run(report.generate("wind", "20261021-000000", "plr-0009"))
     # los hechos son del módulo; la narrativa, del LLM, en su sitio
-    assert markdown.startswith("# Mission report T\n\n**Scenario:** viento · **Duration:** 01:40")
+    assert markdown.startswith("# Mission report T\n\n**Scenario:** wind · **Duration:** 01:40")
     assert "## Summary\n\nEl dron voló con viento." in markdown
     assert "### A1 · Wind (high, confidence 0.8)" in markdown
     assert "first alert at T+00:06 (diagnosis delay: 1.0 s of simulation)" in markdown
@@ -101,7 +101,7 @@ def test_report_is_published_saved_and_counts_chains(tmp_path: Path) -> None:
     [event] = of_type(published, EventType.REPORT_GENERATED)
     assert event.payload == {"run_id": "20261021-000000", "markdown": markdown, "alerts_count": 1}
     assert event.source == "ai-report" and event.causation_id == "plr-0009"
-    assert (tmp_path / "viento" / "20261021-000000" / "informe.md").read_text() == markdown + "\n"
+    assert (tmp_path / "wind" / "20261021-000000" / "informe.md").read_text() == markdown + "\n"
     trace = rt.trace.records[0]
     assert trace["agent"] == "report" and trace["end_reason"] == "final" and not trace["fallback"]
     assert llm.requests[0]["sampling"]["temperature"] == 0.7
@@ -124,9 +124,9 @@ def test_report_without_narrative_keeps_the_facts_and_is_marked(
     rt, published = make_runtime(
         tmp_path, FakeLlm(policy), FakePlatform({"get_flight_summary": SUMMARY})
     )
-    rt.set_run("viento", "r1")
+    rt.set_run("wind", "r1")
     rt.state.apply(alert("ai-0001", ["det-1"], cause="WIND"))
-    markdown = run(ReportAgent(rt, Monitor(rt)).generate("viento", "r1", None))
+    markdown = run(ReportAgent(rt, Monitor(rt)).generate("wind", "r1", None))
     assert "Report with the module's facts and without narrative" in markdown
     assert "### A1 · Wind" in markdown and "OPEN at the end" in markdown
     assert markdown.count("Not available: the agent did not write this section.") == 4

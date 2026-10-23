@@ -7,7 +7,7 @@ import pytest
 from platform_app.plot_scenario import plot_scenario
 
 
-@pytest.mark.parametrize("name", ["fallos", "secuestro"])
+@pytest.mark.parametrize("name", ["faults", "hijack"])
 def test_the_three_figures_are_written(runs_dir: Path, name: str) -> None:
     paths = plot_scenario(name, runs_dir=runs_dir)
     assert [p.name for p in paths] == ["plan_xy.png", "scenario_xy.png", "scenario_time.png"]

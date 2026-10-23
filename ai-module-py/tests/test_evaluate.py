@@ -326,7 +326,7 @@ def test_false_alarms_and_unanswered_detections(tmp_path: Path) -> None:
 
 
 def test_source_silent_is_attributed_by_source(tmp_path: Path) -> None:
-    b = Builder(tmp_path, "fallos")
+    b = Builder(tmp_path, "faults")
     r = b.raised("det-0001", 125.0, "SOURCE_SILENT", "radar")
     b.alert("ai-0002", 126.0, "SENSOR_FAULT", r, ["det-0001"])
     other = b.raised("det-0003", 130.0, "SOURCE_SILENT", "meteo")  # no es la fuente del fallo
@@ -338,7 +338,7 @@ def test_source_silent_is_attributed_by_source(tmp_path: Path) -> None:
 
 
 def test_loss_accepts_sensor_fault_and_counts_one_chain(tmp_path: Path) -> None:
-    b = Builder(tmp_path, "fallos")
+    b = Builder(tmp_path, "faults")
     labels = json.loads((b.root / "labels.json").read_text())["labels"]
     loss = next(lb for lb in labels if lb["type"] == "gps_loss")
     t0 = loss["start_s"]
@@ -399,7 +399,7 @@ def test_manual_faults_generate_synthetic_labels(tmp_path: Path) -> None:
 
 
 def test_scenario_faults_do_not_duplicate_labels(tmp_path: Path) -> None:
-    b = Builder(tmp_path, "fallos")
+    b = Builder(tmp_path, "faults")
     b.ev(
         "FaultInjected",
         120.0,

@@ -16,7 +16,7 @@ from poc_contracts.envelope import EventDraft
 from poc_contracts.run_files import LabelsFile, PlanFile, TruthFile
 
 SENSOR_TYPES = {"PositionUpdated", "TrackUpdated", "WindReported", "LinkStatus", "BatteryStatus"}
-ALL = ["demo", "fallos", "nominal", "secuestro", "spoofing", "viento"]
+ALL = ["demo", "faults", "hijack", "nominal", "spoofing", "wind"]
 
 
 def test_all_scenarios_in_the_repo_are_the_six_expected() -> None:
@@ -125,7 +125,7 @@ def test_gps_reports_the_spoofed_position_and_radar_the_real_one(runs_dir: Path)
 
 
 def test_link_changes_controller_only_during_the_hijack(runs_dir: Path) -> None:
-    run = load_run("secuestro", runs_dir)
+    run = load_run("hijack", runs_dir)
     for e in run.of_type("LinkStatus"):
         hijacked = 335.0 <= e["sim_time"] < 380.0
         assert (e["payload"]["controller_id"] == "UNK-4F2A") == hijacked
@@ -154,7 +154,7 @@ def test_labels_of_the_demo(runs_dir: Path) -> None:
 
 
 def test_labels_of_the_scheduled_faults(runs_dir: Path) -> None:
-    labels = load_run("fallos", runs_dir).labels
+    labels = load_run("faults", runs_dir).labels
     assert [lb.model_dump(mode="json") for lb in labels] == [
         {
             "id": "F1",
@@ -193,7 +193,7 @@ def test_labels_of_the_scheduled_faults(runs_dir: Path) -> None:
 
 
 def test_fault_events_use_the_player_source_and_are_numbered_in_order(runs_dir: Path) -> None:
-    faults = [e for e in load_run("fallos", runs_dir).events if e["event_id"].startswith("sim-")]
+    faults = [e for e in load_run("faults", runs_dir).events if e["event_id"].startswith("sim-")]
     assert [(e["type"], e["event_id"], e["payload"]["mode"]) for e in faults] == [
         ("FaultInjected", "sim-0001", "mute"),
         ("FaultCleared", "sim-0002", "mute"),

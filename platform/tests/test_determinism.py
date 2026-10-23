@@ -10,7 +10,7 @@ from platform_app.generator.build import generate, write_run
 FILES = ["plan.json", "truth.json", "labels.json", "events.jsonl"]
 
 
-@pytest.mark.parametrize("name", ["demo", "fallos"])
+@pytest.mark.parametrize("name", ["demo", "faults"])
 def test_same_seed_gives_byte_identical_files(tmp_path: Path, name: str) -> None:
     for i in (1, 2):
         write_run(generate(scenario_config(name)), tmp_path / str(i))
@@ -21,9 +21,9 @@ def test_same_seed_gives_byte_identical_files(tmp_path: Path, name: str) -> None
 def test_the_files_on_disk_match_a_fresh_generation_of_the_same_scenario(
     tmp_path: Path, runs_dir: Path
 ) -> None:
-    write_run(generate(scenario_config("viento")), tmp_path)
+    write_run(generate(scenario_config("wind")), tmp_path)
     for f in FILES:
-        assert (tmp_path / f).read_bytes() == (runs_dir / "viento" / f).read_bytes(), f
+        assert (tmp_path / f).read_bytes() == (runs_dir / "wind" / f).read_bytes(), f
 
 
 def test_another_seed_changes_the_noise_but_not_the_trajectory(tmp_path: Path) -> None:

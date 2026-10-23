@@ -14,7 +14,7 @@ from platform_app.player import INTERACTIVE_OFF_MESSAGE, Player, PlayerError
 from poc_contracts.enums import EventType, FaultMode, PlayerStatus, SensorSource
 from poc_contracts.envelope import Envelope
 
-ALL = ["demo", "fallos", "nominal", "secuestro", "spoofing", "viento"]
+ALL = ["demo", "faults", "hijack", "nominal", "spoofing", "wind"]
 
 
 def types(player: Player) -> list[str]:
@@ -44,7 +44,7 @@ def test_seq_is_global_and_numbering_is_split_between_simulator_and_player(
     runs_dir: Path,
 ) -> None:
     player = make_player(runs_dir)
-    player.load("fallos")
+    player.load("faults")
     player.run_to_end()
     timeline = player.bus.timeline.all()
     assert [e.seq for e in timeline] == list(range(1, len(timeline) + 1))
@@ -58,12 +58,12 @@ def test_seq_is_global_and_numbering_is_split_between_simulator_and_player(
 
 def test_load_publishes_expected_values_and_waits_for_play(runs_dir: Path) -> None:
     player = make_player(runs_dir)
-    player.load("viento")
+    player.load("wind")
     started = player.bus.timeline.all()
     assert [e.type for e in started] == [EventType.SIMULATION_STARTED]
-    expected = generate(load_scenario("viento"))
+    expected = generate(load_scenario("wind"))
     assert started[0].payload == {
-        "scenario": "viento",
+        "scenario": "wind",
         "run_id": player.run_id,
         "duration_s": expected.truth.duration_s,
         "total_events": len(expected.events),
@@ -157,12 +157,12 @@ def test_step_to_the_end_finishes(runs_dir: Path) -> None:
 
 def test_stepping_then_playing_gives_the_same_events(runs_dir: Path) -> None:
     player = make_player(runs_dir)
-    player.load("viento")
+    player.load("wind")
     for _ in range(10):
         player.step()
     player.run_to_end()
     expected = [
-        json.loads(line) for line in (RUNS_DIR / "viento" / "events.jsonl").read_text().splitlines()
+        json.loads(line) for line in (RUNS_DIR / "wind" / "events.jsonl").read_text().splitlines()
     ]
     assert published_drafts(player) == expected
 
@@ -203,7 +203,7 @@ def test_load_turns_interactive_off_and_says_so_in_the_new_timeline(runs_dir: Pa
     ]
     assert player.bus.timeline.all()[1].payload == {"interactive": False}
     # con el modo ya apagado, cargar no publica nada más
-    player.load("viento")
+    player.load("wind")
     assert [e.type.value for e in player.bus.timeline.all()] == ["SimulationStarted"]
     player.set_interactive(True)
     player.load("nominal")
@@ -266,7 +266,7 @@ def test_timeline_keeps_appending_after_the_dump(runs_dir: Path) -> None:
     assert len(lines) == before + 1 == len(player.bus.timeline)
     assert json.loads(lines[-1])["event_id"] == late.event_id
     # al cargar otro escenario el fichero antiguo deja de recibir eventos
-    player.load("viento")
+    player.load("wind")
     player.bus.publish(cleared(2, 1.0))
     assert len(path.read_text().splitlines()) == before + 2  # solo el SimulationReset de la carga
 
@@ -285,8 +285,8 @@ def test_load_another_scenario_resets_the_bus(runs_dir: Path) -> None:
     player = make_player(runs_dir)
     player.load("nominal")
     player.run_to_end()
-    player.load("viento")
-    assert player.state().scenario == "viento"
+    player.load("wind")
+    assert player.state().scenario == "wind"
     assert [e.seq for e in player.bus.timeline.all()] == [1]
 
 
@@ -357,9 +357,9 @@ def test_manual_mute_drops_the_source_and_keeps_the_trajectory(runs_dir: Path) -
 
 
 def test_manual_gps_loss_changes_the_trajectory_and_publishes_fix_none(runs_dir: Path) -> None:
-    baseline = generate(load_scenario("viento")).truth
+    baseline = generate(load_scenario("wind")).truth
     player = make_player(runs_dir)
-    player.load("viento")
+    player.load("wind")
     player.set_interactive(True)
     player.play()
     player.advance(90)
@@ -387,7 +387,7 @@ def test_manual_fault_errors(runs_dir: Path) -> None:
     player.set_interactive(True)
     with pytest.raises(PlayerError, match="no scenario"):
         player.fault(SensorSource.RADAR, FaultMode.MUTE, True)
-    player.load("fallos")
+    player.load("faults")
     player.set_interactive(True)
     player.play()
     player.advance(125)  # el mute del radar del escenario está activo
@@ -440,7 +440,7 @@ def monitor_reply(number: int, causation_id: str, sim_time: float):
         "cause": "WIND",
         "severity": "low",
         "confidence": 0.8,
-        "summary": "viento",
+        "summary": "wind",
         "explanation": "x",
         "recommendation": "y",
         "evidence_event_ids": ["gps-000001"],

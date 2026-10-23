@@ -106,8 +106,8 @@ def link_events(sc: str, since: float, until: float) -> list[dict]:
 
 
 def test_link_anomaly_on_real_flights() -> None:
-    assert link_is_anomalous(link_events("secuestro", 310, 338))  # otro controller_id
-    assert not link_is_anomalous(link_events("secuestro", 310, 330))  # aún normal
+    assert link_is_anomalous(link_events("hijack", 310, 338))  # otro controller_id
+    assert not link_is_anomalous(link_events("hijack", 310, 330))  # aún normal
     for start in range(10, 500, 5):  # ninguna ventana de 6 enlaces de un vuelo normal
         window = link_events("nominal", start, start + 25)
         assert not link_is_anomalous(window), start
@@ -135,7 +135,7 @@ def test_expected_checks_come_from_tools_and_state(state: MonitorState) -> None:
     assert want == checks(wind_notable=True, wind_with_drift=True, gps_radar_disagreed=True)
     state.apply(alert("ai-1", ["det-1"], cause="GPS_SPOOFING"))
     assert expected_checks(facts, state, 10.0)["gps_alert_recent"] is True
-    with_link = InvocationFacts(link_events=link_events("secuestro", 310, 338))
+    with_link = InvocationFacts(link_events=link_events("hijack", 310, 338))
     assert expected_checks(with_link, state, 10.0)["link_checked"] is True
     assert expected_checks(with_link, state, 10.0)["link_anomalous"] is True
 
@@ -202,7 +202,7 @@ def test_hijack_needs_the_link_checked(state: MonitorState) -> None:
     hijack = alert_args(["det-1"], cause="HIJACK", severity="high")
     verdict = check(hijack, state, InvocationFacts(metrics=metrics()))
     assert any("HIJACK requires having looked at the link" in e for e in verdict.errors)
-    looked = InvocationFacts(link_events=link_events("secuestro", 310, 338))
+    looked = InvocationFacts(link_events=link_events("hijack", 310, 338))
     ok = alert_args(
         ["det-1"],
         cause="HIJACK",

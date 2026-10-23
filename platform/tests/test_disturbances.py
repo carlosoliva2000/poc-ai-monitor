@@ -12,12 +12,12 @@ from platform_app.generator.disturbances import (
 
 
 def test_base_wind_outside_episodes() -> None:
-    w = wind_at(10.0, scenario_config("viento").wind)
+    w = wind_at(10.0, scenario_config("wind").wind)
     assert (w.speed_mps, w.gust_mps, w.from_deg) == (2.0, 3.5, 300.0)
 
 
 def test_episode_ramps_up_holds_and_ramps_down() -> None:
-    wind = scenario_config("viento").wind  # 95–150 s, rampa 10 s, 12 m/s, racha 16, del 350°
+    wind = scenario_config("wind").wind  # 95–150 s, rampa 10 s, 12 m/s, racha 16, del 350°
     assert wind_at(95.0, wind).speed_mps == pytest.approx(2.0)  # arranca en la velocidad base
     assert wind_at(100.0, wind).speed_mps == pytest.approx(7.0)  # a media rampa
     assert wind_at(120.0, wind) == wind_at(120.0, wind)
@@ -53,7 +53,7 @@ def test_spoof_offset_grows_and_vanishes_at_the_end() -> None:
 
 
 def test_hijack_window_is_half_open_and_open_ended_when_no_end() -> None:
-    hijack = scenario_config("secuestro").hijack
+    hijack = scenario_config("hijack").hijack
     assert not is_hijacked(334.9, hijack)
     assert is_hijacked(335.0, hijack)
     assert is_hijacked(379.9, hijack)

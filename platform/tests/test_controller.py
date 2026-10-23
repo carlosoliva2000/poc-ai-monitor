@@ -69,7 +69,7 @@ def test_crosswind_steady_state_error_matches_lookahead_formula(wind_mps: float)
 
 
 def test_wind_does_not_matter_in_the_planned_flight() -> None:
-    windy = fly(scenario_config("viento"), perturbed=False)
+    windy = fly(scenario_config("wind"), perturbed=False)
     calm = fly(scenario_config("nominal", wind=NO_WIND), perturbed=False)
     assert [(s.x, s.y) for s in windy.samples] == [(s.x, s.y) for s in calm.samples]
 
@@ -103,7 +103,7 @@ def test_spoofing_pulls_the_drone_away_while_the_gps_stays_on_route() -> None:
 
 
 def test_hijack_heads_for_the_target_then_rejoins_the_route() -> None:
-    cfg = scenario_config("secuestro")
+    cfg = scenario_config("hijack")
     h = cfg.hijack
     flight = fly(cfg, perturbed=True)
     target = (h.target.x, h.target.y)

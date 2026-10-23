@@ -42,7 +42,7 @@ def test_events_come_in_the_contract_order_within_an_instant() -> None:
         EventType.LINK_STATUS,
         EventType.BATTERY_STATUS,
     ]
-    events = generate(scenario_config("fallos")).events
+    events = generate(scenario_config("faults")).events
     for a, b in zip(events, events[1:], strict=False):
         if a.sim_time == b.sim_time and a.type in order and b.type in order:
             assert order.index(a.type) <= order.index(b.type)
@@ -85,7 +85,7 @@ def test_a_mute_does_not_change_the_flight_but_a_loss_does() -> None:
 
 
 def test_gps_during_a_loss_has_no_fix_and_is_the_estimate() -> None:
-    cfg = scenario_config("fallos")
+    cfg = scenario_config("faults")
     run = generate(cfg)
     during = [
         e for e in run.events if e.type == EventType.POSITION_UPDATED and 245 <= e.sim_time < 290
@@ -125,7 +125,7 @@ def test_loss_is_navigation_on_estimate_it_ignores_the_wind() -> None:
 
 
 def test_manual_fault_rules() -> None:
-    sim = Simulator(scenario_config("fallos"))
+    sim = Simulator(scenario_config("faults"))
     with pytest.raises(ValueError, match="only exists for the GPS"):
         sim.set_fault(RADAR, FaultMode.LOSS, True, MANUAL)
     sim.set_fault(RADAR, FaultMode.MUTE, True, MANUAL)
@@ -142,7 +142,7 @@ def test_manual_fault_rules() -> None:
 
 
 def test_a_scheduled_fault_cannot_be_ended_by_hand() -> None:
-    sim = Simulator(scenario_config("fallos"))
+    sim = Simulator(scenario_config("faults"))
     while sim.t <= 121:
         sim.step()
     with pytest.raises(ValueError, match="scenario"):

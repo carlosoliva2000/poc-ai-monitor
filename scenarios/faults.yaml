@@ -1,6 +1,6 @@
-name: viento
+name: faults
 description: >-
-  Strong northerly wind episode on the WP1→WP2 leg. Expected cause: WIND.
+  Nominal mission with scheduled faults: the radar goes silent from T+02:00 to T+03:00; the GPS loses the signal from T+04:05 to T+04:50 (the drone navigates by dead reckoning on a leg with base wind) and goes silent from T+05:00 to T+05:12. Expected rules: SOURCE_SILENT (radar and GPS) and GPS_DEGRADED, SOURCE_DISCREPANCY and ROUTE_DEVIATION (loss); causes: SENSOR_FAULT and GPS_JAMMING.
 seed: 42
 t0: "2026-10-20T10:00:00Z"
 max_duration_s: 900
@@ -14,7 +14,7 @@ drone:
   lookahead_m: 40.0         # punto de mira sobre el tramo, por delante de la proyección
 
 mission:
-  id: MSN-VIENTO
+  id: MSN-FAULTS
   waypoints:            # BASE = (0, 0) se añade al principio y al final
     - {id: WP1, x: 500.0, y: 1200.0}
     - {id: WP2, x: 1600.0, y: 1500.0}
@@ -31,11 +31,13 @@ sensors:
 
 wind:
   base: {speed_mps: 2.0, gust_mps: 3.5, from_deg: 300.0}
-  episodes:
-    - {start_s: 95.0, end_s: 150.0, ramp_s: 10.0, speed_mps: 12.0, gust_mps: 16.0, from_deg: 350.0}
+  episodes: []
 
 spoofing: null
 
 hijack: null
 
-faults: []              # fallos programados, mute o loss (ver README)
+faults:                 # mute: la fuente no se publica; loss (solo GPS): el dron navega a estima. Inserta FaultInjected/FaultCleared
+  - {source: radar, mode: mute, start_s: 120.0, end_s: 180.0}
+  - {source: gps, mode: loss, start_s: 245.0, end_s: 290.0}   # tramo WP3→WP4, con el viento de base casi de costado
+  - {source: gps, mode: mute, start_s: 300.0, end_s: 312.0}

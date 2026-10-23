@@ -34,7 +34,7 @@ def state_at(name: str, until_s: float) -> ViewerState:
     return state
 
 
-@pytest.mark.parametrize(("name", "until_s"), [("fallos", 270.0), ("demo", 200.0)])
+@pytest.mark.parametrize(("name", "until_s"), [("faults", 270.0), ("demo", 200.0)])
 def test_the_viewer_draws_a_frame(name: str, until_s: float, tmp_path) -> None:
     fig, renderer = make_figure()
     state = state_at(name, until_s)

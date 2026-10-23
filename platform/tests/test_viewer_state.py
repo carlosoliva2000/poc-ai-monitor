@@ -94,12 +94,12 @@ def test_plan_comes_from_the_api_and_is_asked_again_on_a_new_run() -> None:
     s.set_plan({"waypoints": [{"id": "BASE", "x": 0, "y": 0}, {"id": "WP1", "x": 5, "y": 5}]})
     assert not s.needs_plan and s.route == [(0, 0), (5, 5)]
     s.apply_message(gps(1, 1, 1))
-    s.apply_message(ev("SimulationStarted", {"scenario": "viento", "run_id": "r2",
+    s.apply_message(ev("SimulationStarted", {"scenario": "wind", "run_id": "r2",
                                              "duration_s": 1.0, "total_events": 1}, 0))  # fmt: skip
     assert s.needs_plan and not s.gps and not s.route
-    s.apply_message({**STATE, "run_id": "r2", "scenario": "viento"})  # no vuelve a borrar
+    s.apply_message({**STATE, "run_id": "r2", "scenario": "wind"})  # no vuelve a borrar
     s.apply_message(gps(1, 1, 1))
-    s.apply_message({**STATE, "run_id": "r2", "scenario": "viento", "sim_time": 2.0})
+    s.apply_message({**STATE, "run_id": "r2", "scenario": "wind", "sim_time": 2.0})
     assert len(s.gps) == 1
 
 

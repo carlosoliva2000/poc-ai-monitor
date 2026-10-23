@@ -55,7 +55,7 @@ def test_time_cut_for_every_tool(runs_dir: Path) -> None:
 
 
 def test_tools_never_expose_sim_domain_or_truth(runs_dir: Path) -> None:
-    player, ctx = at(runs_dir, "fallos", 300.0)
+    player, ctx = at(runs_dir, "faults", 300.0)
     player.set_interactive(True)
     player.advance(1)
     timeline_types = {e.type for e in player.bus.timeline.all()}
@@ -138,7 +138,7 @@ def test_mission_plan_and_next_waypoint(runs_dir: Path) -> None:
 
 
 def test_track_metrics_on_the_wind_episode(runs_dir: Path) -> None:
-    _, ctx = at(runs_dir, "viento", 150.0)
+    _, ctx = at(runs_dir, "wind", 150.0)
     quiet = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 20, "until": 50})
     )
@@ -162,7 +162,7 @@ def test_track_metrics_on_the_wind_episode(runs_dir: Path) -> None:
 
 
 def test_track_metrics_with_the_radar_silenced(runs_dir: Path) -> None:
-    _, ctx = at(runs_dir, "fallos", 150.2)  # el radar calla de 120 a 180 s
+    _, ctx = at(runs_dir, "faults", 150.2)  # el radar calla de 120 a 180 s
     metrics = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 130, "until": 150})
     )
@@ -178,7 +178,7 @@ def test_track_metrics_with_the_radar_silenced(runs_dir: Path) -> None:
 
 
 def test_track_metrics_with_the_gps_silenced(runs_dir: Path) -> None:
-    _, ctx = at(runs_dir, "fallos", 311.0)  # el GPS calla de 300 a 312 s
+    _, ctx = at(runs_dir, "faults", 311.0)  # el GPS calla de 300 a 312 s
     metrics = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 301, "until": 311})
     )
@@ -275,7 +275,7 @@ def test_detection_acknowledged_is_ignored_by_alerts_and_summary(runs_dir: Path)
 def test_track_metrics_wind_of_the_same_window(runs_dir: Path) -> None:
     """El viento de la ventana viene calculado: media, racha máxima, hacia dónde empuja y la
     diferencia con la deriva (el modelo no hace aritmética de ángulos)."""
-    _, ctx = at(runs_dir, "viento", 150.0)
+    _, ctx = at(runs_dir, "wind", 150.0)
     metrics = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 120, "until": 150})
     )
@@ -294,7 +294,7 @@ def test_track_metrics_wind_of_the_same_window(runs_dir: Path) -> None:
 
 
 def test_track_metrics_wind_is_weak_and_not_aligned_in_the_hijack(runs_dir: Path) -> None:
-    _, ctx = at(runs_dir, "secuestro", 340.0)
+    _, ctx = at(runs_dir, "hijack", 340.0)
     metrics = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 310, "until": 340})
     )
@@ -303,7 +303,7 @@ def test_track_metrics_wind_is_weak_and_not_aligned_in_the_hijack(runs_dir: Path
 
 
 def test_track_metrics_wind_is_null_without_meteo_in_the_window(runs_dir: Path) -> None:
-    _, ctx = at(runs_dir, "viento", 150.0)
+    _, ctx = at(runs_dir, "wind", 150.0)
     metrics = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 141, "until": 149})
     )
@@ -319,17 +319,17 @@ def test_wind_helpers() -> None:
 
 def test_computed_facts_wind(runs_dir: Path) -> None:
     """`notable` (media ≥ 5 o racha ≥ 8) y `with_drift` (≤ 45°) los calcula la plataforma."""
-    _, ctx = at(runs_dir, "viento", 150.0)
+    _, ctx = at(runs_dir, "wind", 150.0)
     windy = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 120, "until": 150})
     )
     assert windy.wind.notable and windy.wind.with_drift
-    _, ctx = at(runs_dir, "secuestro", 340.0)
+    _, ctx = at(runs_dir, "hijack", 340.0)
     hijack = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 310, "until": 340})
     )
     assert not hijack.wind.notable and not hijack.wind.with_drift  # media 1,9, 62° de diferencia
-    _, ctx = at(runs_dir, "viento", 106.5)  # al abrirse la detección el viento está subiendo
+    _, ctx = at(runs_dir, "wind", 106.5)  # al abrirse la detección el viento está subiendo
     rising = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 76, "until": 106})
     )
@@ -344,17 +344,17 @@ def test_computed_facts_gps_radar_and_max_step(runs_dir: Path) -> None:
         call_tool(ctx, "get_track_metrics", {"since": 192, "until": 222})
     )
     assert recovery.gps_radar.disagreed and recovery.gps_max_step_m >= 30
-    _, ctx = at(runs_dir, "secuestro", 338.5)
+    _, ctx = at(runs_dir, "hijack", 338.5)
     hijack = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 308, "until": 338})
     )
     assert not hijack.gps_radar.disagreed and hijack.gps_max_step_m < 30
-    _, ctx = at(runs_dir, "viento", 106.5)
+    _, ctx = at(runs_dir, "wind", 106.5)
     wind = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 76, "until": 106})
     )
     assert not wind.gps_radar.disagreed and wind.gps_max_step_m < 30
-    _, ctx = at(runs_dir, "fallos", 290.5)  # fin de la pérdida de GPS
+    _, ctx = at(runs_dir, "faults", 290.5)  # fin de la pérdida de GPS
     loss = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 260, "until": 290})
     )
@@ -362,12 +362,12 @@ def test_computed_facts_gps_radar_and_max_step(runs_dir: Path) -> None:
 
 
 def test_computed_facts_are_null_without_data(runs_dir: Path) -> None:
-    _, ctx = at(runs_dir, "fallos", 150.2)  # el radar calla de 120 a 180 s
+    _, ctx = at(runs_dir, "faults", 150.2)  # el radar calla de 120 a 180 s
     metrics = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 130, "until": 150})
     )
     assert metrics.gps_radar is None and metrics.gps_max_step_m is not None
-    _, ctx = at(runs_dir, "fallos", 311.0)  # el GPS calla de 300 a 312 s
+    _, ctx = at(runs_dir, "faults", 311.0)  # el GPS calla de 300 a 312 s
     silent = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 305, "until": 311})
     )

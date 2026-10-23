@@ -158,7 +158,7 @@ def _draw_waypoints(ax: Axes, plan: PlanFile, with_eta: bool = True, muted: bool
         dx, dy = w.x - cx, w.y - cy
         norm = math.hypot(dx, dy) or 1.0
         text = w.id if not with_eta else (
-            f"BASE\nsalida {_clock(base_etas[0])}\nllegada {_clock(base_etas[-1])}"
+            f"BASE\ndeparture {_clock(base_etas[0])}\narrival {_clock(base_etas[-1])}"
             if base else f"{w.id}\n{_clock(w.eta_s)}"
         )  # fmt: skip
         ax.annotate(
@@ -324,7 +324,7 @@ def plot_xy(name: str, out_dir: Path) -> Path:
                    label="GPS without fix (estimated position)")
         )  # fmt: skip
     fig.legend(handles=handles, loc="lower center", ncol=3, fontsize=8.5)
-    _titles(fig, f"{name} · trayectoria planificada y real", _summary(run))
+    _titles(fig, f"{name} · planned and real trajectory", _summary(run))
     path = out_dir / "scenario_xy.png"
     fig.savefig(path, dpi=FIG_DPI)
     plt.close(fig)

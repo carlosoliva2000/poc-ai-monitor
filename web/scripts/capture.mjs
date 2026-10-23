@@ -108,7 +108,7 @@ async function runDemo() {
     }
     await once('espera', async () => waiting, async () => shot('01_aviso_de_espera'))
     await once('alerta1', async () => (await count('[data-testid=alert-card]')) >= 1, async () => {
-      await shot('02_alerta_viento')
+      await shot('02_alert_wind')
       await page.locator('[data-testid=alert-card] details').first().evaluate((d) => (d.open = true))
       await sleep(300)
       await shot('03_alerta_desplegada_checks')
@@ -118,7 +118,7 @@ async function runDemo() {
       await ask('monitor', 'Why do you think it is wind?', '04_chat_monitor')
     })
     await once('supersedes', async () => (await count('[data-testid=supersedes]')) >= 1, async () => shot('05_supersedes_spoofing'))
-    await once('secuestro', async () => (await page.locator('[data-testid=alert-card]', { hasText: 'Hijacking' }).count()) >= 1, async () => shot('06_alerta_secuestro'))
+    await once('hijack', async () => (await page.locator('[data-testid=alert-card]', { hasText: 'Hijacking' }).count()) >= 1, async () => shot('06_alert_hijack'))
     const status = await headerText()
     if (status.includes('Finished')) break
     await sleep(500)

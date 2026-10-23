@@ -68,4 +68,4 @@ El resumen, la explicación y la recomendación de una alerta los escribe el mod
 - **Texto fiable del monitor** (`docs/mejoras_futuras.md`): explicación estructurada con plantillas, verificar el texto contra los `checks` antes de publicarlo, o un modelo mejor.
 - **Liberar al agente** (`docs/mejoras_futuras.md`): con un modelo más moderno (Qwen3 instruct, por ejemplo), apagar las ayudas del §3 de arriba abajo y comparar los `eval.md`.
 - **Probar el monitor con modelos de Claude** (`docs/mejoras_futuras.md`, dentro de «Liberar al agente»): `claude-haiku-5-5`, luego `claude-sonnet-5-5` y, solo como techo y avisando, `claude-opus-5-5`, con todas las ayudas apagadas. Exige una excepción explícita a la regla 1 («nada en la nube»), que decide Carlos.
-- **`fallos`**: F3, las dos cadenas de F2 y las alertas que quedan abiertas: decisiones mecánicas candidatas a regla.
+- **`faults`**: F3, las dos cadenas de F2 y las alertas que quedan abiertas: decisiones mecánicas candidatas a regla.

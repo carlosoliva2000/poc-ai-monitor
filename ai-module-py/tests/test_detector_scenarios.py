@@ -13,7 +13,7 @@ from poc_contracts.envelope import EventDraft
 from poc_contracts.payloads import DetectionCleared, DetectionRaised
 
 RUNS = Path(__file__).resolve().parents[2] / "runs"
-SCENARIOS = ["nominal", "viento", "spoofing", "secuestro", "fallos", "demo"]
+SCENARIOS = ["nominal", "wind", "spoofing", "hijack", "faults", "demo"]
 
 
 @dataclass
@@ -84,7 +84,7 @@ def test_nominal_has_no_detections(results: dict[str, list[EventDraft]]) -> None
     assert results["nominal"] == [], table(results["nominal"])
 
 
-@pytest.mark.parametrize("scenario", ["viento", "spoofing", "secuestro", "demo"])
+@pytest.mark.parametrize("scenario", ["wind", "spoofing", "hijack", "demo"])
 def test_each_label_fires_its_expected_rules_once(
     scenario: str, results: dict[str, list[EventDraft]]
 ) -> None:
@@ -103,7 +103,7 @@ def test_each_label_fires_its_expected_rules_once(
 
 
 def test_wind_is_a_single_route_deviation(results: dict[str, list[EventDraft]]) -> None:
-    episodes = episodes_of(results["viento"])
+    episodes = episodes_of(results["wind"])
     assert [(e.rule, e.source) for e in episodes] == [("ROUTE_DEVIATION", None)]
     assert 95.0 <= episodes[0].raised <= 150.0
 
@@ -123,7 +123,7 @@ def test_spoofing_discrepancy_then_recovery_deviation(
 def test_hijack_is_a_route_deviation_that_gets_worse(
     results: dict[str, list[EventDraft]],
 ) -> None:
-    episodes = episodes_of(results["secuestro"])
+    episodes = episodes_of(results["hijack"])
     assert [(e.rule, e.source) for e in episodes] == [("ROUTE_DEVIATION", None)]
     assert 335.0 <= episodes[0].raised <= 380.0
     assert len(episodes[0].updated) == 1
@@ -132,7 +132,7 @@ def test_hijack_is_a_route_deviation_that_gets_worse(
 def test_faults_each_muted_source_fires_its_own_silent_detection(
     results: dict[str, list[EventDraft]],
 ) -> None:
-    detections = results["fallos"]
+    detections = results["faults"]
     episodes = episodes_of(detections)
     silent = find(episodes, "SOURCE_SILENT")
     assert sorted(e.source or "" for e in silent) == ["gps", "radar"], table(detections)
@@ -145,7 +145,7 @@ def test_faults_each_muted_source_fires_its_own_silent_detection(
 def test_faults_gps_loss_is_degraded_at_once_and_discrepancy_after(
     results: dict[str, list[EventDraft]],
 ) -> None:
-    detections = results["fallos"]
+    detections = results["faults"]
     episodes = episodes_of(detections)
     (degraded,) = find(episodes, "GPS_DEGRADED")
     assert degraded.source == "gps" and degraded.raised == 245.0, table(detections)
@@ -166,9 +166,9 @@ def test_faults_gps_loss_is_degraded_at_once_and_discrepancy_after(
 
 
 def test_faults_labels_match_the_expected_rules(results: dict[str, list[EventDraft]]) -> None:
-    detections = results["fallos"]
+    detections = results["faults"]
     episodes = episodes_of(detections)
-    for label in labels_of("fallos"):
+    for label in labels_of("faults"):
         for rule in label["expected_rules"]:
             found = [e for e in find(episodes, rule) if in_window(e, label["eval_window"])]
             if rule in (Rule.SOURCE_SILENT, Rule.GPS_DEGRADED):

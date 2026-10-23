@@ -13,7 +13,7 @@ platform/         Python: simulador incremental (generador y reproductor en dire
 ai-module-py/     Python: cliente del bus, detector de reglas, motor de agente, monitor, informe, chats, guardrails, trazas, evaluación
 agent-assets/     Compartido con el futuro módulo Java: prompts/, skills/, tools.json
 web/              JS: la interfaz de v0 adaptada (Next.js)
-scenarios/        nominal, viento, secuestro, spoofing, fallos y demo (YAML con semilla)
+scenarios/        nominal, wind, hijack, spoofing, faults y demo (YAML con semilla)
 runs/             Salida del simulador sin intervenciones, versionada (`runs/<escenario>/`: plan, verdad, eventos esperados, etiquetas y PNG), y de cada ejecución (`runs/<escenario>/<run_id>/`, no se versiona)
 docs/  ref/       Diseño, mejoras futuras y referencias
 ```

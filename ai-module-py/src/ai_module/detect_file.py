@@ -1,6 +1,6 @@
 """Ejecuta el detector sobre uno o varios `events.jsonl` y muestra las detecciones.
 
-uv run --project ai-module-py python -m ai_module.detect_file runs/fallos/events.jsonl
+uv run --project ai-module-py python -m ai_module.detect_file runs/faults/events.jsonl
 """
 
 import argparse

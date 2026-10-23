@@ -34,7 +34,7 @@ Las pruebas que comprobaban textos en castellano se han actualizado a los textos
 ## 4. Búsqueda de texto en castellano que pueda ver el usuario o el modelo
 - `agent-assets/`: `grep -P '[áéíóúñ¿¡«»]'` → **solo** el comentario HTML de `prompts/monitor_objective.md` (líneas 1–3) y comentarios de `agents.yaml`; `assets.py` quita los comentarios HTML antes de enviar el prompt, así que no llegan al modelo.
 - `web/` (`app`, `components`, `hooks`, `lib`, `scripts`): sin cadenas en castellano; quedan **comentarios** (documentación en español, regla 14), los datos de prueba en castellano de `clean-text.test.ts` (verifican que la función sigue funcionando con prosa en castellano) y las notas de consola de `scripts/capture.mjs` (`note(...)`, para nosotros).
-- Palabras como «alerta», «viento», «detección», «cerrada», «Esperando», «sí/no» en cadenas de `web/` y de `agent-assets/`: **ninguna**. «viento» y «secuestro» siguen apareciendo como **nombres de escenario** (`viento`, `secuestro`: nombres de ficheros YAML y de carpetas de `runs/`, que no se cambian) y en la lista desplegable de escenarios.
+- Palabras como «alerta», «viento», «detección», «cerrada», «Esperando», «sí/no» en cadenas de `web/` y de `agent-assets/`: **ninguna**. «viento» y «secuestro» siguen apareciendo como **nombres de escenario** (`wind`, `hijack`: nombres de ficheros YAML y de carpetas de `runs/`, que no se cambian) y en la lista desplegable de escenarios.
 
 **Lo que queda en castellano, y por qué:**
 1. Documentación, `CLAUDE.md`, comentarios y docstrings (regla 14).
@@ -64,7 +64,7 @@ Igual que en la Fase 4 (`docs/fases/fase4.md` §3). Comprobaciones: `(cd contrac
 ## 8. Qué queda
 - Validar con el LLM real (apartado 5).
 - Decidir si las herramientas de desarrollo (apartado 4, punto 3) también pasan a inglés.
-- Pendientes de la Fase 4.3 sin cambios (texto no verificado del monitor, F2/F3 de `fallos`, `pnpm exec next telemetry disable`).
+- Pendientes de la Fase 4.3 sin cambios (texto no verificado del monitor, F2/F3 de `faults`, `pnpm exec next telemetry disable`).
 
 ## 9. Copias (reglas 13 y 15)
 `docs/fases/`, los PNG de `runs/*/` (regenerados), los `eval.md` e `informe.md` existentes, `snapshots/fase5/` y `snapshots-limpias/fase5/` en `/mnt/c/CITADEL/_CLAUDE/poc-ai-monitor/results/`. Las dos comprobaciones de la regla 15 (palabras prohibidas y nombres propios) **salen vacías**; no ha hecho falta corregir nada.
@@ -85,4 +85,70 @@ feat: phase 5 - interface and all messages in English
 - docs: language rule, who-decides-what and demo script updated; plots in runs/
   regenerated (only the PNG files change)
 - model behaviour in English is not yet evaluated
+```
+
+---
+
+# Fase 5.1 · nombres y gráficas en inglés (23/10/2026)
+
+Cierra lo que quedaba en castellano en lo visible: dos textos de las gráficas y los nombres de tres escenarios. **No se ha ejecutado nada con el LLM real.** Lo dicho en el apartado 4 sobre `viento` y `secuestro` («siguen apareciendo como nombres de escenario») ya no es cierto.
+
+## 5.1.1 Textos de las gráficas
+- `plot_scenario.py`: etiqueta de la base en `plan_xy.png` → `departure T+00:00` / `arrival T+07:15`; título de `scenario_xy.png` → `<name> · planned and real trajectory`.
+- Búsqueda en `plot_scenario.py`, `viewer.py` y `viewer_state.py` (`salida`, `llegada`, `ruta`, `tramo`, `verdad`, `viento`, `trayectoria`, `planificad`, `desviaci`, `fallo`, `secuestro`, `esperar`, `alerta`, caracteres con tilde y palabras sueltas como `el/la/de/con/para/en`): **no queda ninguna cadena visible en castellano**; solo docstrings y comentarios (regla 14) y la ayuda de teclas del docstring de `viewer.py`.
+- Revisados a ojo `hijack/plan_xy.png`, `faults/scenario_xy.png` y `demo/scenario_time.png`: todo en inglés.
+
+## 5.1.2 Equivalencias de nombres
+| Antes | Ahora | `mission.id` antes → ahora |
+|---|---|---|
+| `viento` | `wind` | `MSN-VIENTO` → `MSN-WIND` |
+| `secuestro` | `hijack` | `MSN-SECUESTRO` → `MSN-HIJACK` |
+| `fallos` | `faults` | `MSN-FALLOS` → `MSN-FAULTS` |
+| `nominal`, `spoofing`, `demo` | sin cambios | sin cambios |
+
+Cambia en: `scenarios/*.yaml` (`name`, `mission.id`; las descripciones ya estaban en inglés) y `scenarios/README.md`; carpetas de `runs/` (con sus ejecuciones antiguas dentro, movidas con la carpeta); código y pruebas de `platform/`, `ai-module-py/` y `contracts/python/` (nombres de escenario en cadenas, listas ordenadas de escenarios de las pruebas, ejemplos de `run.py`/`detect_file.py`); `web/scripts/capture.mjs` (la clave `hijack` y los ficheros `02_alert_wind`/`06_alert_hijack`); `CLAUDE.md`, `platform/CLAUDE.md`, `ai-module-py/CLAUDE.md`, `web/CLAUDE.md`, `docs/quien_decide_que.md`, `docs/mejoras_futuras.md`, `contracts/eventos.md` y este informe. El selector de la web lee la lista de la API (`GET /api/scenarios`), así que no hay nombres en el código de `web/` salvo `capture.mjs`. Los informes `fase0`–`fase4` (y `fase3_*`) y `01_definicion.md` no se han tocado.
+
+## 5.1.3 `runs/` regenerado
+`generator --all` y `plot_scenario --all`. Comparado con la versión de git (`HEAD`), sustituyendo antes en la antigua los nombres viejos por los nuevos:
+- `truth.json`: **idéntico en los 6**.
+- `events.jsonl` y `labels.json`: **idénticos en los 6** tras la sustitución (solo cambian el nombre del escenario y el id de la misión).
+- `plan.json`: idéntico en `nominal`, `spoofing` y `demo`; en `wind`, `hijack` y `faults` **cambia únicamente `mission_id`** (el id de la misión va dentro del plan; no lo dije al pedirlo, pero es el mismo cambio del id). Tras la sustitución, idéntico.
+- PNG: regenerados los 18 (cambian los dos textos y los nombres en títulos).
+- Las ejecuciones antiguas de `runs/<escenario>/<run_id>/` están ahora bajo el nombre nuevo. Sus `run_meta.json`/`timeline.jsonl` siguen diciendo `viento`/`secuestro`/`fallos` por dentro (histórico, no tocado, ignorado por git).
+
+## 5.1.4 Comprobaciones (sin LLM real)
+| Comprobación | Resultado |
+|---|---|
+| `contracts/python` pytest | 128 passed, 1 skipped |
+| `platform` pytest | 206 passed |
+| `ai-module-py` pytest | 303 passed (la primera pasada falló una prueba, `test_report_chat`, porque comprobaba `**Scenario:** viento`; corregida) |
+| `ruff check` y `ruff format --check` en los tres | limpios |
+| `pnpm typecheck` · `pnpm test` | correcto · 7 passed |
+| `pnpm build` | **la primera ejecución volvió a fallar** con `exit code 1` justo después del aviso de Next sobre la vulnerabilidad conocida (`Reference: https://registry.npmjs.org/-/npm/v1/security/advisories/bulk … [ELIFECYCLE] Command failed with exit code 1`); la segunda, sin tocar nada, compiló bien. Mismo síntoma que en la Fase 5; sigue sin investigarse (parece una consulta de red al registro). |
+
+## 5.1.5 Lo que queda con `viento`, `secuestro` o `fallos` (fuera de `docs/`)
+Búsqueda en todo el repo. **No queda ningún nombre de escenario ni `MSN-*` antiguo.** Lo que sigue apareciendo es castellano corriente, no un nombre de escenario:
+- Docstrings y comentarios en castellano (regla 14): `simulator.py`, `controller.py`, `disturbances.py`, `player.py`, `viewer.py`, `viewer_state.py`, `plot_scenario.py`, `metrics.py`, `bus_client.py`, `recovery.py`, `evaluate.py`, `contracts/python/.../tools.py` y `payloads.py`, descripciones de los modelos y de `contracts/schemas/payloads/InteractiveModeChanged.json` (docstring exportado), comentarios del YAML (`faults: []  # fallos programados…`).
+- Los `CLAUDE.md` y `contracts/eventos.md`: prosa en castellano («viento», «secuestro», «fallos» como palabras).
+- `scenario_metrics.py` y `run.py`: la salida de consola de las herramientas de desarrollo sigue en castellano (`… viento: desviación máx. …`, `… secuestro: …`; pendiente abierto del apartado 8 de la Fase 5). La prueba `test_acceptance.py` busca esos prefijos.
+- `evaluate.py`: patrones en castellano de la métrica (compatibilidad con ejecuciones antiguas).
+- Datos de prueba en castellano en `tests/` (textos que simulan al modelo, p. ej. `test_evaluate.py`, `test_round9.py`, `test_chat_facts.py`) y `web/lib/clean-text.test.ts`.
+- `scenarios/README.md`: prosa en castellano (el documento no es visible para el usuario final).
+- `web/scripts/capture.mjs`: comentarios y notas de consola.
+
+## 5.1.6 Copias (reglas 13 y 15)
+Copiados a `/mnt/c/CITADEL/_CLAUDE/poc-ai-monitor/results/`: `docs/fases/`, PNG de `runs/*/` (con los nombres nuevos), `eval.md` e `informe.md` existentes, `snapshots/fase5_1/` y `snapshots-limpias/fase5_1/`. Las dos comprobaciones de la regla 15 **salen vacías**; no ha hecho falta corregir nada. `git ls-files` aún lista los ficheros antiguos (`scenarios/viento.yaml`, `secuestro.yaml`, `fallos.yaml`, que git ve como borrados hasta tu commit), y `cp` avisó de que no existen; es inofensivo: las copias contienen los nuevos.
+
+**Para borrar a mano (yo no puedo):** en `results/runs/` siguen las carpetas con nombre en castellano de copias anteriores: `viento/`, `secuestro/` y `fallos/`. Las nuevas son `wind/`, `hijack/` y `faults/`.
+
+## 5.1.7 Mensaje de commit propuesto
+```
+feat: phase 5.1 - scenario names and plot labels in English
+
+- plot_scenario: base label (departure/arrival) and scenario_xy title in English
+- rename scenarios: viento -> wind, secuestro -> hijack, fallos -> faults
+  (mission ids MSN-WIND, MSN-HIJACK, MSN-FAULTS) across scenarios, runs/, code,
+  tests, web capture script and current docs
+- runs/ regenerated: truth.json identical; events.jsonl, labels.json and plan.json
+  differ only in the scenario name and mission id
 ```

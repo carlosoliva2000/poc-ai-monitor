@@ -64,9 +64,9 @@ def test_demo_hijack_deviation_is_not_a_recovery() -> None:
 def test_the_other_scenarios_agree_with_demo() -> None:
     for scenario, key, expected in [
         ("spoofing", "T+03:42", True),
-        ("fallos", "T+04:50", True),  # fin de la pérdida de GPS
-        ("secuestro", "T+05:38", False),
-        ("viento", "T+01:46", False),
+        ("faults", "T+04:50", True),  # fin de la pérdida de GPS
+        ("hijack", "T+05:38", False),
+        ("wind", "T+01:46", False),
     ]:
         ctx = demo_context(RUNS / scenario / "events.jsonl")[key]
         until = ctx["until"] if expected else None

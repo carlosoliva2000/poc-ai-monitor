@@ -27,7 +27,7 @@ from poc_contracts.enums import EventType
 from poc_contracts.envelope import Envelope
 
 RUNS = Path(__file__).resolve().parents[2] / "runs"
-SCENARIOS = ["nominal", "viento", "spoofing", "secuestro", "fallos", "demo"]
+SCENARIOS = ["nominal", "wind", "spoofing", "hijack", "faults", "demo"]
 DETECTIONS = (
     EventType.DETECTION_RAISED,
     EventType.DETECTION_UPDATED,
@@ -149,16 +149,16 @@ def test_every_detection_gets_a_response(tmp_path: Path, name: str, policy: Any)
     check_everything_is_answered(rt, published, dets, monitor)
 
 
-@pytest.mark.parametrize("name", ["viento", "fallos"])
+@pytest.mark.parametrize("name", ["wind", "faults"])
 def test_every_detection_gets_a_response_when_the_llm_times_out(tmp_path: Path, name: str) -> None:
     rt, published, monitor, dets = drive(tmp_path, name, Sleeper(texter), fast_timeout=True)
     check_everything_is_answered(rt, published, dets, monitor)
 
 
 def test_the_publisher_policy_gives_one_alert_per_episode_in_fallos(tmp_path: Path) -> None:
-    """Con un LLM que responde bien al estado, `fallos` acaba sin alertas abiertas y sin
+    """Con un LLM que responde bien al estado, `faults` acaba sin alertas abiertas y sin
     UNKNOWN de fallback."""
-    rt, published, monitor, dets = drive(tmp_path, "fallos", FakeLlm(publisher))
+    rt, published, monitor, dets = drive(tmp_path, "faults", FakeLlm(publisher))
     assert rt.state.open_alerts() == []
     assert not any(r["fallback"] for r in rt.trace.records)
     alerts = [e for e in published if e.type == EventType.ANOMALY_DETECTED]

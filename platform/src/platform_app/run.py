@@ -11,7 +11,7 @@ respuestas del monitor y el informe, hasta `SimulationFinished` (y `ReportGenera
     uv run --project platform python -m platform_app.run --all --check --detector-only
     uv run --project platform python -m platform_app.run --scenario nominal --interactive \\
         --fault radar:mute:150:200 --fault gps:loss:240:285
-    uv run --project platform python -m platform_app.run --scenario viento --speed 16 \\
+    uv run --project platform python -m platform_app.run --scenario wind --speed 16 \\
         --wait-agent --ask monitor:120:"¿Por qué crees que es viento?" --ask report:end:"¿Qué pasó?"
 
 `--wait-agent` activa «esperar al agente» (el reproductor se pausa en cada detección hasta que
