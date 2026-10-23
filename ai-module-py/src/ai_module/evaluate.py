@@ -134,6 +134,14 @@ TO_ROUTE = re.compile(
     r"|\s*(?:to|of|against)\s+(?:the\s+)?(?:planned\s+|flight\s+)?(?:route|plan|path)\b",
     re.IGNORECASE,
 )
+# Viento «notable» (o fuerte, o significativo) dicho en afirmativo; «wind is not notable» no encaja
+# porque el «not» rompe el patrón, y «no notable wind» lo descarta `NEGATED_BEFORE`.
+WIND_NOTABLE = re.compile(
+    r"\b(?:notable|significant|strong)\s+wind\b"
+    r"|\bwind\b[^.;,]{0,25}?\b(?:is|was|are|were)\s+(?:notable|significant|strong)\b"
+    r"|\bviento\s+(?:es\s+|era\s+)?(?:notable|fuerte)\b|\bnotable\s+viento\b",
+    re.IGNORECASE,
+)
 NEGATED_BEFORE = re.compile(r"(?:\b(?:no|not|never)\b|n't)[^,;()]{0,35}$", re.IGNORECASE)
 ALERT_TEXT_FIELDS = (
     ("summary", "resumen"),
@@ -142,6 +150,7 @@ ALERT_TEXT_FIELDS = (
 )
 RULE_OPPOSITE = "contrario a la deriva o al viento, con la deriva a favor"
 RULE_DISAGREE = "GPS y radar discrepan con una cifra, sin que discrepen"
+RULE_WIND_NOTABLE = "viento notable, con el check de viento notable en no"
 
 
 def _near_wind_or_drift(sentence: str, start: int, end: int, window: int = 60) -> bool:
@@ -174,6 +183,11 @@ def contradicting_rules(sentence: str, checks: dict[str, Any] | None) -> list[st
         )
     ):
         rules.append(RULE_DISAGREE)
+    if checks.get("wind_notable") is False:
+        for m in WIND_NOTABLE.finditer(sentence):
+            if NEGATED_BEFORE.search(sentence[: m.start()]) is None:
+                rules.append(RULE_WIND_NOTABLE)
+                break
     return rules
 
 

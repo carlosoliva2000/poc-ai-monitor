@@ -152,3 +152,81 @@ feat: phase 5.1 - scenario names and plot labels in English
 - runs/ regenerated: truth.json identical; events.jsonl, labels.json and plan.json
   differ only in the scenario name and mission id
 ```
+
+---
+
+# Fase 5.2 · validación del inglés con el LLM real (23/10/2026)
+
+vLLM arrancado (`Qwen/Qwen2.5-14B-Instruct-AWQ`, `max_model_len` 32768). **Paro en el punto 3: hay un empeoramiento respecto a la 4.3 (caracteres chinos en la respuesta del chat del monitor, 3 de 3).** No he tocado prompts ni skills (huella de `agent-assets` sin cambios: `e28d071e856efb09`) ni he hecho las capturas del punto 4 (solo «si todo está bien»).
+
+## 5.2.0 Next.js 16.4.1
+- `pnpm add next@16.4.1` (antes 16.4.0). Cambia solo `web/package.json` y `web/pnpm-lock.yaml`; **ningún cambio de código**. No hay `eslint-config-next` en el proyecto. `sharp` en el lockfile: **0.35.5** (ya lo estaba; el aviso pide ≥ 0.35.5).
+- Avisos (https://nextjs.org/blog/nextjs-security-update-october-14-2026, leída hoy): (1) ejecución remota de código sin autenticar en funciones `use cache` que devuelven typed arrays, crítico (GHSA-673q-mjm6-r5xr); (2) ejecución remota de código sin autenticar en la API de optimización de imágenes con SVG, crítico, en Linux con glibc (CVE-2026-96889 / GHSA-2464-fhr4-w9xw); (3) denegación de servicio en el App Router con Server Actions, alto (GHSA-p3m5-59mp-jv5r). La página no da los rangos afectados, solo las versiones corregidas (16.4.1 y 15.5.28). Cuánto nos afectaban (`grep` de `use cache`, `use server`, `next/image` y `<Image` en `web/app`, `components`, `lib` y `hooks`: sin resultados) no lo he analizado: se actualiza igualmente.
+- Repetido: `pnpm typecheck` correcto · `pnpm test` 7 passed · **`pnpm build` 3 veces seguidas, cada una con `.next` borrada: exit 0 las tres, sin ningún aviso de vulnerabilidad** (0 coincidencias de «vulnerab/advisor» en los tres logs). Con 16.4.0 el aviso salía siempre y el build falló en la primera ejecución en la Fase 5 y en la 5.1; **con 16.4.1 desaparecen los dos**. Tres builds es una muestra pequeña: no demuestra que el fallo intermitente tuviera esa causa (no se había investigado), solo que no se ha vuelto a ver.
+
+## 5.2.1 `demo` ×3 a 16× con «esperar al agente»
+`platform_app.run --scenario demo --speed 16 --wait-agent --evaluate` con las tres preguntas del guion en inglés (monitor a T+110 s «Why do you think it is wind?», monitor a T+342 s «What did you look at on the link?», informe al terminar «Which was the most serious anomaly and why?»). Ejecuciones `20261023-154733`, `20261023-154928`, `20261023-155116`.
+
+| | Resultado (igual en las tres) | 4.3 |
+|---|---|---|
+| Veredicto | ✅ 3/3 · 0 falsas alarmas · 0 fallbacks · 0 esperas agotadas · 0 detecciones sin respuesta · 0 alertas abiertas | igual |
+| Causas | `ai-0001` WIND (T+01:46) · `ai-0004` GPS_SPOOFING alta (T+03:12) → `ai-0005` GPS_SPOOFING media **con `supersedes`** (T+03:42) · `ai-0008` HIJACK (T+05:38) | igual (los ids `0004/0005/0008` son los de la demo web de la 4.3; la tabla de la 4.3 tenía `0003/0004/0007`) |
+| Cadenas | 1·1·1 | igual |
+| Cierres | T+02:36 · T+03:54 · T+07:21 (+ el cierre determinista de `det-0003` a T+03:52, sin LLM) | igual |
+| Reconocimiento | uno, T+05:41 (`det-0007` → `ai-0008`) | igual |
+| Frases que contradicen (métrica de la 4.3) | **0 · 0 · 0** | 0 |
+| Rechazos de guardrails | 4 · 3 · 3 | 3 en la `…143322` |
+| Reloj | 113 s · 107 s · 107 s | — |
+
+Comportamiento determinista a temperatura 0: las alertas del monitor son **casi idénticas entre las tres** (solo difieren en el texto de `ai-0004` en la ejecución 3, el resumen de `ai-0005` y algunas frases de cierres, informe y chats). **El diagnóstico, las cadenas, los cierres y los reconocimientos no han empeorado.**
+
+## 5.2.2 Lectura de los textos
+Leídos todos los resúmenes, explicaciones, recomendaciones, cierres, reconocimientos, informes y respuestas de chat de las tres ejecuciones, contra los `checks` de cada alerta y `eval.md`.
+
+### A. Texto de las alertas (la métrica no lo veía → ya sí)
+1. **`ai-0008` HIJACK, explicación (las 3 ejecuciones):** «…and the wind is notable but not affecting the deviation» con `wind_notable = no`. Contradice su propio check y el cierre del mismo `ai-0008` («The wind is not notable…») y el reconocimiento («There is no notable wind»). **No es nuevo**: en las 4 ejecuciones de la 4.3 el mismo texto decía «El viento es notable y coincide con la deriva» (el 14B lo repite siempre en el secuestro) y la métrica daba 0 porque solo conocía «viento contrario a la deriva» y «discrepan <cifra>».
+2. **`ai-0004` GPS_SPOOFING, ejecución 3:** «The wind is notable (… wind.mean_speed_mps 1.9 m/s …)» con `wind_notable = no` (1,9 m/s no es notable). Además esa frase enseña **nombres de campo en crudo** (`gps_deviation_from_plan_m.mean`, `wind.wind_to_deg`, `wind.drift_vs_wind_deg`) que `stripFieldValues` de la web **no quita** (solo quita `campo=valor` y `campo: valor`; aquí es `campo valor`).
+3. Sin check que las contradiga, pero dudosas: `ai-0004` ejecuciones 1 y 2 («The radar is outside the planned route and moving away», citando `gps-000192` como evidencia de un dato de radar); `ai-0008`: «the command link is showing signs of interference» (el check solo dice que cambió el `controller_id`); el resumen de `ai-0005` es «GPS spoofing detected» en las ejecuciones 2 y 3 (en la 1, «Recovery from GPS spoofing»), poco claro para una recuperación.
+
+**Métrica ampliada** (`evaluate.py`, regla nueva, **la cuarta**): con `wind_notable = no`, una frase que dice «notable/significant/strong wind» o «the wind is/was notable/significant/strong» (y en castellano «el viento es notable/fuerte») cuenta como contradicción, salvo negada por un «no/not/never/n't» a menos de 35 caracteres delante (`There is no notable wind`, `The wind is not notable`, `The wind isn't notable` no cuentan). +1 prueba en `test_evaluate.py` (ejemplos que sí y que no, y que solo se aplica con el check en `False`). Resultado sobre lo ya existente: **las ejecuciones de la 5.2 pasan a 1 · 1 · 2 frases** (`eval.md` regenerados: la cabecera sigue en ✅ 3/3 porque el veredicto es de diagnóstico; el contador sube) y las 4 de la 4.3 (`…143322`, `…143517`, `…143717`, `…144059`) también dan **1** cada una. Es decir, **con la métrica ampliada la 4.3 y la 5.2 empatan** (1 frase por ejecución, la del secuestro): el inglés no ha introducido esta contradicción, solo estaba sin medir. Los `eval.md` antiguos de la 4.3 no se han reescrito.
+
+### B. Chats
+- **Chino en la respuesta «What did you look at on the link?» (3 de 3, 4.3: 0 de 4).** Traza `inv-0010` de `20261023-154733/llm_trace.jsonl` (`chat-monitor`, `as_of` 342 s, `temperature 0`, `top_p 1.0`, `top_k -1`, `repetition_penalty 1.05`, `max_tokens 800`, `finish_reason: stop`, 109 tokens, sin tools; el prompt dice «Answer in English»). Texto literal: «…the latency ranged between 37 and 123 ms, suggesting**不稳定连接。这些迹象表明命令链可能存在异常。**\n\nEvidence: lnk-0067.» (ejecuciones 2 y 3: «suggesting不稳定的数据连接。这些迹象表明命令链路可能存在异常。» seguido de una línea resumen en inglés). Es el cambio de idioma típico de Qwen, que no pasaba con el prompt en castellano. Aparece **dentro del historial del chat**: en la conversación siguiente del mismo chat (la del informe no, es otro) se reinyecta como turno anterior. No aparece en alertas, informes ni cierres (0 líneas con caracteres CJK en `informe.md`; 1 en `timeline.jsonl` y 1 en `llm_trace.jsonl`, las de este mensaje).
+- «Why do you think it is wind?» (3 de 3 idéntica): coherente con los checks y las cifras (3,9 m/s, racha 9,7 m/s, 4,9°). Redacción rara: «a 4.9° similarity with the wind direction» (es una diferencia de 4,9°, que es lo que hace «a favor»). No contradice.
+- «What did you look at on the link?»: `GCS-1` → `UNK-4F2A` a T+05:35, −78 a −61 dBm y 37 a 123 ms cuadran con los datos (como en la 4.3), pero añade «indicating poor signal quality» (interpretación suya, no está en los hechos).
+- «Which was the most serious anomaly and why?» (informe): HIJACK/A3, alta, confianza 0,8, hasta 714,2 m (la cifra de `eval.md`/detector) y cambio de controlador, en las tres. Sin contradicciones.
+
+### C. Informe (la métrica no lo cubre)
+Los títulos en inglés salen bien en las tres (`parse_narrative` no cayó en «Not available») y los hechos del módulo son correctos (cronología, estados, cadena A2 «high → medium; 2 alerts», cifras del monitor). En las partes escritas por el modelo, frases que **contradicen los checks o los datos**:
+- Ejecución 2, A3: «the lack of additional checks on the command link leaves some doubt» → `link_checked = sí`, `link_anomalous = sí`.
+- Ejecución 3, A2: «The deviation … increased to 73.9 meters, suggesting persistent GPS spoofing despite the recovery» → los 73,9 m son los de la detección de la recuperación y la cadena se cerró a T+03:54; recomendación 2: «the 13-second delay in publishing the alert» para el secuestro (fue de 7,6 s; 13 s es la del viento).
+- Sin dato que las apoye: ejecución 1, «the deviation was not explained fully by wind alone» y «the absence of a GPS jump or radar disagreement left some doubt» (esa ausencia es lo que dicen los checks del secuestro); ejecución 2, «there was doubt regarding the exact cause» (A1); ejecución 3, «the lack of wind impact raised doubts».
+- Las recomendaciones son genéricas (revisar guardrails, bajar la latencia), como en la 4.3 (que también tenía «el cambio de severidad a media no fue justificado», sin respaldo). **No hay métrica sobre el informe**; con tres ejecuciones y una sola leída de la 4.3 no puedo decir que sea peor, pero sí que **las tres del inglés tienen al menos una afirmación falsa o sin respaldo**.
+
+## 5.2.3 Qué empeora y qué propongo (no hecho)
+1. **Chino en el chat del monitor (nuevo, 3/3).** Es lo único que empeora respecto a la 4.3. Opciones, a elegir por ti (todas tocan `agent-assets/` o el código, **no lo he hecho**): (a) reforzar «Answer in English only» en `chat_monitor_system_notools.md` (el modelo ya la tiene una vez); (b) un guardrail de código que detecte caracteres CJK en la respuesta del chat y la regenere o la sustituya (más fiable que el prompt con este modelo); (c) medirlo primero en `eval.md` (contador de respuestas con caracteres no latinos), sin cambiar nada más. Recomiendo (c) + (b).
+2. Nombres de campo sin `=`/`:` que la web no limpia (`wind.mean_speed_mps 1.9 m/s`): ampliar `stripFieldValues` o aceptarlo.
+3. Informe: sin métrica ni ayuda; es del tipo «texto del modelo no verificado» ya en `docs/mejoras_futuras.md`.
+
+## 5.2.4 Comprobaciones
+`contracts/python` 128 passed, 1 skipped · `platform` 206 passed · `ai-module-py` **304 passed** (+1: regla nueva de la métrica) · `ruff check` y `ruff format --check` limpios · `pnpm typecheck`, `pnpm test` (7 passed) y `pnpm build` correctos · huella de `agent-assets` `e28d071e856efb09` sin cambios.
+
+## 5.2.5 Capturas (punto 4)
+**No hechas**: el punto 4 se hace «si todo está bien» y hay un empeoramiento. Cuando decidas sobre el chino, `scripts/capture.mjs demo` y `radar` (con `pnpm demo`) quedan para `results/capturas/fase5/`.
+
+## 5.2.6 Cambios en el repo
+`web/package.json` y `web/pnpm-lock.yaml` (next 16.4.1); `ai-module-py/src/ai_module/evaluate.py` y `tests/test_evaluate.py` (cuarta regla de la métrica); `docs/quien_decide_que.md` y `ai-module-py/CLAUDE.md` (cuatro reglas). Los `eval.md` de las tres ejecuciones se han regenerado con la métrica nueva.
+
+## 5.2.7 Copias (reglas 13 y 15)
+`docs/fases/`, PNG de `runs/*/`, los `eval.md` e `informe.md` (incluidas las tres ejecuciones nuevas), `snapshots/fase5_2/` y `snapshots-limpias/fase5_2/`. Las dos comprobaciones de la regla 15: ver abajo.
+
+## 5.2.8 Mensaje de commit propuesto
+```
+feat: phase 5.2 - English validated with the real model, next 16.4.1
+
+- web: next 16.4.0 -> 16.4.1 (security update of 14/10/2026); sharp already 0.35.5
+- evaluate: fourth rule of the contradiction metric (notable wind said while
+  wind_notable is no); it was already present in the 4.3 hijack alerts
+- docs: phase 5.2 report (demo x3 in English: same diagnosis, chains, closures and
+  acknowledgements as 4.3; Chinese characters in the monitor chat answer about the link)
+```

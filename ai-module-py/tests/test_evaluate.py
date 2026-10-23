@@ -663,3 +663,26 @@ def test_english_phrases_are_checked_with_the_same_rules() -> None:
         "GPS and radar do not disagree, 6.8 m apart.",
     ):
         assert contradicting_rules(sentence, WIND_YES) == [], sentence
+
+
+def test_notable_wind_contradicts_a_check_of_no_notable_wind() -> None:
+    no_wind = {"wind_notable": False}
+    for sentence in (
+        "The GPS and radar agree, and the wind is notable but not affecting the deviation.",
+        "The wind is notable (T+03:12, wind.mean_speed_mps 1.9 m/s).",
+        "There is strong wind pushing the drone.",
+        "The drone deviates due to notable wind.",
+        "El viento es notable y coincide con la deriva.",
+    ):
+        assert contradicting_rules(sentence, no_wind), sentence
+    for sentence in (
+        "The wind is not notable and does not affect the deviation.",
+        "There is no notable wind (T+05:40, met-0034).",
+        "The wind isn't notable.",
+        "No strong wind was reported.",
+        "El viento no es notable.",
+    ):
+        assert contradicting_rules(sentence, no_wind) == [], sentence
+    # solo se aplica si el check dice que no hay viento notable
+    assert contradicting_rules("The wind is notable.", {"wind_notable": True}) == []
+    assert contradicting_rules("The wind is notable.", {"wind_notable": None}) == []
