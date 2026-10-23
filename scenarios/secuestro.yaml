@@ -1,6 +1,6 @@
 name: secuestro
 description: >-
-  Cambio de destino no autorizado en el tramo WP4→BASE, con cambio en el enlace de mando; se recupera el control a los 45 s. Causa esperada: HIJACK.
+  Unauthorised change of destination on the WP4→BASE leg, with a change on the command link; control is recovered after 45 s. Expected cause: HIJACK.
 seed: 42
 t0: "2026-10-20T10:00:00Z"
 max_duration_s: 900

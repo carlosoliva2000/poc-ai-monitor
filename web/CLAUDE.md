@@ -23,13 +23,14 @@ Interfaz de la demo. Se parte de la que generó v0 (`/mnt/c/Proyectos/interfaz-d
   - Distingue claramente quién habla: detector, monitor, informe y operador.
 
 ## Notas
+- **Idioma (Fase 5): todos los textos de la interfaz están en inglés** (etiquetas, botones, leyendas, avisos, pestañas, nombres de causas, severidades y checks, preguntas sugeridas, errores) y las cifras salen con punto decimal (`toFixed`). `<html lang="en">`. Los textos del monitor y de los chats llegan ya en inglés del módulo de IA.
 - Puerto 3000. Comprueba versiones de Node y pnpm en la Fase 0 (v0 declara `pnpm@12.3.4` en `package.json`); si no cuadran, usa las instaladas y anótalo.
 - Mantén el aspecto de v0; no hace falta rediseñar.
 
 ## Estado (Fase 4)
 - Arranque: `pnpm install` y `pnpm dev` (3000, solo `127.0.0.1`, sin telemetría de Next.js); `pnpm build` y `pnpm typecheck` para comprobarla. Las fuentes IBM Plex vienen de `@fontsource/*` (autoalojadas: nada se descarga del navegador).
 - Código: `hooks/use-platform.ts` (WebSocket y API HTTP; los eventos llegan en ráfagas y se vuelcan al estado cada 100 ms), `lib/contracts.ts` (tipos del contrato, a mano), `lib/derive.ts` (de la lista de eventos saca estela, detecciones, cadenas de alertas, respuestas pendientes y chats) y `components/mission/`.
-- El aviso «Esperando al monitor: analizando det-XXXX…» sale cuando el último `SimulationPaused` es `waiting_agent` y el estado es `paused`; el id sale de la detección sin respuesta más antigua.
+- El aviso «Waiting for the monitor: analysing det-XXXX…» sale cuando el último `SimulationPaused` es `waiting_agent` y el estado es `paused`; el id sale de la detección sin respuesta más antigua.
 - Los ids `ops-` los calcula la web («máximo visto + 1»): con dos pestañas abiertas pueden repetirse y la plataforma rechazaría el mensaje. Una sola pestaña.
 - `scripts/capture.mjs` (Playwright, Chromium en `~/.cache/ms-playwright`) conduce la web y saca capturas: `node scripts/capture.mjs demo|radar|gps <carpeta>` con plataforma, módulo de IA y web en marcha.
-- `lib/clean-text.ts` (`stripFieldValues`, con prueba: `pnpm test`): al mostrar la explicación, la recomendación, la razón de cierre y los reconocimientos del monitor, quita los paréntesis que solo contienen `campo=valor` o `campo: valor`. Es un parche de presentación: el evento, `eval.md` y el informe conservan el texto original, y no arregla frases falsas.
+- `lib/clean-text.ts` (`stripFieldValues`, con pruebas: `pnpm test`): al mostrar la explicación, la recomendación, la razón de cierre y los reconocimientos del monitor, quita los paréntesis que solo contienen `campo=valor` o `campo: valor`. Es un parche de presentación: el evento, `eval.md` y el informe conservan el texto original, y no arregla frases falsas.

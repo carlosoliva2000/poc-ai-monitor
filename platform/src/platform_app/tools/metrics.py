@@ -158,7 +158,7 @@ def _max_step(times: list[float], deviation: list[float]) -> float | None:
 
 def get_track_metrics(ctx: ToolContext, args: GetTrackMetricsArgs) -> TrackMetrics:
     if args.since > args.until:
-        raise ToolFailure("`since` no puede ser mayor que `until`")
+        raise ToolFailure("`since` cannot be greater than `until`")
     plan = mission_planned(ctx)
     route: list[Point] = [(w.x, w.y) for w in plan.waypoints]
     until = ctx.cutoff(args.until)

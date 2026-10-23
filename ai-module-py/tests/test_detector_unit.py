@@ -306,9 +306,9 @@ def degraded_run(maker: Maker, bad: dict[str, object], bad_range: range) -> list
     ("bad", "severity", "expected_value", "word"),
     [
         ({"fix": "2d"}, "medium", 0.8, "fix 2d"),
-        ({"sats": 4}, "medium", 0.8, "4 satélites (mínimo 6)"),
-        ({"hdop": 3.5}, "medium", 3.5, "hdop 3,5"),
-        ({"fix": "none", "sats": 0, "hdop": 99.9}, "high", 99.9, "perdido el fix"),
+        ({"sats": 4}, "medium", 0.8, "4 satellites (minimum 6)"),
+        ({"hdop": 3.5}, "medium", 3.5, "hdop 3.5"),
+        ({"fix": "none", "sats": 0, "hdop": 99.9}, "high", 99.9, "lost the fix"),
     ],
 )
 def test_gps_degraded_by_fix_sats_or_hdop(
@@ -433,5 +433,5 @@ def test_gps_degraded_message_names_the_failing_values() -> None:
     maker, det = Maker(), quiet()
     out = feed_all(det, degraded_run(maker, {"sats": 4, "hdop": 4.2}, range(10, 12)))
     message = DetectionRaised.model_validate(out[0].payload).message
-    assert "4 satélites (mínimo 6)" in message and "hdop 4,2 (máximo 3" in message
+    assert "4 satellites (minimum 6)" in message and "hdop 4.2 (maximum 3" in message
     assert "fix" not in message  # el fix es bueno

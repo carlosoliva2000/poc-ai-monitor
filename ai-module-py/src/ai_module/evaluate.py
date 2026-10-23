@@ -116,17 +116,25 @@ def accepted_causes(label: Label) -> set[str]:
 # con reglas simples y explícitas, sin LLM; las frases se listan en `eval.md` para revisarlas.
 
 SENTENCE_SPLIT = re.compile(r"(?<=[.;!?])\s+|\n+")
-OPPOSITE = re.compile(r"\b(?:contrari|opuest)\w*", re.IGNORECASE)
-WIND_OR_DRIFT = re.compile(r"\b(?:deriva|viento)\b", re.IGNORECASE)
+# Los textos de las alertas están en inglés desde la Fase 5; los patrones en castellano se
+# conservan para evaluar las ejecuciones antiguas.
+OPPOSITE = re.compile(r"\b(?:contrari|opuest)\w*|\b(?:against|opposite|contrary)\b", re.IGNORECASE)
+WIND_OR_DRIFT = re.compile(r"\b(?:deriva|viento|drift\w*|wind)\b", re.IGNORECASE)
 AGAINST = re.compile(r"\bcontra\s+(?:de\s+)?(?:la\s+deriva|el\s+viento|él)\b", re.IGNORECASE)
 DISAGREE_FIGURE = re.compile(
     r"\bdiscrepan\s+(?:(?:en|de|unos|hasta|alrededor\s+de)\s+)?\d"
-    r"|\bdiscrepancia\b[^.;]{0,40}\bes\s+de\s+\d",
+    r"|\bdiscrepancia\b[^.;]{0,40}\bes\s+de\s+\d"
+    r"|\bdisagree\s+(?:(?:by|of|about|around|up\s+to)\s+)?\d"
+    r"|\bdiscrepancy\b[^.;]{0,40}\bis\s+(?:(?:about|around|of)\s+)?\d",
     re.IGNORECASE,
 )
 # «contraria a la ruta» no habla de la deriva (los checks no dicen nada de la ruta): no cuenta.
-TO_ROUTE = re.compile(r"\s*(?:a|al)\s+(?:la\s+|el\s+)?(?:ruta|plan)\b", re.IGNORECASE)
-NEGATED_BEFORE = re.compile(r"\bno\b[^,;()]{0,35}$", re.IGNORECASE)
+TO_ROUTE = re.compile(
+    r"\s*(?:a|al)\s+(?:la\s+|el\s+)?(?:ruta|plan)\b"
+    r"|\s*(?:to|of|against)\s+(?:the\s+)?(?:planned\s+|flight\s+)?(?:route|plan|path)\b",
+    re.IGNORECASE,
+)
+NEGATED_BEFORE = re.compile(r"(?:\b(?:no|not|never)\b|n't)[^,;()]{0,35}$", re.IGNORECASE)
 ALERT_TEXT_FIELDS = (
     ("summary", "resumen"),
     ("explanation", "explicación"),
@@ -159,7 +167,11 @@ def contradicting_rules(sentence: str, checks: dict[str, Any] | None) -> list[st
     if (
         checks.get("gps_radar_disagreed") is False
         and DISAGREE_FIGURE.search(sentence)
-        and not re.search(r"\bpoco\b|\bno\s+discrepa", sentence, re.IGNORECASE)
+        and not re.search(
+            r"\bpoco\b|\bno\s+discrepa|\bslightly\b|(?:\b(?:no|not|never)\b|n't)\s+disagree",
+            sentence,
+            re.IGNORECASE,
+        )
     ):
         rules.append(RULE_DISAGREE)
     return rules

@@ -85,9 +85,9 @@ def test_load_generates_the_run_when_missing(tmp_path: Path) -> None:
 
 def test_unknown_scenario_and_commands_without_scenario(tmp_path: Path) -> None:
     player = make_player(tmp_path)
-    with pytest.raises(PlayerError, match="ningún escenario"):
+    with pytest.raises(PlayerError, match="no scenario"):
         player.play()
-    with pytest.raises(PlayerError, match="desconocido"):
+    with pytest.raises(PlayerError, match="unknown"):
         player.load("../etc")
 
 
@@ -209,7 +209,7 @@ def test_load_turns_interactive_off_and_says_so_in_the_new_timeline(runs_dir: Pa
     player.load("nominal")
     assert not player.state().interactive
     assert of_type(player, EventType.INTERACTIVE_MODE_CHANGED)[-1].payload == {"interactive": False}
-    with pytest.raises(PlayerError, match="modo interactivo está apagado"):
+    with pytest.raises(PlayerError, match="interactive mode is off"):
         player.fault(SensorSource.RADAR, FaultMode.MUTE, True)
 
 
@@ -302,7 +302,7 @@ def test_fault_is_rejected_when_interactive_is_off(runs_dir: Path) -> None:
     with pytest.raises(PlayerError) as exc:
         player.fault(SensorSource.RADAR, FaultMode.MUTE, True)
     assert str(exc.value) == INTERACTIVE_OFF_MESSAGE
-    assert str(exc.value) == "el modo interactivo está apagado: actívalo para inyectar fallos"
+    assert str(exc.value) == "interactive mode is off: turn it on to inject faults"
     assert len(player.bus.timeline) == before
     assert player.state().active_faults == []
 
@@ -385,17 +385,17 @@ def test_manual_gps_loss_changes_the_trajectory_and_publishes_fix_none(runs_dir:
 def test_manual_fault_errors(runs_dir: Path) -> None:
     player = make_player(runs_dir)
     player.set_interactive(True)
-    with pytest.raises(PlayerError, match="ningún escenario"):
+    with pytest.raises(PlayerError, match="no scenario"):
         player.fault(SensorSource.RADAR, FaultMode.MUTE, True)
     player.load("fallos")
     player.set_interactive(True)
     player.play()
     player.advance(125)  # el mute del radar del escenario está activo
-    with pytest.raises(PlayerError, match="ya tiene un fallo"):
+    with pytest.raises(PlayerError, match="already has an active fault"):
         player.fault(SensorSource.RADAR, FaultMode.MUTE, True)
-    with pytest.raises(PlayerError, match="escenario"):
+    with pytest.raises(PlayerError, match="scenario"):
         player.fault(SensorSource.RADAR, FaultMode.MUTE, False)
-    with pytest.raises(PlayerError, match="solo existe para el GPS"):
+    with pytest.raises(PlayerError, match="only exists for the GPS"):
         player.fault(SensorSource.RADAR, FaultMode.LOSS, True)
 
 

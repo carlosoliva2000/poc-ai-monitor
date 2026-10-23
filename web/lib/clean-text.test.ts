@@ -41,3 +41,10 @@ test('texto sin paréntesis, vacío y paréntesis al principio', () => {
   assert.equal(stripFieldValues('sin nada raro'), 'sin nada raro')
   assert.equal(stripFieldValues('(with_drift=true) a favor'), 'a favor')
 })
+
+test('funciona con textos en inglés y cifras con punto decimal', () => {
+  assert.equal(
+    stripFieldValues('The wind is notable (notable=true) and pushes with the drift (wind.mean_speed_mps: 3.9 m/s).'),
+    'The wind is notable and pushes with the drift.',
+  )
+})

@@ -10,12 +10,12 @@ import { cn } from '@/lib/utils'
 type Mark = { key: string; t: number; className: string; title: string }
 
 const MARKS: Record<string, { className: string; label: string }> = {
-  DetectionRaised: { className: 'bg-accent', label: 'detección' },
-  AnomalyDetected: { className: 'bg-destructive', label: 'alerta' },
-  AlertClosed: { className: 'bg-primary', label: 'cierre' },
-  FaultInjected: { className: 'bg-foreground', label: 'fallo' },
-  FaultCleared: { className: 'bg-muted-foreground', label: 'fin del fallo' },
-  InteractiveModeChanged: { className: 'bg-muted-foreground', label: 'modo interactivo' },
+  DetectionRaised: { className: 'bg-accent', label: 'detection' },
+  AnomalyDetected: { className: 'bg-destructive', label: 'alert' },
+  AlertClosed: { className: 'bg-primary', label: 'closure' },
+  FaultInjected: { className: 'bg-foreground', label: 'fault' },
+  FaultCleared: { className: 'bg-muted-foreground', label: 'end of fault' },
+  InteractiveModeChanged: { className: 'bg-muted-foreground', label: 'interactive mode' },
 }
 
 export function progressMarks(events: Envelope[]): Mark[] {
@@ -54,7 +54,7 @@ export function SimControls({ state, data, marks, duration, scenarios, waiting, 
         <div
           className="relative h-2 flex-1 rounded-full bg-muted"
           role="progressbar"
-          aria-label="Progreso de la simulación"
+          aria-label="Simulation progress"
           aria-valuemin={0}
           aria-valuemax={Math.round(duration)}
           aria-valuenow={Math.round(simTime)}
@@ -80,22 +80,22 @@ export function SimControls({ state, data, marks, duration, scenarios, waiting, 
           data-testid="waiting-agent"
         >
           <Hourglass className="size-4 shrink-0 animate-pulse text-accent" aria-hidden="true" />
-          <span>{waiting ?? 'Esperando al monitor…'}</span>
-          <span className="ml-auto text-xs text-muted-foreground">pausa automática, no es una pausa del usuario</span>
+          <span>{waiting ?? 'Waiting for the monitor…'}</span>
+          <span className="ml-auto text-xs text-muted-foreground">automatic pause, not a user pause</span>
         </div>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Escenario
+            Scenario
             <select
               value={state?.scenario ?? ''}
               onChange={(e) => e.target.value && onControl({ action: 'load', value: e.target.value })}
               className="h-9 rounded-md border border-border bg-background px-2 font-sans text-sm normal-case tracking-normal text-foreground"
-              aria-label="Escenario"
+              aria-label="Scenario"
             >
-              {!state?.scenario && <option value="">Elige un escenario…</option>}
+              {!state?.scenario && <option value="">Choose a scenario…</option>}
               {scenarios.map((s) => (
                 <option key={s.name} value={s.name} title={s.description}>
                   {s.name}
@@ -106,37 +106,37 @@ export function SimControls({ state, data, marks, duration, scenarios, waiting, 
           {running ? (
             <Button onClick={() => onControl({ action: 'pause' })} size="lg" className="min-w-28">
               <Pause aria-hidden="true" />
-              Pausar
+              Pause
             </Button>
           ) : (
             <Button onClick={() => onControl({ action: 'play' })} size="lg" className="min-w-28" disabled={!loaded || finished}>
               <Play aria-hidden="true" />
-              {status === 'idle' ? 'Iniciar' : finished ? 'Terminada' : 'Reanudar'}
+              {status === 'idle' ? 'Start' : finished ? 'Finished' : 'Resume'}
             </Button>
           )}
           <Button variant="outline" size="lg" onClick={() => onControl({ action: 'step' })} disabled={!loaded || finished}>
             <StepForward aria-hidden="true" />
-            Paso
+            Step
           </Button>
           <Button variant="outline" size="lg" onClick={() => onControl({ action: 'reset' })} disabled={!loaded}>
             <RotateCcw aria-hidden="true" />
-            Reiniciar
+            Restart
           </Button>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <Toggle
-            label="Esperar al agente"
+            label="Wait for the agent"
             checked={state?.wait_agent ?? false}
             onChange={(v) => onControl({ action: 'wait_agent', value: v })}
           />
           <Toggle
-            label="Modo interactivo"
+            label="Interactive mode"
             checked={state?.interactive ?? false}
             onChange={(v) => onControl({ action: 'interactive', value: v })}
           />
-          <div className="flex items-center gap-2" role="group" aria-label="Velocidad de simulación">
-            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Velocidad</span>
+          <div className="flex items-center gap-2" role="group" aria-label="Simulation speed">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Speed</span>
             <div className="flex rounded-md border border-border bg-background p-0.5">
               {SPEEDS.map((option) => (
                 <button

@@ -95,8 +95,8 @@ def test_publish_alert_rejects_missing_future_or_unknown_evidence(state: Monitor
         state,
         index,
     )
-    assert any("gps-000009" in e and "posterior" in e for e in verdict.errors)
-    assert any("gps-424242" in e and "no existe" in e for e in verdict.errors)
+    assert any("gps-000009" in e and "later than" in e for e in verdict.errors)
+    assert any("gps-424242" in e and "does not exist" in e for e in verdict.errors)
     assert not any("gps-000001" in e for e in verdict.errors)
 
 
@@ -108,7 +108,7 @@ def test_publish_alert_rejects_unknown_detection(state: MonitorState) -> None:
 def test_publish_alert_rejects_a_detection_already_in_an_open_alert(state: MonitorState) -> None:
     state.apply(alert("ai-1", ["det-1"]))
     verdict = check(alert_args(["det-1"]), state)
-    assert any("ya está en la alerta abierta ai-1" in e for e in verdict.errors)
+    assert any("is already in the open alert ai-1" in e for e in verdict.errors)
     # con supersedes a esa alerta sí vale
     assert check(alert_args(["det-1"], supersedes="ai-1"), state).ok
 
@@ -118,7 +118,7 @@ def test_supersedes_must_point_to_an_open_alert(state: MonitorState) -> None:
     state.apply(alert("ai-1", ["det-1"]))
     state.apply(closed("ai-1"))
     verdict = check(alert_args(["det-1"], supersedes="ai-1"), state)
-    assert any("no es una alerta abierta" in e for e in verdict.errors)
+    assert any("is not an open alert" in e for e in verdict.errors)
     # una alerta cerrada ya no bloquea una alerta nueva para la misma detección
     assert check(alert_args(["det-1"]), state).ok
 
@@ -131,7 +131,7 @@ def test_supersedes_must_change_the_cause_or_the_severity(state: MonitorState) -
     )
     assert not same.ok
     assert any(
-        e.startswith("No cambia nada respecto a ai-1") and "usa acknowledge_detection" in e
+        e.startswith("Nothing changes with respect to ai-1") and "use acknowledge_detection" in e
         for e in same.errors
     )
     # cambia la severidad, o cambia la causa: vale
@@ -160,17 +160,17 @@ def test_acknowledge_rules(state: MonitorState) -> None:
         {"detection_ids": ["det-2"], "alert_id": "ai-9", "reason": "r"},
         state=state, unanswered={"det-2"}, pending={"det-2"},
     )  # fmt: skip
-    assert any("no es una alerta abierta" in e for e in bad_alert.errors)
+    assert any("is not an open alert" in e for e in bad_alert.errors)
     foreign = check_acknowledge(
         {"detection_ids": ["det-5"], "reason": "r"},
         state=state, unanswered={"det-2"}, pending={"det-2"},
     )  # fmt: skip
-    assert any("no es de las que debes atender" in e for e in foreign.errors)
+    assert any("is not one you must handle" in e for e in foreign.errors)
     answered = check_acknowledge(
         {"detection_ids": ["det-2"], "reason": "r"},
         state=state, unanswered=set(), pending={"det-2"},
     )  # fmt: skip
-    assert any("ya tiene respuesta" in e for e in answered.errors)
+    assert any("already has a response" in e for e in answered.errors)
     missing = check_acknowledge(
         {"detection_ids": [], "reason": "r"}, state=state, unanswered=set(), pending=set()
     )
@@ -180,16 +180,16 @@ def test_acknowledge_rules(state: MonitorState) -> None:
 def test_close_alert_rules(state: MonitorState) -> None:
     state.apply(alert("ai-1", ["det-1"]))
     still_open = check_close_alert({"alert_id": "ai-1", "reason": "ok"}, state=state)
-    assert any("detecciones abiertas (det-1)" in e for e in still_open.errors)
+    assert any("open detections (det-1)" in e for e in still_open.errors)
     state.apply(detection_event("cleared", "det-1", 30.0))
     assert check_close_alert({"alert_id": "ai-1", "reason": "ok"}, state=state).ok
-    assert any("no existe" in e for e in check_close_alert(
+    assert any("does not exist" in e for e in check_close_alert(
         {"alert_id": "ai-7", "reason": "x"}, state=state).errors)  # fmt: skip
     state.apply(alert("ai-2", ["det-1"], supersedes="ai-1"))
     superseded = check_close_alert({"alert_id": "ai-1", "reason": "x"}, state=state)
-    assert any("sustituida por ai-2" in e for e in superseded.errors)
+    assert any("superseded by ai-2" in e for e in superseded.errors)
     state.apply(closed("ai-2"))
-    assert any("ya está cerrada" in e for e in check_close_alert(
+    assert any("is already closed" in e for e in check_close_alert(
         {"alert_id": "ai-2", "reason": "x"}, state=state).errors)  # fmt: skip
 
 

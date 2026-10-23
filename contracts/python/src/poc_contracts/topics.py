@@ -102,7 +102,7 @@ def routing_for(event_type: EventType, conversation_id: ConversationId | None = 
     if routing is not None:
         return routing
     if conversation_id is None:
-        raise ValueError(f"{event_type} necesita conversation_id para su topic")
+        raise ValueError(f"{event_type} needs conversation_id for its topic")
     return conversation_id.value
 
 
@@ -112,7 +112,7 @@ def source_for(event_type: EventType, conversation_id: ConversationId | None = N
     if source is not None:
         return source
     if conversation_id is None:
-        raise ValueError(f"{event_type} necesita conversation_id para su source")
+        raise ValueError(f"{event_type} needs conversation_id for its source")
     return CHAT_SOURCES[conversation_id]
 
 
@@ -149,11 +149,11 @@ def validate_pattern(pattern: str) -> None:
     segments = pattern.split(".")
     for i, seg in enumerate(segments):
         if not seg:
-            raise ValueError(f"patrón con un segmento vacío: {pattern!r}")
+            raise ValueError(f"pattern with an empty segment: {pattern!r}")
         if seg != "*" and seg != ">" and ("*" in seg or ">" in seg):
-            raise ValueError(f"los comodines van por segmento entero: {pattern!r}")
+            raise ValueError(f"wildcards apply to whole segments: {pattern!r}")
         if seg == ">" and i != len(segments) - 1:
-            raise ValueError(f"'>' solo puede ser el último segmento: {pattern!r}")
+            raise ValueError(f"'>' can only be the last segment: {pattern!r}")
 
 
 def topic_matches(pattern: str, topic: str) -> bool:

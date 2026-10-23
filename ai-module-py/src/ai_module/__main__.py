@@ -58,15 +58,15 @@ async def run(
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Módulo de IA de poc-ai-monitor")
-    parser.add_argument("--platform", default=DEFAULT_PLATFORM, help="URL de la plataforma")
+    parser = argparse.ArgumentParser(description="AI module of poc-ai-monitor")
+    parser.add_argument("--platform", default=DEFAULT_PLATFORM, help="platform URL")
     parser.add_argument(
-        "--detector-only", action="store_true", help="solo el detector de reglas, sin agentes"
+        "--detector-only", action="store_true", help="rule-based detector only, no agents"
     )
-    parser.add_argument("--llm-url", help="URL del servidor LLM (por defecto, la de agents.yaml)")
+    parser.add_argument("--llm-url", help="LLM server URL (default: the one in agents.yaml)")
     parser.add_argument("--assets", type=Path, default=DEFAULT_ASSETS, help="carpeta agent-assets/")
     parser.add_argument(
-        "--runs", type=Path, default=DEFAULT_RUNS, help="carpeta runs/ donde se guardan trazas"
+        "--runs", type=Path, default=DEFAULT_RUNS, help="runs/ folder where traces are saved"
     )
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)

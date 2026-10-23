@@ -1,6 +1,6 @@
 name: fallos
 description: >-
-  Misión nominal con fallos programados: el radar calla de T+02:00 a T+03:00; el GPS pierde la señal de T+04:05 a T+04:50 (el dron navega a estima en un tramo con viento de base) y calla de T+05:00 a T+05:12. Reglas esperadas: SOURCE_SILENT (radar y GPS) y GPS_DEGRADED, SOURCE_DISCREPANCY y ROUTE_DEVIATION (pérdida); causas: SENSOR_FAULT y GPS_JAMMING.
+  Nominal mission with scheduled faults: the radar goes silent from T+02:00 to T+03:00; the GPS loses the signal from T+04:05 to T+04:50 (the drone navigates by dead reckoning on a leg with base wind) and goes silent from T+05:00 to T+05:12. Expected rules: SOURCE_SILENT (radar and GPS) and GPS_DEGRADED, SOURCE_DISCREPANCY and ROUTE_DEVIATION (loss); causes: SENSOR_FAULT and GPS_JAMMING.
 seed: 42
 t0: "2026-10-20T10:00:00Z"
 max_duration_s: 900

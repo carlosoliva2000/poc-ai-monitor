@@ -106,7 +106,7 @@ export const DroneMap = memo(function DroneMap({ plan, data, truth, layers, faul
         viewBox={view}
         className="h-full w-full"
         role="img"
-        aria-label={drone ? `Mapa x,y (y hacia el norte). Dron en x ${drone.x.toFixed(0)}, y ${drone.y.toFixed(0)}.` : 'Mapa x,y con la ruta planificada.'}
+        aria-label={drone ? `x,y map (y towards the north). Drone at x ${drone.x.toFixed(0)}, y ${drone.y.toFixed(0)}.` : 'x,y map with the planned route.'}
       >
         <rect x={b.xmin} y={-b.ymax} width={spanX} height={spanY} className="fill-card" />
         <g className="stroke-grid">
@@ -230,11 +230,11 @@ export const DroneMap = memo(function DroneMap({ plan, data, truth, layers, faul
               <>
                 <span className="text-foreground">{wind.speed_mps.toFixed(1)} m/s</span>
                 <span className="text-muted-foreground">
-                  racha {wind.gust_mps.toFixed(1)} · desde {wind.from_deg.toFixed(0)}°
+                  gust {wind.gust_mps.toFixed(1)} · from {wind.from_deg.toFixed(0)}°
                 </span>
               </>
             ) : (
-              <span className="text-muted-foreground">viento: sin datos</span>
+              <span className="text-muted-foreground">wind: no data</span>
             )}
           </div>
         </div>

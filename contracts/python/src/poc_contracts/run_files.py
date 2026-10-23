@@ -78,9 +78,9 @@ class Label(RunFile):
     def _check(self) -> "Label":
         is_fault = self.type in (LabelType.SOURCE_SILENT, LabelType.GPS_LOSS)
         if is_fault != (self.source is not None):
-            raise ValueError("`source` es obligatoria en los fallos y null en el resto")
+            raise ValueError("`source` is mandatory in faults and null in the rest")
         if self.eval_window[0] != self.start_s or self.eval_window[1] < self.end_s:
-            raise ValueError("eval_window va de start_s a end_s o más allá")
+            raise ValueError("eval_window goes from start_s to end_s or beyond")
         return self
 
 

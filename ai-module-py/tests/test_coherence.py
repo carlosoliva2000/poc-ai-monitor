@@ -147,15 +147,15 @@ def test_checks_must_match_the_tool_results(state: MonitorState) -> None:
     lie = alert_args(["det-1"], checks=checks(wind_notable=True))
     verdict = check(lie, state, facts)
     assert any(
-        "checks.wind_notable = true no coincide con get_track_metrics (false)" in e
+        "checks.wind_notable = true does not match get_track_metrics (false)" in e
         for e in verdict.errors
     )
     # sin haber llamado a get_track_metrics, declarar un hecho de esa tool se rechaza
     verdict = check(lie, state, InvocationFacts())
-    assert any("no has llamado a get_track_metrics" in e for e in verdict.errors)
+    assert any("you have not called get_track_metrics" in e for e in verdict.errors)
     # estado: declarar una alerta del GPS que no existe
     verdict = check(alert_args(["det-1"], checks=checks(gps_alert_recent=True)), state, facts)
-    assert any("gps_alert_recent" in e and "estado" in e for e in verdict.errors)
+    assert any("gps_alert_recent" in e and "state" in e for e in verdict.errors)
     # enlace: declarar que se miró sin haberlo mirado, o no declararlo habiéndolo mirado
     verdict = check(alert_args(["det-1"], checks=checks(link_checked=True)), state, facts)
     assert any("link_checked" in e for e in verdict.errors)
@@ -169,7 +169,7 @@ def test_checks_must_match_the_tool_results(state: MonitorState) -> None:
 def test_missing_checks_are_rejected_when_required(state: MonitorState) -> None:
     args = alert_args(["det-1"])
     del args["checks"]
-    assert any("falta `checks`" in e for e in check(args, state, InvocationFacts()).errors)
+    assert any("`checks` is missing" in e for e in check(args, state, InvocationFacts()).errors)
     assert check(args, state, InvocationFacts(), require=False).ok
 
 
@@ -183,7 +183,7 @@ def test_wind_needs_a_notable_wind_that_agrees_with_the_drift(state: MonitorStat
     assert check(wind, state, InvocationFacts(metrics=metrics(notable=True, with_drift=True))).ok
     weak = check(alert_args(["det-1"], cause="WIND"), state, InvocationFacts(metrics=metrics()))
     assert weak.errors == [
-        "WIND exige viento notable: media 1,9 y racha 4,1 no lo son; mira el enlace (paso 5)"
+        "WIND requires notable wind: mean 1.9 and gust 4.1 are not; look at the link (step 5)"
     ]
     against = check(
         alert_args(["det-1"], cause="WIND", checks=checks(wind_notable=True)),
@@ -191,17 +191,17 @@ def test_wind_needs_a_notable_wind_that_agrees_with_the_drift(state: MonitorStat
         InvocationFacts(metrics=metrics(notable=True, with_drift=False, drift=101.6)),
     )
     assert against.errors == [
-        "WIND exige que la deriva vaya a favor del viento: difieren 101,6° (máximo 45°); "
-        "mira el enlace (paso 5)"
+        "WIND requires the drift to go with the wind: they differ by 101.6° (maximum 45°); "
+        "look at the link (step 5)"
     ]
     none = check(alert_args(["det-1"], cause="WIND"), state, InvocationFacts())
-    assert any("WIND exige llamar antes a get_track_metrics" in e for e in none.errors)
+    assert any("WIND requires calling get_track_metrics first" in e for e in none.errors)
 
 
 def test_hijack_needs_the_link_checked(state: MonitorState) -> None:
     hijack = alert_args(["det-1"], cause="HIJACK", severity="high")
     verdict = check(hijack, state, InvocationFacts(metrics=metrics()))
-    assert any("HIJACK exige haber mirado el enlace" in e for e in verdict.errors)
+    assert any("HIJACK requires having looked at the link" in e for e in verdict.errors)
     looked = InvocationFacts(link_events=link_events("secuestro", 310, 338))
     ok = alert_args(
         ["det-1"],
@@ -228,8 +228,8 @@ def test_gps_recovery_is_exclusive_to_the_cause_of_the_recent_gps_alert(
     )
     assert check(jump, state, InvocationFacts(metrics=metrics(disagreed=False, step=68.0))).ok
     expected = (
-        "Es la recuperación del GPS_SPOOFING de ai-1: publica cause GPS_SPOOFING, "
-        "severity medium y supersedes ai-1"
+        "This is the recovery from the GPS_SPOOFING of ai-1: publish cause GPS_SPOOFING, "
+        "severity medium and supersedes ai-1"
     )
     for cause in ("GPS_JAMMING", "SENSOR_FAULT", "HIJACK", "WIND", "UNKNOWN"):
         other = alert_args(["det-2"], cause=cause, supersedes="ai-1", checks=both)
@@ -240,7 +240,7 @@ def test_gps_recovery_is_exclusive_to_the_cause_of_the_recent_gps_alert(
     # ninguna causa del GPS vale
     calm = InvocationFacts(metrics=metrics(step=14.8))
     gps_cause = alert_args(["det-2"], cause="GPS_JAMMING", checks=checks(gps_alert_recent=True))
-    assert any("gps_max_step_m=14,8" in e for e in check(gps_cause, state, calm).errors)
+    assert any("gps_max_step_m=14.8" in e for e in check(gps_cause, state, calm).errors)
 
 
 def test_exclusive_recovery_when_the_gps_alert_is_already_closed(state: MonitorState) -> None:
@@ -255,7 +255,7 @@ def test_exclusive_recovery_when_the_gps_alert_is_already_closed(state: MonitorS
         ["det-2"], cause="GPS_JAMMING", supersedes="ai-1", checks=checks(gps_alert_recent=True)
     )
     # una alerta cerrada no se puede sustituir (la regla de supersedes ya lo rechaza)
-    assert any("no es una alerta abierta" in e for e in check(bad, state, facts).errors)
+    assert any("is not an open alert" in e for e in check(bad, state, facts).errors)
 
 
 def test_gps_recovery_must_be_published_with_severity_medium(state: MonitorState) -> None:
@@ -265,8 +265,8 @@ def test_gps_recovery_must_be_published_with_severity_medium(state: MonitorState
     facts = InvocationFacts(metrics=metrics(disagreed=True))
     both = checks(gps_alert_recent=True, gps_radar_disagreed=True)
     expected = (
-        "Es la recuperación del GPS_SPOOFING de ai-1: publica cause GPS_SPOOFING, "
-        "severity medium y supersedes ai-1"
+        "This is the recovery from the GPS_SPOOFING of ai-1: publish cause GPS_SPOOFING, "
+        "severity medium and supersedes ai-1"
     )
     for severity in ("high", "low"):
         # con `high` (la de la alerta) la regla de la recuperación pasa por delante de «No cambia
@@ -291,8 +291,8 @@ def test_gps_recovery_with_a_closed_alert_also_needs_severity_medium(state: Moni
         ["det-2"], cause="GPS_JAMMING", severity="high", checks=checks(gps_alert_recent=True)
     )
     assert check(high, state, facts).errors == [
-        "Es la recuperación del GPS_JAMMING de ai-1: publica cause GPS_JAMMING, severity medium "
-        "y sin supersedes (ai-1 ya está cerrada)"
+        "This is the recovery from the GPS_JAMMING of ai-1: publish cause GPS_JAMMING, "
+        "severity medium and no supersedes (ai-1 is already closed)"
     ]
 
 
@@ -309,13 +309,13 @@ def test_recovery_of_a_gps_alert_that_is_already_medium_is_an_acknowledgement(
         ["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", severity="medium", checks=both
     )
     assert check(same, state, facts).errors == [
-        "Es la recuperación del GPS_SPOOFING de ai-1, que ya es medium: no cambia nada, "
-        "usa acknowledge_detection con alert_id ai-1"
+        "This is the recovery from the GPS_SPOOFING of ai-1, which is already medium: nothing "
+        "changes, use acknowledge_detection with alert_id ai-1"
     ]
     other = alert_args(["det-2"], cause="SENSOR_FAULT", supersedes="ai-1", checks=both)
     assert check(other, state, facts).errors == [
-        "Es la recuperación del GPS_SPOOFING de ai-1, que ya es medium: no cambia nada, "
-        "usa acknowledge_detection con alert_id ai-1"
+        "This is the recovery from the GPS_SPOOFING of ai-1, which is already medium: nothing "
+        "changes, use acknowledge_detection with alert_id ai-1"
     ]
 
 
@@ -324,7 +324,7 @@ def test_gps_recovery_without_a_recent_gps_alert_is_rejected(state: MonitorState
         ["det-1"], cause="GPS_JAMMING", severity="high", checks=checks(gps_radar_disagreed=True)
     )
     verdict = check(args, state, InvocationFacts(metrics=metrics(disagreed=True)))
-    assert any("no la hay" in e for e in verdict.errors)
+    assert any("there is none" in e for e in verdict.errors)
 
 
 def test_gps_causes_on_other_rules_are_not_recoveries(state: MonitorState) -> None:
@@ -434,7 +434,7 @@ def test_cleared_prompt_fixes_the_window_from_the_start_of_the_detection(tmp_pat
     rt.clock.observe(156.0)
     run(monitor.handle_batch([detection_event("cleared", "det-0001", 156.0)]))
     prompt = llm.requests[0]["messages"][1]["content"]
-    assert "`since` = 106 y `until` = 156" in prompt and "una sola vez" in prompt
+    assert "`since` = 106 and `until` = 156" in prompt and "**once**" in prompt
 
 
 def test_coherence_guardrail_rejects_and_the_switch_turns_it_off(tmp_path: Path) -> None:
@@ -511,7 +511,7 @@ def test_with_checks_off_the_coherence_rules_still_use_the_tool_results(tmp_path
     monitor.config = replace(monitor.config, require_checks=False)
     run(monitor.handle_batch([detection_event("raised", "det-0001", 20.0)]))
     assert (
-        "WIND exige viento notable: media 1,9 y racha 4,1"
+        "WIND requires notable wind: mean 1.9 and gust 4.1"
         in (rt.trace.records[0]["guardrail_rejections"][0]["errors"][0])
     )
 
@@ -607,6 +607,6 @@ def test_a_wrong_cause_on_a_recovery_with_a_closed_gps_alert_says_there_is_no_su
     facts = InvocationFacts(metrics=metrics(step=90.0))
     wrong = alert_args(["det-2"], cause="HIJACK", checks=checks(gps_alert_recent=True))
     assert (
-        "Es la recuperación del GPS_JAMMING de ai-1: publica cause GPS_JAMMING, severity medium "
-        "y sin supersedes (ai-1 ya está cerrada)"
+        "This is the recovery from the GPS_JAMMING of ai-1: publish cause GPS_JAMMING, "
+        "severity medium and no supersedes (ai-1 is already closed)"
     ) in check(wrong, state, facts).errors

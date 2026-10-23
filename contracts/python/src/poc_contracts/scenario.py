@@ -95,7 +95,7 @@ class WindEpisode(WindBase):
     @model_validator(mode="after")
     def _check_window(self) -> "WindEpisode":
         if self.end_s <= self.start_s:
-            raise ValueError("end_s debe ser mayor que start_s")
+            raise ValueError("end_s must be greater than start_s")
         return self
 
 
@@ -115,7 +115,7 @@ class SpoofingConfig(Config):
     @model_validator(mode="after")
     def _check_window(self) -> "SpoofingConfig":
         if self.end_s <= self.start_s:
-            raise ValueError("end_s debe ser mayor que start_s")
+            raise ValueError("end_s must be greater than start_s")
         return self
 
 
@@ -141,7 +141,7 @@ class HijackConfig(Config):
     @model_validator(mode="after")
     def _check_window(self) -> "HijackConfig":
         if self.end_s is not None and self.end_s <= self.start_s:
-            raise ValueError("end_s debe ser mayor que start_s")
+            raise ValueError("end_s must be greater than start_s")
         return self
 
 
@@ -156,9 +156,9 @@ class FaultConfig(Config):
     @model_validator(mode="after")
     def _check_window(self) -> "FaultConfig":
         if self.end_s <= self.start_s:
-            raise ValueError("end_s debe ser mayor que start_s")
+            raise ValueError("end_s must be greater than start_s")
         if self.mode == FaultMode.LOSS and self.source != SensorSource.GPS:
-            raise ValueError("`loss` solo existe para el GPS")
+            raise ValueError("`loss` only exists for the GPS")
         return self
 
 

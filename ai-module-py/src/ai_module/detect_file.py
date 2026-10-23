@@ -32,9 +32,9 @@ def detect(path: Path) -> list[EventDraft]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Detector de reglas sobre ficheros de eventos")
+    parser = argparse.ArgumentParser(description="Rule-based detector over event files")
     parser.add_argument("files", nargs="+", type=Path, help="uno o varios events.jsonl")
-    parser.add_argument("--json", action="store_true", help="imprime los eventos completos")
+    parser.add_argument("--json", action="store_true", help="print the full events")
     args = parser.parse_args(argv)
     for path in args.files:
         if len(args.files) > 1 and not args.json:

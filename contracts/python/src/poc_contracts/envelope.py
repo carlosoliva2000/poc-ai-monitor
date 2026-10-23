@@ -51,7 +51,7 @@ class EventDraft(BaseModel):
         try:
             parsed = model.model_validate(self.payload)
         except ValidationError as exc:
-            raise ValueError(f"payload no válido para {self.type.value}: {exc}") from exc
+            raise ValueError(f"invalid payload for {self.type.value}: {exc}") from exc
 
         raw_conversation = getattr(parsed, "conversation_id", None)
         conversation = ConversationId(raw_conversation) if raw_conversation else None
@@ -59,20 +59,21 @@ class EventDraft(BaseModel):
 
         expected_topic = topic_for(self.type, conversation)
         if self.topic != expected_topic:
-            raise ValueError(f"topic esperado {expected_topic!r}, recibido {self.topic!r}")
+            raise ValueError(f"expected topic {expected_topic!r}, received {self.topic!r}")
         expected_source = source_for(self.type, conversation)
         if self.source != expected_source:
-            raise ValueError(f"source esperado {expected_source!r}, recibido {self.source!r}")
+            raise ValueError(f"expected source {expected_source!r}, received {self.source!r}")
         routing = expected_topic.split(".")[4]
         expected_asset = asset_for(spec.domain, routing)
         if self.asset != expected_asset:
-            raise ValueError(f"asset esperado {expected_asset!r}, recibido {self.asset!r}")
+            raise ValueError(f"expected asset {expected_asset!r}, received {self.asset!r}")
         if not matches_id_prefix(self.event_id, self.type):
             raise ValueError(
-                f"event_id {self.event_id!r} sin el prefijo {spec.id_prefix!r} de {self.type.value}"
+                f"event_id {self.event_id!r} lacks the prefix {spec.id_prefix!r} "
+                f"of {self.type.value}"
             )
         if self.ephemeral != spec.ephemeral:
-            raise ValueError(f"ephemeral debe ser {spec.ephemeral} en {self.type.value}")
+            raise ValueError(f"ephemeral must be {spec.ephemeral} in {self.type.value}")
         return self
 
     def typed_payload(self) -> Payload:

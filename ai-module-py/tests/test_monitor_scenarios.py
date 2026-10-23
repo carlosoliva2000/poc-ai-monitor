@@ -39,15 +39,13 @@ RESPONSES = (EventType.ANOMALY_DETECTED, EventType.ALERT_CLOSED, EventType.DETEC
 def publisher(messages: list, tools: list, sampling: dict) -> Any:
     """LLM falso que siempre responde bien según lo que dice el estado del prompt."""
     user = messages[1]["content"]
-    detections = re.findall(r"detección (det-\d+)", user)
+    detections = re.findall(r"detection (det-\d+)", user)
     pending = list(
-        dict.fromkeys(
-            re.findall(r"(?:Nueva detección|ha empeorado:?|La detección) (det-\d+)", user)
-        )
+        dict.fromkeys(re.findall(r"(?:New detection|has got worse:?|Detection) (det-\d+)", user))
     )
     pending = list(dict.fromkeys(detections)) or pending
-    open_alert = re.search(r"Alertas abiertas: (ai-\d+)", user)
-    last_open = re.search(r"de la alerta (ai-\d+)", user)
+    open_alert = re.search(r"Open alerts: (ai-\d+)", user)
+    last_open = re.search(r"of alert (ai-\d+)", user)
     if last_open:
         return tool_response(call("close_alert", alert_id=last_open.group(1), reason="normalizada"))
     if open_alert:

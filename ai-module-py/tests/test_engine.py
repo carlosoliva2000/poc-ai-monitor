@@ -80,7 +80,7 @@ def test_invalid_json_and_unknown_tool_go_back_to_the_model_and_count() -> None:
     result, messages, trace = go(make_engine(llm))
     assert trace.invalid_json == 1
     tool_messages = [m["content"] for m in messages if m["role"] == "tool"]
-    assert "no son JSON válido" in tool_messages[0]
+    assert "are not valid JSON" in tool_messages[0]
     assert "tool desconocida o no disponible" in tool_messages[1]
     assert len(trace.calls) == 3  # cada fallo consumió una iteración
     assert trace.calls[0].tool_calls[0]["error"]
@@ -102,7 +102,7 @@ def test_results_are_trimmed_with_a_notice() -> None:
     llm = FakeLlm(Script(tool_response(call("get_events", source="gps")), text_response("ok")))
     _, messages, trace = go(make_engine(llm, big))
     content = messages[2]["content"]
-    assert len(content) < MAX_RESULT_CHARS + 120 and "recortado" in content
+    assert len(content) < MAX_RESULT_CHARS + 120 and "truncated" in content
     assert trace.calls[0].tool_calls[0]["truncated"] is True
     short, truncated = limit_result("corto")
     assert short == "corto" and not truncated

@@ -25,15 +25,15 @@ def policy(body: dict[str, Any]) -> dict[str, Any]:
     """Decisión del LLM falso según el prompt: monitor, informe o chat."""
     system = body["messages"][0]["content"]
     messages = body["messages"]
-    if "agente de informe" in system:
+    if "report agent" in system:
         text = "## Resumen\n\nInforme de prueba.\n\n## Valoración del monitor\n\nSegún los eventos."
         return {"content": text}
-    if "ahora te habla el **operador**" in system:
+    if "now the human **operator** is talking to you" in system:
         return {"content": "Respuesta de prueba del chat con datos."}
     user = messages[1]["content"]
-    pending = list(dict.fromkeys(re.findall(r"(?:detección|Nueva detección) (det-\d+)", user)))
-    last_open = re.search(r"de la alerta (ai-\d+)", user)
-    open_alert = re.search(r"Alertas abiertas: (ai-\d+)", user)
+    pending = list(dict.fromkeys(re.findall(r"(?:detection|New detection) (det-\d+)", user)))
+    last_open = re.search(r"of alert (ai-\d+)", user)
+    open_alert = re.search(r"Open alerts: (ai-\d+)", user)
     if last_open:
         return {"tool_calls": [("close_alert", {"alert_id": last_open.group(1), "reason": "ok"})]}
     if open_alert:
@@ -67,15 +67,15 @@ def test_demo_end_to_end_with_a_fake_llm() -> None:
         assert "ACK" in out or "ALERTA" in out
         assert "INFORME" in out and "Respuesta de prueba del chat" in out
         informe = (folder / "informe.md").read_text()
-        assert informe.startswith("# Informe de la misión") and "Informe de prueba." in informe
+        assert informe.startswith("# Mission report") and "Informe de prueba." in informe
         trace = [json.loads(line) for line in (folder / "llm_trace.jsonl").read_text().splitlines()]
         agents = {t["agent"] for t in trace}
         assert {"monitor", "report", "chat-monitor", "chat-report"} <= agents
         # cada petición al servidor llevó el muestreo explícito; el monitor, `required`
         for r in server.requests:
             system = r["messages"][0]["content"]
-            chat = "ahora te habla el **operador**" in system
-            monitor = not chat and "informe" not in system[:80]
+            chat = "now the human **operator** is talking to you" in system
+            monitor = not chat and "report agent" not in system[:80]
             facts = monitor or chat  # monitor y chats: sobre hechos, temperatura 0 y sin top_k
             assert r["repetition_penalty"] == 1.05
             assert r["top_k"] == (-1 if facts else 20)

@@ -88,18 +88,16 @@ def test_report_is_published_saved_and_counts_chains(tmp_path: Path) -> None:
     report = ReportAgent(rt, Monitor(rt))
     markdown = run(report.generate("viento", "20261021-000000", "plr-0009"))
     # los hechos son del módulo; la narrativa, del LLM, en su sitio
-    assert markdown.startswith(
-        "# Informe de la misión T\n\n**Escenario:** viento · **Duración:** 01:40"
-    )
-    assert "## Resumen\n\nEl dron voló con viento." in markdown
-    assert "### A1 · Viento (alta, confianza 0.8)" in markdown
-    assert "primera alerta a T+00:06 (retraso de diagnóstico: 1,0 s de simulación)" in markdown
-    assert "**Última alerta:** ai-0002 a T+00:20" in markdown
-    assert "- **Qué se vio:** La desviación creció hasta 40 m con viento notable." in markdown
-    assert "- **Estado:** ABIERTA al final." in markdown
-    assert "**Cifras del monitor** (las escribe el módulo): 0 invocaciones" in markdown
+    assert markdown.startswith("# Mission report T\n\n**Scenario:** viento · **Duration:** 01:40")
+    assert "## Summary\n\nEl dron voló con viento." in markdown
+    assert "### A1 · Wind (high, confidence 0.8)" in markdown
+    assert "first alert at T+00:06 (diagnosis delay: 1.0 s of simulation)" in markdown
+    assert "**Last alert:** ai-0002 at T+00:20" in markdown
+    assert "- **What was seen:** La desviación creció hasta 40 m con viento notable." in markdown
+    assert "- **Status:** OPEN at the end." in markdown
+    assert "**Monitor figures** (written by the module): 0 invocations" in markdown
     assert "\n\nRespaldada por las comprobaciones, pero tardó.\n" in markdown
-    assert "1. Revisar el viento antes de despegar." in markdown and "## Limitaciones" in markdown
+    assert "1. Revisar el viento antes de despegar." in markdown and "## Limitations" in markdown
     [event] = of_type(published, EventType.REPORT_GENERATED)
     assert event.payload == {"run_id": "20261021-000000", "markdown": markdown, "alerts_count": 1}
     assert event.source == "ai-report" and event.causation_id == "plr-0009"
@@ -110,10 +108,10 @@ def test_report_is_published_saved_and_counts_chains(tmp_path: Path) -> None:
     # una sola llamada y sin tools: los datos van en el prompt
     assert len(llm.requests) == 1 and llm.requests[0]["tools"] == []
     system, user = (m["content"] for m in llm.requests[0]["messages"])
-    assert "## Qué se vio" in system and "<<" not in system and "<<" not in user
+    assert "## What was seen" in system and "<<" not in system and "<<" not in user
     assert '"mission_id":"T"' in user and "MSN" not in user
-    assert "### A1 · Viento" in user and "Monitor ai-0002" in user and "ABIERTA al final" in user
-    assert "### Rechazos de los guardrails" in user and "### Ayudas al modelo activas" in user
+    assert "### A1 · Wind" in user and "Monitor ai-0002" in user and "OPEN at the end" in user
+    assert "### Guardrail rejections" in user and "### Active model aids" in user
     assert [e.payload["state"] for e in of_type(published, EventType.AGENT_ACTIVITY)] == [
         "started", "finished",
     ]  # fmt: skip
@@ -129,9 +127,9 @@ def test_report_without_narrative_keeps_the_facts_and_is_marked(
     rt.set_run("viento", "r1")
     rt.state.apply(alert("ai-0001", ["det-1"], cause="WIND"))
     markdown = run(ReportAgent(rt, Monitor(rt)).generate("viento", "r1", None))
-    assert "Informe con los hechos del módulo y sin narrativa" in markdown
-    assert "### A1 · Viento" in markdown and "ABIERTA al final" in markdown
-    assert markdown.count("No disponible: el agente no redactó este apartado.") == 4
+    assert "Report with the module's facts and without narrative" in markdown
+    assert "### A1 · Wind" in markdown and "OPEN at the end" in markdown
+    assert markdown.count("Not available: the agent did not write this section.") == 4
     assert rt.trace.records[0]["fallback"] is True
     assert of_type(published, EventType.REPORT_GENERATED)[0].payload["alerts_count"] == 1
 
@@ -212,7 +210,7 @@ def test_report_chat_answers_a_fixed_text_before_the_report(tmp_path: Path) -> N
     run(chat.answer(operator_message("report", "¿qué pasó?")))
     [reply] = of_type(published, EventType.AGENT_REPLY)
     assert reply.payload["text"] == rt.assets.agent("chat_report").no_report_reply
-    assert "Todavía no hay informe" in reply.payload["text"] and reply.source == "ai-chat-report"
+    assert "There is no report yet" in reply.payload["text"] and reply.source == "ai-chat-report"
     assert llm.requests == [] and rt.trace.records == []
     # con el informe, el LLM recibe el informe en el prompt de sistema
     report.markdown = "# Informe de prueba"
@@ -246,4 +244,4 @@ def test_chat_survives_a_llm_error(tmp_path: Path) -> None:
     rt, published = make_runtime(tmp_path, FakeLlm(Script(RuntimeError("caído"))))
     run(Chat(rt, ConversationId.MONITOR).answer(operator_message("monitor", "hola")))
     [reply] = of_type(published, EventType.AGENT_REPLY)
-    assert "No he podido responder" in reply.payload["text"]
+    assert "I could not answer" in reply.payload["text"]

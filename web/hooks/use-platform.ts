@@ -188,7 +188,7 @@ export function usePlatform() {
     const current = stateRef.current
     const last = eventsRef.current.reduce<Envelope | null>((a, e) => (a === null || e.seq > a.seq ? e : a), null)
     if (!socket || socket.readyState !== WebSocket.OPEN || !current || !last) {
-      showError('No se ha enviado el mensaje: sin conexión con la plataforma o sin escenario cargado.')
+      showError('The message was not sent: no connection to the platform or no scenario loaded.')
       return false
     }
     let max = 0

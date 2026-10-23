@@ -18,36 +18,36 @@ from .monitor_state import CHECK_LABELS, AlertRecord, DetectionRecord, MonitorSt
 from .outbox import format_t
 
 CAUSE_NAMES = {
-    "WIND": "Viento",
-    "HIJACK": "Secuestro del dron",
-    "GPS_SPOOFING": "Spoofing del GPS",
-    "SENSOR_FAULT": "Fallo de sensor",
-    "GPS_JAMMING": "Pérdida o interferencia del GPS",
-    "UNKNOWN": "Causa desconocida",
+    "WIND": "Wind",
+    "HIJACK": "Drone hijacking",
+    "GPS_SPOOFING": "GPS spoofing",
+    "SENSOR_FAULT": "Sensor fault",
+    "GPS_JAMMING": "GPS loss or interference",
+    "UNKNOWN": "Unknown cause",
 }
-SEVERITY_NAMES = {"low": "baja", "medium": "media", "high": "alta"}
-COMPLETION_NAMES = {"returned_to_base": "regreso a base", "timeout": "tiempo agotado"}
+SEVERITY_NAMES = {"low": "low", "medium": "medium", "high": "high"}
+COMPLETION_NAMES = {"returned_to_base": "returned to base", "timeout": "timed out"}
 AID_NAMES = {
-    "tool_choice": "tool_choice «required» (respuesta siempre con una llamada a una tool)",
-    "final_iteration_response_tools_only": "última iteración solo con las tools de respuesta",
-    "require_checks": "comprobaciones (`checks`) obligatorias antes de la causa",
-    "coherence_guardrail": "guardrail de coherencia, incluida la recuperación excluyente del GPS",
-    "computed_facts": "hechos calculados por la plataforma (viento notable, discrepancia "
-    "GPS–radar, salto del GPS)",
+    "tool_choice": 'tool_choice "required" (always answering with a tool call)',
+    "final_iteration_response_tools_only": "last iteration with only the response tools",
+    "require_checks": "mandatory checks (`checks`) before the cause",
+    "coherence_guardrail": "coherence guardrail, including the exclusive GPS recovery",
+    "computed_facts": "facts computed by the platform (notable wind, GPS–radar "
+    "discrepancy, GPS jump)",
 }
 CLOSE_GAP_S = 5.0  # desfase entre el fin de la detección y el cierre a partir del cual se explica
-MISSING = "No disponible: el agente no redactó este apartado."
+MISSING = "Not available: the agent did not write this section."
 LIMITATIONS = (
-    "Los datos son simulados y el monitor solo veía lo ocurrido hasta cada instante. Las horas, "
-    "severidades, estados y evidencias de este informe las escribe el módulo a partir de los "
-    "eventos; el resumen, «qué se vio», la valoración y las recomendaciones los redacta un "
-    "modelo de lenguaje con esos mismos datos, sin la verdad del simulador."
+    "The data is simulated and the monitor only saw what had happened up to each instant. The "
+    "times, severities, statuses and evidence in this report are written by the module from the "
+    'events; the summary, "what was seen", the assessment and the recommendations are written by '
+    "a language model with that same data, without knowing what the simulator really did."
 )
 
 
 def num(value: float, decimals: int = 1) -> str:
-    """Número con coma decimal."""
-    return f"{value:.{decimals}f}".replace(".", ",")
+    """Número con punto decimal."""
+    return f"{value:.{decimals}f}"
 
 
 def cause_name(cause: str) -> str:
@@ -92,13 +92,13 @@ class Anomaly:
         """Qué cambió entre la primera alerta y la última."""
         changes = []
         if self.last.cause != self.first.cause:
-            changes.append(f"causa {cause_name(self.first.cause)} → {cause_name(self.last.cause)}")
+            changes.append(f"cause {cause_name(self.first.cause)} → {cause_name(self.last.cause)}")
         if self.last.severity != self.first.severity:
             changes.append(
-                f"severidad {severity_name(self.first.severity)} → "
+                f"severity {severity_name(self.first.severity)} → "
                 f"{severity_name(self.last.severity)}"
             )
-        return "; ".join(changes) or "sin cambio de causa ni de severidad"
+        return "; ".join(changes) or "no change of cause or severity"
 
     @property
     def status(self) -> str:
@@ -106,13 +106,13 @@ class Anomaly:
         a la hora en que terminó la última detección; si se desvía más de `CLOSE_GAP_S` (sin
         esperar, el monitor responde mientras la simulación avanza), se añade cuándo terminó."""
         if self.closed_at is None:
-            return "ABIERTA al final"
-        text = f"cerrada por el monitor a {format_t(self.closed_at)}"
+            return "OPEN at the end"
+        text = f"closed by the monitor at {format_t(self.closed_at)}"
         ends = [d.closed_at for d in self.detections]
         if ends and None not in ends:
             last_end = max(e for e in ends if e is not None)
             if self.closed_at - last_end > CLOSE_GAP_S:
-                text += f" (la última detección de la cadena terminó a {format_t(last_end)})"
+                text += f" (the last detection of the chain ended at {format_t(last_end)})"
         return text
 
     def evidence_ids(self) -> list[str]:
@@ -154,63 +154,63 @@ def build_facts(state: MonitorState) -> ReportFacts:
 
 def header(scenario: str, summary: dict[str, Any] | None, facts: ReportFacts) -> str:
     if summary is None:
-        return (
-            f"# Informe de la misión\n\n**Escenario:** {scenario} · datos del vuelo no disponibles"
-        )
+        return f"# Mission report\n\n**Scenario:** {scenario} · flight data not available"
     completed = summary["mission_completed"]
-    reason = COMPLETION_NAMES.get(summary["completion_reason"], "sin motivo")
+    reason = COMPLETION_NAMES.get(summary["completion_reason"], "no reason")
     reached = len(summary["waypoints_reached"])
     planned = len(summary["waypoints_planned"])
     open_alerts = sum(1 for a in facts.anomalies if a.closed_at is None)
     return (
-        f"# Informe de la misión {summary['mission_id']}\n\n"
-        f"**Escenario:** {scenario} · **Duración:** {format_t(summary['duration_s'])[2:]} · "
-        f"**Misión completada:** {'sí' if completed else 'no'} ({reason}) · "
-        f"**Waypoints alcanzados:** {reached} de {planned} · "
-        f"**Anomalías:** {len(facts.anomalies)} (abiertas al final: {open_alerts})"
+        f"# Mission report {summary['mission_id']}\n\n"
+        f"**Scenario:** {scenario} · **Duration:** {format_t(summary['duration_s'])[2:]} · "
+        f"**Mission completed:** {'yes' if completed else 'no'} ({reason}) · "
+        f"**Waypoints reached:** {reached} of {planned} · "
+        f"**Anomalies:** {len(facts.anomalies)} (open at the end: {open_alerts})"
     )
 
 
 def timeline_table(state: MonitorState, facts: ReportFacts, summary: dict[str, Any] | None) -> str:
     rows: list[tuple[float, int, str, str]] = []
     if summary is not None:
-        rows.append((0.0, 0, "Misión", f"Inicio de la misión {summary['mission_id']}"))
-        end = COMPLETION_NAMES.get(summary["completion_reason"], "la misión no había terminado")
-        rows.append((summary["duration_s"], 5, "Misión", f"Fin de la misión: {end}"))
+        rows.append((0.0, 0, "Mission", f"Start of mission {summary['mission_id']}"))
+        end = COMPLETION_NAMES.get(summary["completion_reason"], "the mission had not finished")
+        rows.append((summary["duration_s"], 5, "Mission", f"End of mission: {end}"))
     for d in state.detections.values():
         source = f" {d.source}" if d.source else ""
         opened = severity_name(d.opened_severity or d.severity)
         what = f"{d.detection_id} {d.rule}{source} ({opened}): {d.message}"
         rows.append((d.since, 1, "Detector", what))
         for at, severity, _, message in d.updates:
-            what = f"{d.detection_id} {d.rule}{source} sube a {severity_name(severity)}: {message}"
+            what = (
+                f"{d.detection_id} {d.rule}{source} rises to {severity_name(severity)}: {message}"
+            )
             rows.append((at, 1, "Detector", what))
         if d.closed_at is not None:
-            peak = f"; máximo {num(d.max_value)} {d.unit}" if d.max_value is not None else ""
-            lasted = f"duró {num(d.closed_at - d.since, 0)} s{peak}"
+            peak = f"; maximum {num(d.max_value)} {d.unit}" if d.max_value is not None else ""
+            lasted = f"lasted {num(d.closed_at - d.since, 0)} s{peak}"
             rows.append(
                 (
                     d.closed_at,
                     3,
                     "Detector",
-                    f"{d.detection_id} {d.rule}{source} cerrada ({lasted})",
+                    f"{d.detection_id} {d.rule}{source} cleared ({lasted})",
                 )
             )
     for anomaly in facts.anomalies:
         for alert in anomaly.chain:
-            replaces = f", sustituye a {alert.supersedes}" if alert.supersedes else ""
+            replaces = f", supersedes {alert.supersedes}" if alert.supersedes else ""
             what = (
-                f"Alerta {alert.alert_id} ({anomaly.label}): {cause_name(alert.cause)} "
-                f"({severity_name(alert.severity)}, confianza {alert.confidence:g}){replaces}"
+                f"Alert {alert.alert_id} ({anomaly.label}): {cause_name(alert.cause)} "
+                f"({severity_name(alert.severity)}, confidence {alert.confidence:g}){replaces}"
             )
             if alert.fallback:
-                what += " [fallback: el agente no concluyó]"
+                what += " [fallback: the agent did not conclude]"
             rows.append((alert.sim_time, 2, "Monitor", what))
         if anomaly.closed_at is not None:
-            what = f"Cierre de la alerta {anomaly.last.alert_id} ({anomaly.label})"
+            what = f"Closure of alert {anomaly.last.alert_id} ({anomaly.label})"
             rows.append((anomaly.closed_at, 4, "Monitor", what))
     rows.sort(key=lambda r: (r[0], r[1]))
-    lines = ["| Tiempo | Fuente | Qué pasó |", "|---|---|---|"]
+    lines = ["| Time | Source | What happened |", "|---|---|---|"]
     lines += [
         f"| {format_t(t)} | {source} | {text.replace('|', '/')} |" for t, _, source, text in rows
     ]
@@ -219,40 +219,40 @@ def timeline_table(state: MonitorState, facts: ReportFacts, summary: dict[str, A
 
 def anomaly_section(anomaly: Anomaly, seen: str) -> str:
     first, last = anomaly.first, anomaly.last
-    rules = ", ".join(dict.fromkeys(d.rule for d in anomaly.detections)) or "sin detección"
+    rules = ", ".join(dict.fromkeys(d.rule for d in anomaly.detections)) or "no detection"
     lines = [
         f"### {anomaly.label} · {cause_name(first.cause)} "
-        f"({severity_name(first.severity)}, confianza {first.confidence:g})",
-        f"- **Cuándo:** detección a {format_t(anomaly.detected_at)} ({rules}), primera alerta a "
-        f"{format_t(first.sim_time)} (retraso de diagnóstico: {num(anomaly.delay_s)} s de "
-        "simulación).",
+        f"({severity_name(first.severity)}, confidence {first.confidence:g})",
+        f"- **When:** detection at {format_t(anomaly.detected_at)} ({rules}), first alert at "
+        f"{format_t(first.sim_time)} (diagnosis delay: {num(anomaly.delay_s)} s of "
+        "simulation).",
     ]
     if last is not first:
         lines.append(
-            f"- **Última alerta:** {last.alert_id} a {format_t(last.sim_time)} ({anomaly.changes}; "
-            f"{len(anomaly.chain)} alertas en la cadena)."
+            f"- **Last alert:** {last.alert_id} at {format_t(last.sim_time)} ({anomaly.changes}; "
+            f"{len(anomaly.chain)} alerts in the chain)."
         )
-    lines.append(f"- **Qué se vio:** {seen}")
-    lines.append(f"- **Evidencias:** {_evidence(anomaly)}.")
-    lines.append(f"- **Estado:** {anomaly.status}.")
+    lines.append(f"- **What was seen:** {seen}")
+    lines.append(f"- **Evidence:** {_evidence(anomaly)}.")
+    lines.append(f"- **Status:** {anomaly.status}.")
     return "\n".join(lines)
 
 
 def _evidence(anomaly: Anomaly) -> str:
-    detections = ", ".join(d.detection_id for d in anomaly.detections) or "ninguna"
+    detections = ", ".join(d.detection_id for d in anomaly.detections) or "none"
     events = anomaly.evidence_ids()
-    shown = ", ".join(events[:6]) + (f" y {len(events) - 6} más" if len(events) > 6 else "")
-    return f"detecciones {detections}; eventos citados por el monitor: {shown or 'ninguno'}"
+    shown = ", ".join(events[:6]) + (f" and {len(events) - 6} more" if len(events) > 6 else "")
+    return f"detections {detections}; events cited by the monitor: {shown or 'none'}"
 
 
 def without_alert_section(facts: ReportFacts) -> str:
     if not facts.without_alert:
         return ""
-    lines = ["## Detecciones sin alerta", ""]
+    lines = ["## Detections without an alert", ""]
     for d in facts.without_alert:
-        end = format_t(d.closed_at) if d.closed_at is not None else "sigue abierta"
+        end = format_t(d.closed_at) if d.closed_at is not None else "still open"
         source = f" {d.source}" if d.source else ""
-        lines.append(f"- {d.detection_id} {d.rule}{source}: de {format_t(d.since)} a {end}.")
+        lines.append(f"- {d.detection_id} {d.rule}{source}: from {format_t(d.since)} to {end}.")
     return "\n".join(lines)
 
 
@@ -269,21 +269,21 @@ def assemble(
     blocks = [header(scenario, summary, facts)]
     if note:
         blocks.append(f"> {note}")
-    blocks += ["## Resumen\n\n" + (narrative.summary or MISSING)]
-    blocks += ["## Cronología\n\n" + timeline_table(state, facts, summary)]
+    blocks += ["## Summary\n\n" + (narrative.summary or MISSING)]
+    blocks += ["## Timeline\n\n" + timeline_table(state, facts, summary)]
     if facts.anomalies:
         sections = [
             anomaly_section(a, narrative.seen.get(a.label) or MISSING) for a in facts.anomalies
         ]
-        blocks.append("## Anomalías\n\n" + "\n\n".join(sections))
+        blocks.append("## Anomalies\n\n" + "\n\n".join(sections))
     else:
-        blocks.append("## Anomalías\n\nEl monitor no publicó ninguna alerta.")
+        blocks.append("## Anomalies\n\nThe monitor published no alerts.")
     if (orphans := without_alert_section(facts)) != "":
         blocks.append(orphans)
     assessment = (figures + "\n\n" if figures else "") + (narrative.assessment or MISSING)
-    blocks += ["## Valoración del monitor\n\n" + assessment]
-    blocks += ["## Recomendaciones\n\n" + (narrative.recommendations or MISSING)]
-    blocks += ["## Limitaciones\n\n" + LIMITATIONS]
+    blocks += ["## Monitor assessment\n\n" + assessment]
+    blocks += ["## Recommendations\n\n" + (narrative.recommendations or MISSING)]
+    blocks += ["## Limitations\n\n" + LIMITATIONS]
     return "\n\n".join(blocks)
 
 
@@ -293,31 +293,31 @@ def assemble(
 def anomalies_for_llm(facts: ReportFacts) -> str:
     """Cada anomalía con lo que dijo el monitor y lo que vio el detector, para «qué se vio»."""
     if not facts.anomalies:
-        return "No hubo alertas."
+        return "There were no alerts."
     blocks = []
     for anomaly in facts.anomalies:
         lines = [
-            f"### {anomaly.label} · {cause_name(anomaly.first.cause)} — detección a "
-            f"{format_t(anomaly.detected_at)}, primera alerta a "
+            f"### {anomaly.label} · {cause_name(anomaly.first.cause)} — detection at "
+            f"{format_t(anomaly.detected_at)}, first alert at "
             f"{format_t(anomaly.first.sim_time)}, {anomaly.status}"
         ]
         for d in anomaly.detections:
-            peak = f", máximo {num(d.max_value)} {d.unit}" if d.max_value is not None else ""
+            peak = f", maximum {num(d.max_value)} {d.unit}" if d.max_value is not None else ""
             source = f" {d.source}" if d.source else ""
             lines.append(
-                f"- Detector {d.detection_id} {d.rule}{source} a {format_t(d.since)}: "
-                f"«{d.message}» (valor {num(d.value)} {d.unit}, "
-                f"umbral {num(d.threshold)} {d.unit}{peak})"
+                f"- Detector {d.detection_id} {d.rule}{source} at {format_t(d.since)}: "
+                f'"{d.message}" (value {num(d.value)} {d.unit}, '
+                f"threshold {num(d.threshold)} {d.unit}{peak})"
             )
             for at, severity, value, _ in d.updates:
                 lines.append(
-                    f"  · a {format_t(at)} sube a {severity_name(severity)} "
-                    f"(valor {num(value)} {d.unit})"
+                    f"  · at {format_t(at)} rises to {severity_name(severity)} "
+                    f"(value {num(value)} {d.unit})"
                 )
         for alert in anomaly.chain:
             lines.append(_alert_line(alert))
         if len(anomaly.chain) > 1:
-            lines.append(f"- Cambios de la primera alerta a la última: {anomaly.changes}")
+            lines.append(f"- Changes from the first alert to the last: {anomaly.changes}")
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
 
@@ -328,15 +328,15 @@ def _alert_line(alert: AlertRecord, max_chars: int = 600) -> str:
         explanation = explanation[:max_chars] + "…"
     if alert.checks:
         checks = "; ".join(
-            f"{CHECK_LABELS[k]}: {'sí' if v else 'no' if v is False else 'no se miró'}"
+            f"{CHECK_LABELS[k]}: {'yes' if v else 'no' if v is False else 'not looked at'}"
             for k, v in alert.checks.items()
         )
     else:
-        checks = "sin comprobaciones (alerta de fallback)"
+        checks = "no checks (fallback alert)"
     return (
-        f"- Monitor {alert.alert_id} a {format_t(alert.sim_time)}: {cause_name(alert.cause)} "
-        f"({severity_name(alert.severity)}, confianza {alert.confidence:g}) «{alert.summary}». "
-        f"Explicación: {explanation} Comprobaciones: {checks}."
+        f"- Monitor {alert.alert_id} at {format_t(alert.sim_time)}: {cause_name(alert.cause)} "
+        f'({severity_name(alert.severity)}, confidence {alert.confidence:g}) "{alert.summary}". '
+        f"Explanation: {explanation} Checks: {checks}."
     )
 
 
@@ -376,12 +376,12 @@ def figures_line(stats: MonitorStats, facts: ReportFacts) -> str:
     """Las cifras del monitor, escritas por el módulo: el LLM no puede contradecirlas."""
     open_alerts = sum(1 for a in facts.anomalies if a.closed_at is None)
     return (
-        f"**Cifras del monitor** (las escribe el módulo): {stats.invocations} invocaciones "
-        f"({stats.with_llm} con LLM y {stats.deterministic} deterministas) · duración de reloj "
-        f"por invocación con LLM: media {num(stats.mean_s, 0)} s, máxima {num(stats.max_s, 0)} s · "
-        f"fallbacks: {stats.fallbacks} · rechazos de los guardrails: {len(stats.rejections)} · "
-        f"alertas abiertas al final: {open_alerts} · ayudas activas: "
-        f"{'; '.join(stats.aids) or 'ninguna'}."
+        f"**Monitor figures** (written by the module): {stats.invocations} invocations "
+        f"({stats.with_llm} with LLM and {stats.deterministic} deterministic) · wall-clock "
+        f"duration per LLM invocation: mean {num(stats.mean_s, 0)} s, maximum "
+        f"{num(stats.max_s, 0)} s · fallbacks: {stats.fallbacks} · guardrail rejections: "
+        f"{len(stats.rejections)} · alerts open at the end: {open_alerts} · active aids: "
+        f"{'; '.join(stats.aids) or 'none'}."
     )
 
 
@@ -390,45 +390,45 @@ def assessment_facts(
 ) -> str:
     """Retrasos, fallbacks, rechazos de los guardrails y ayudas activas, para la valoración."""
     stats = monitor_stats(records, aids)
-    lines = ["### Retrasos"]
+    lines = ["### Delays"]
     for a in facts.anomalies:
         lines.append(
-            f"- {a.label}: la primera alerta llegó {num(a.delay_s)} s de simulación después de "
-            f"la detección; la invocación del monitor que la publicó tardó "
-            f"{_wall(records, a.first.alert_id)} de reloj."
+            f"- {a.label}: the first alert arrived {num(a.delay_s)} s of simulation after "
+            f"the detection; the monitor invocation that published it took "
+            f"{_wall(records, a.first.alert_id)} of wall clock."
         )
     if not facts.anomalies:
-        lines.append("- No hubo alertas.")
+        lines.append("- There were no alerts.")
     if stats.with_llm:
         lines.append(
-            f"- Invocaciones del monitor con LLM: {stats.with_llm}; duración de reloj media "
-            f"{num(stats.mean_s, 0)} s, máxima {num(stats.max_s, 0)} s."
+            f"- Monitor invocations with LLM: {stats.with_llm}; mean wall-clock duration "
+            f"{num(stats.mean_s, 0)} s, maximum {num(stats.max_s, 0)} s."
         )
     fallback_alerts = [a.alert_id for x in facts.anomalies for a in x.chain if a.fallback]
     lines += [
         "",
         "### Fallbacks",
-        f"- Número de fallbacks (el módulo respondió por el monitor porque no concluyó): "
-        f"{stats.fallbacks}. Alertas de fallback: {', '.join(fallback_alerts) or 'ninguna'}.",
-        f"- Detecciones sin alerta: {len(facts.without_alert)}. Alertas abiertas al final: "
+        f"- Number of fallbacks (the module answered for the monitor because it did not "
+        f"conclude): {stats.fallbacks}. Fallback alerts: {', '.join(fallback_alerts) or 'none'}.",
+        f"- Detections without an alert: {len(facts.without_alert)}. Alerts open at the end: "
         f"{sum(1 for a in facts.anomalies if a.closed_at is None)}.",
     ]
     lines += [
         "",
-        "### Rechazos de los guardrails",
-        f"- Número de llamadas del monitor rechazadas por los guardrails: {len(stats.rejections)}.",
+        "### Guardrail rejections",
+        f"- Number of monitor calls rejected by the guardrails: {len(stats.rejections)}.",
     ]
     if stats.rejections:
         by_tool: dict[str, int] = {}
         for rejection in stats.rejections:
             by_tool[rejection["tool"]] = by_tool.get(rejection["tool"], 0) + 1
-        lines.append("- Por tool: " + ", ".join(f"{t} {n}" for t, n in sorted(by_tool.items())))
+        lines.append("- By tool: " + ", ".join(f"{t} {n}" for t, n in sorted(by_tool.items())))
         messages = dict.fromkeys(
             _short(error) for rejection in stats.rejections for error in rejection["errors"]
         )
-        lines += [f"- Motivo: «{message}»" for message in list(messages)[:6]]
-    lines += ["", "### Ayudas al modelo activas"]
-    lines += [f"- {name}" for name in stats.aids] or ["- Ninguna."]
+        lines += [f'- Reason: "{message}"' for message in list(messages)[:6]]
+    lines += ["", "### Active model aids"]
+    lines += [f"- {name}" for name in stats.aids] or ["- None."]
     return "\n".join(lines)
 
 
@@ -438,7 +438,7 @@ def _wall(records: list[dict[str, Any]], alert_id: str) -> str:
             p.get("event_id") == alert_id for p in record.get("published", [])
         ):
             return f"{record['duration_s']:.0f} s"
-    return "un tiempo desconocido"
+    return "an unknown time"
 
 
 def _short(text: str, limit: int = 180) -> str:
@@ -463,10 +463,16 @@ class Narrative:
 
 HEADING_RE = re.compile(r"^\s*(#{1,6})\s+(.+?)\s*#*\s*$")
 LABEL_RE = re.compile(r"^\s*(?:#{1,6}\s*|\*\*|[-*]\s+)?(A\d+)\b[\s:.·\-—*]*(.*)$")
+# Prefijos de los títulos (sin acentos, en minúsculas): inglés y, para las ejecuciones antiguas,
+# castellano.
 SECTIONS = (
+    ("summary", "summary"),
     ("summary", "resumen"),
+    ("seen", "what was seen"),
     ("seen", "que se vio"),
+    ("assessment", "monitor assessment"),
     ("assessment", "valoracion"),
+    ("recommendations", "recommendations"),
     ("recommendations", "recomendaciones"),
 )
 
@@ -491,9 +497,9 @@ def _unfence(text: str) -> str:
 
 
 def parse_narrative(text: str, labels: list[str]) -> Narrative:
-    """Lee los cuatro apartados de la respuesta del LLM por sus títulos (`## Resumen`,
-    `## Qué se vio` con un `### A1` por anomalía, `## Valoración del monitor` y
-    `## Recomendaciones`). Lo que falte queda vacío; cualquier otro apartado que escriba se
+    """Lee los cuatro apartados de la respuesta del LLM por sus títulos (`## Summary`,
+    `## What was seen` con un `### A1` por anomalía, `## Monitor assessment` y
+    `## Recommendations`). Lo que falte queda vacío; cualquier otro apartado que escriba se
     ignora."""
     parts: dict[str, list[str]] = {}
     current: str | None = None

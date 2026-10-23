@@ -19,14 +19,14 @@ export function TelemetryStrip({ data, plan, faults }: Props) {
   const items: { label: string; value: string; unit?: string; alert?: boolean; dim?: boolean }[] = [
     { label: 'X', value: gps ? gps.x.toFixed(0) : '—', unit: 'm', dim: muted('gps') },
     { label: 'Y', value: gps ? gps.y.toFixed(0) : '—', unit: 'm', dim: muted('gps') },
-    { label: 'VEL', value: gps ? gps.speed.toFixed(1) : '—', unit: 'm/s', dim: muted('gps') },
-    { label: 'RUMBO', value: gps ? String(Math.round(gps.heading)).padStart(3, '0') : '—', unit: '°', dim: muted('gps') },
+    { label: 'SPEED', value: gps ? gps.speed.toFixed(1) : '—', unit: 'm/s', dim: muted('gps') },
+    { label: 'HEADING', value: gps ? String(Math.round(gps.heading)).padStart(3, '0') : '—', unit: '°', dim: muted('gps') },
     { label: 'FIX', value: gps ? `${gps.fix} · ${gps.sats} sat` : '—', alert: gps ? gps.fix !== '3d' : false, dim: muted('gps') },
-    { label: 'DESV. RUTA', value: dev !== null ? dev.toFixed(1) : '—', unit: 'm', alert: (dev ?? 0) > 30 },
+    { label: 'ROUTE DEV.', value: dev !== null ? dev.toFixed(1) : '—', unit: 'm', alert: (dev ?? 0) > 30 },
     { label: 'GPS–RADAR', value: gpsRadar !== null ? gpsRadar.toFixed(1) : '—', unit: 'm', alert: (gpsRadar ?? 0) > 25, dim: muted('radar') },
-    { label: 'VIENTO', value: wind ? `${wind.speed_mps.toFixed(1)} · ${wind.from_deg.toFixed(0)}°` : '—', unit: 'm/s', dim: muted('meteo') },
-    { label: 'ENLACE', value: link ? link.controller_id : '—', dim: muted('link') },
-    { label: 'BAT', value: battery ? battery.battery_pct.toFixed(0) : '—', unit: '%', alert: (battery?.battery_pct ?? 100) < 45, dim: muted('battery') },
+    { label: 'WIND', value: wind ? `${wind.speed_mps.toFixed(1)} · ${wind.from_deg.toFixed(0)}°` : '—', unit: 'm/s', dim: muted('meteo') },
+    { label: 'LINK', value: link ? link.controller_id : '—', dim: muted('link') },
+    { label: 'BATT', value: battery ? battery.battery_pct.toFixed(0) : '—', unit: '%', alert: (battery?.battery_pct ?? 100) < 45, dim: muted('battery') },
   ]
 
   return (

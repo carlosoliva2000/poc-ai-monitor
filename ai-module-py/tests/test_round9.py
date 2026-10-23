@@ -117,7 +117,7 @@ def test_a_wrong_detection_id_is_rejected_with_the_right_one(tmp_path: Path) -> 
     run(monitor.handle_batch([raised()]))
     [rejection] = rt.trace.records[0]["guardrail_rejections"]
     assert rejection["errors"] == [
-        "Esta invocación atiende det-0001, no det-0007: usa det-0001 (o no pongas detection_ids)"
+        "This invocation handles det-0001, not det-0007: use det-0001 (or leave out detection_ids)"
     ]
     assert responses(published)[0].payload["detection_ids"] == ["det-0001"]
 
@@ -129,7 +129,9 @@ def test_with_several_pending_detections_the_ids_are_required(tmp_path: Path) ->
     )
     run(monitor.handle_batch([raised("det-0001"), raised("det-0002", rule="SOURCE_DISCREPANCY")]))
     [rejection] = rt.trace.records[0]["guardrail_rejections"]
-    assert rejection["errors"][0].startswith("Falta `detection_ids`: hay varias detecciones")
+    assert rejection["errors"][0].startswith(
+        "`detection_ids` is missing: there are several pending detections"
+    )
 
 
 def closure_setup(tmp_path: Path, policy: Any):
@@ -172,8 +174,8 @@ def test_a_wrong_alert_id_in_a_closure_is_rejected_with_the_right_one(tmp_path: 
     run(monitor.handle_batch([cleared]))
     [rejection] = rt.trace.records[0]["guardrail_rejections"]
     assert rejection["errors"] == [
-        "En este aviso de cierre la alerta es ai-0001, no ai-0099: usa ai-0001 "
-        "(o no pongas alert_id)"
+        "In this closing warning the alert is ai-0001, not ai-0099: use ai-0001 "
+        "(or leave out alert_id)"
     ]
     assert responses(published)[0].type == EventType.ALERT_CLOSED
 
@@ -184,7 +186,7 @@ def test_close_alert_without_a_closure_still_needs_the_alert_id(tmp_path: Path) 
     )
     run(monitor.handle_batch([raised()]))
     assert rt.trace.records[0]["guardrail_rejections"][0]["errors"] == [
-        "Falta `alert_id`: indica la alerta que cierras"
+        "`alert_id` is missing: say which alert you are closing"
     ]
 
 
@@ -202,8 +204,8 @@ def test_the_second_repetition_of_a_rejected_call_cuts_the_invocation(tmp_path: 
     assert len(llm.requests) == 3  # la original, una repetición avisada y la segunda: se corta
     assert trace["end_reason"] == "repeated_rejection" and trace["fallback"] is True
     errors = [r["errors"][0] for r in trace["guardrail_rejections"]]
-    assert errors[1] == "Es la misma llamada que antes; cambia lo que te indiqué."
-    assert errors[2] == "repite por segunda vez una llamada rechazada"
+    assert errors[1] == "This is the same call as before; change what I told you."
+    assert errors[2] == "repeats a rejected call for the second time"
     [fallback] = responses(published)  # y el módulo responde igualmente
     assert fallback.causation_id == event.event_id and fallback.payload["fallback"] is True
     assert fallback.payload["cause"] == "UNKNOWN"
@@ -227,7 +229,7 @@ def chat_runtime(tmp_path: Path, *, tools: bool, text: str = "respuesta"):
         "wind": {"mean_speed_mps": 7.2, "max_gust_mps": 9.7, "notable": True, "with_drift": True},
         "gps_radar": {"disagreed": False}, "gps_max_step_m": 15.5,
     }  # fmt: skip
-    rt.last_metrics_note = "consulta del monitor a T+01:46 (ventana 76–106 s)"
+    rt.last_metrics_note = "monitor query at T+01:46 (window 76–106 s)"
     rt.clock.observe(110.0)
     return rt, published, llm
 
@@ -258,14 +260,12 @@ def test_chat_without_tools_carries_alerts_checks_evidence_and_facts(tmp_path: P
     request = llm.requests[0]
     assert request["tools"] == []  # no recibe tools
     system = request["messages"][0]["content"]
-    assert "No tienes tools" in system and "<<" not in system
-    assert "ai-0002 WIND (low, confianza 0.85)" in system
+    assert "You have no tools" in system and "<<" not in system
+    assert "ai-0002 WIND (low, confidence 0.85)" in system
     assert "El viento de 7,2 m/s empuja hacia el sur." not in system  # sin la prosa del monitor
-    assert "viento notable: sí" in system and "enlace anómalo: no se miró" in system  # checks
-    assert "Evidencias: gps-000001, gps-000002" in system
-    assert (
-        "consulta del monitor a T+01:46" in system and "El viento es notable: sí" in system
-    )  # hechos
+    assert "notable wind: yes" in system and "link anomalous: not looked at" in system  # checks
+    assert "Evidence: gps-000001, gps-000002" in system
+    assert "monitor query at T+01:46" in system and "The wind is notable: yes" in system  # hechos
     assert rt.trace.records[0]["aids"] == {"chat_tools_enabled": False}
     [reply] = [e for e in published if e.type == EventType.AGENT_REPLY]
     assert reply.payload["tool_calls"] == []
@@ -276,7 +276,7 @@ def test_chat_with_tools_enabled_keeps_its_tools(tmp_path: Path) -> None:
     run(Chat(rt, ConversationId.MONITOR).answer(operator_message("monitor", "¿qué hay?")))
     assert llm.requests[0]["tools"]
     system = llm.requests[0]["messages"][0]["content"]
-    assert "No tienes tools" not in system and "Explicación:" not in system
+    assert "You have no tools" not in system and "Explicación:" not in system
     assert rt.trace.records[0]["aids"] == {"chat_tools_enabled": True}
 
 
@@ -288,7 +288,9 @@ def test_report_chat_without_tools_also_gets_the_data(tmp_path: Path) -> None:
     system = llm.requests[0]["messages"][0]["content"]
     assert llm.requests[0]["tools"] == []
     assert (
-        "# Informe de prueba" in system and "ai-0002 WIND" in system and "No tienes tools" in system
+        "# Informe de prueba" in system
+        and "ai-0002 WIND" in system
+        and "You have no tools" in system
     )
 
 
@@ -305,9 +307,9 @@ def test_the_monitor_remembers_the_last_metrics_for_the_chats(tmp_path: Path) ->
     rt, _, monitor, _ = setup(tmp_path, script, FakePlatform({"get_track_metrics": metrics}))
     run(monitor.handle_batch([raised()]))
     assert rt.last_metrics == metrics
-    assert rt.last_metrics_note == "consulta del monitor a T+00:20 (ventana 1–20 s)"
-    assert "Salto brusco del GPS" in rt.describe_last_facts()
-    assert "2,0 m" in rt.describe_last_facts()
+    assert rt.last_metrics_note == "monitor query at T+00:20 (window 1–20 s)"
+    assert "Sudden GPS jump" in rt.describe_last_facts()
+    assert "2.0 m" in rt.describe_last_facts()
 
 
 def test_the_monitor_remembers_the_link_it_looked_at_for_the_chats(tmp_path: Path) -> None:
@@ -327,6 +329,8 @@ def test_the_monitor_remembers_the_link_it_looked_at_for_the_chats(tmp_path: Pat
     run(monitor.handle_batch([raised()]))
     assert rt.last_link == link
     facts = rt.describe_last_facts()
-    assert "El enlace de mando es anómalo: sí (el controlador pasa de GCS-1 a UNK-4F2A" in facts
+    assert (
+        "The command link is anomalous: yes (the controller changes from GCS-1 to UNK-4F2A" in facts
+    )
     rt.reset_run()
     assert rt.last_link is None

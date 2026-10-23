@@ -61,7 +61,7 @@ def test_a_skill_already_loaded_is_not_sent_again() -> None:
     assert first.startswith("---\nname: route-deviation")
     again = run(box("load_skill", {"name": "route-deviation"}))
     assert again == (
-        "Ya tienes cargada la skill route-deviation (más arriba): sigue con su siguiente paso."
+        "You already have the skill route-deviation loaded (above): continue with its next step."
     )
     other = run(box("load_skill", {"name": "source-discrepancy"}))
     assert other.startswith("---\nname: source-discrepancy")
@@ -77,7 +77,7 @@ def test_each_invocation_has_its_own_loaded_skills(tmp_path: Path) -> None:
     rt, _, monitor, llm = setup(tmp_path, script)
     run(monitor.handle_batch([raised()]))
     tool_texts = [m["content"] for m in llm.requests[-1]["messages"] if m["role"] == "tool"]
-    assert tool_texts[0].startswith("---") and tool_texts[1].startswith("Ya tienes cargada")
+    assert tool_texts[0].startswith("---") and tool_texts[1].startswith("You already have")
     assert rt.trace.records[0]["skills_loaded"] == [{"name": "route-deviation", "by": "model"}]
     reset_ids()
     rt2, _, monitor2, llm2 = setup(
@@ -98,14 +98,14 @@ def test_state_line_for_the_gps_alert() -> None:
     s.apply(detection_event("raised", "det-1", 5.0, rule="SOURCE_DISCREPANCY"))
     s.apply(alert("ai-0008", ["det-1"], cause="GPS_SPOOFING"))
     assert s.describe_gps_alert(10.0) == (
-        "sí — ai-0008 GPS_SPOOFING (abierta). Si este aviso es la recuperación del GPS: "
-        "causa GPS_SPOOFING, supersedes ai-0008"
+        "yes — ai-0008 GPS_SPOOFING (open). If this warning is the GPS recovery: "
+        "cause GPS_SPOOFING, supersedes ai-0008"
     )
     s.apply(detection_event("cleared", "det-1", 40.0))
     s.apply(closed("ai-0008", t=50.0))
     closed_line = s.describe_gps_alert(100.0)  # cerrada hace 50 s
-    assert "ai-0008 GPS_SPOOFING (cerrada hace 50 s)" in closed_line
-    assert closed_line.endswith("causa GPS_SPOOFING, sin supersedes (ya está cerrada)")
+    assert "ai-0008 GPS_SPOOFING (closed 50 s ago)" in closed_line
+    assert closed_line.endswith("cause GPS_SPOOFING, no supersedes (already closed)")
     assert s.describe_gps_alert(111.0) == "no"
 
 
@@ -115,13 +115,10 @@ def test_the_prompt_carries_the_gps_alert_line(tmp_path: Path) -> None:
     rt.state.apply(alert("ai-0008", ["det-0001"], cause="GPS_SPOOFING"))
     run(monitor.handle_batch([raised("det-0002", 20.0)]))
     prompt = llm.requests[0]["messages"][1]["content"]
-    assert (
-        "- Alerta del GPS reciente (abierta o cerrada hace ≤ 60 s): sí — ai-0008 GPS_SPOOFING"
-        in prompt
-    )
-    assert "causa GPS_SPOOFING, supersedes ai-0008" in prompt
+    assert "- Recent GPS alert (open or closed ≤ 60 s ago): yes — ai-0008 GPS_SPOOFING" in prompt
+    assert "cause GPS_SPOOFING, supersedes ai-0008" in prompt
     skill = ASSETS.skills["route-deviation"].content
-    assert "«Alerta del GPS reciente» del estado dice **sí**" in skill
+    assert '"Recent GPS alert" line of the state says **yes**' in skill
 
 
 # --- 3. orden del esquema -----------------------------------------------------------------------
@@ -154,22 +151,22 @@ def test_a_missing_evidence_field_is_explained_in_spanish(tmp_path: Path) -> Non
     run(monitor.handle_batch([raised()]))
     [rejection] = rt.trace.records[0]["guardrail_rejections"]
     assert rejection["errors"] == [
-        "Falta `evidence_event_ids`: pon ahí, no en la explicación, de 2 a 6 ids que hayas visto, "
-        "como met-0010 o gps-000106"
+        "`evidence_event_ids` is missing: put there, not in the explanation, 2 to 6 ids you have "
+        "seen, such as met-0010 or gps-000106"
     ]
 
 
 @pytest.mark.parametrize(
     ("change", "expected"),
     [
-        ({"confidence": 1.7}, "`confidence` fuera de rango: un número entre 0 y 1"),
+        ({"confidence": 1.7}, "`confidence` is out of range: a number between 0 and 1"),
         (
             {"summary": "x" * 200},
-            "`summary` es demasiado largo: una frase de menos de 160 caracteres",
+            "`summary` is too long: one sentence of fewer than 160 characters",
         ),
-        ({"cause": "ALIENS"}, "`cause` no es un valor permitido: usa una de WIND, HIJACK"),
-        ({"evidence_event_ids": []}, "`evidence_event_ids` está vacío: pon ahí"),
-        ({"sobra": 1}, "`sobra` sobra: quítalo"),
+        ({"cause": "ALIENS"}, "`cause` is not an allowed value: use one of WIND, HIJACK"),
+        ({"evidence_event_ids": []}, "`evidence_event_ids` is empty: put there"),
+        ({"sobra": 1}, "`sobra` is not needed: remove it"),
     ],
 )
 def test_validation_errors_are_spanish(change: dict, expected: str, tmp_path: Path) -> None:
@@ -186,7 +183,8 @@ def test_a_missing_nested_check_says_how_to_fix_it(tmp_path: Path) -> None:
     rt, _, monitor, _ = setup(tmp_path, Script(tool_response(call("publish_alert", **bad)), "x"))
     run(monitor.handle_batch([raised()]))
     assert rt.trace.records[0]["guardrail_rejections"][0]["errors"] == [
-        "Falta `checks.link_anomalous`: true, false, o null si no has mirado el enlace"
+        "`checks.link_anomalous` is missing: true, false, or null if you have not looked at "
+        "the link"
     ]
 
 
@@ -201,8 +199,8 @@ def test_the_same_rejected_call_is_called_out(tmp_path: Path) -> None:
     rt, published, monitor, llm = setup(tmp_path, script)
     run(monitor.handle_batch([raised()]))
     first, second = rt.trace.records[0]["guardrail_rejections"]
-    assert "gps-999999" in first["errors"][0] and first["errors"][0].startswith("la evidencia")
-    assert second["errors"][0] == "Es la misma llamada que antes; cambia lo que te indiqué."
+    assert "gps-999999" in first["errors"][0] and first["errors"][0].startswith("evidence")
+    assert second["errors"][0] == "This is the same call as before; change what I told you."
     assert second["errors"][1:] == first["errors"]  # y repite qué había que cambiar
     assert any(e.type == EventType.ANOMALY_DETECTED for e in published)
 
@@ -232,7 +230,7 @@ def test_publish_alert_only_accepts_pending_detections(tmp_path: Path) -> None:
     event = raised("det-0002", 20.0)
     run(monitor.handle_batch([event]))
     [rejection] = rt.trace.records[0]["guardrail_rejections"]
-    assert "Esta invocación atiende det-0002, no det-0001, det-0002" in rejection["errors"][0]
+    assert "This invocation handles det-0002, not det-0001, det-0002" in rejection["errors"][0]
     [alert_event] = [e for e in published if e.type == EventType.ANOMALY_DETECTED]
     assert alert_event.causation_id == event.event_id  # responde a la detección que atiende
 
@@ -258,7 +256,7 @@ def test_publish_alert_rejects_detections_that_already_have_a_response(tmp_path:
         pending={"det-0001", "det-0002"},
         unanswered={"det-0002"},
     )
-    assert any("ya tienen respuesta" in e for e in verdict.errors)
+    assert any("already have a response" in e for e in verdict.errors)
 
 
 # --- 6. informe y chats --------------------------------------------------------------------------
@@ -280,10 +278,10 @@ def test_chats_carry_the_current_state_in_every_question(tmp_path: Path) -> None
     rt.state.apply(closed("ai-0003", t=60.0))
     rt.clock.observe(70.0)
     run(chat.answer(operator_message("monitor", "¿y ahora?", 2)))
-    assert "alertas abiertas: ninguna" in llm.requests[1]["messages"][0]["content"].lower()
+    assert "open alerts: none" in llm.requests[1]["messages"][0]["content"].lower()
 
 
 def test_report_prompt_has_no_tools_and_carries_the_data() -> None:
     config = ASSETS.agent("report")
     assert config.tools == [] and config.skills == []
-    assert json.dumps(ASSETS.skill_body("report-format")).startswith('"# Formato del informe final')
+    assert json.dumps(ASSETS.skill_body("report-format")).startswith('"# Final report format')

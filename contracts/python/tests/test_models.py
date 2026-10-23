@@ -36,12 +36,12 @@ def test_valid_draft_and_envelope() -> None:
 @pytest.mark.parametrize(
     ("override", "fragment"),
     [
-        ({"topic": "citadel.pub.evt.air.d1.TrackUpdated.v1"}, "topic esperado"),
-        ({"topic": "citadel.pub.evt.air.d1.PositionUpdated.v2"}, "topic esperado"),
-        ({"source": "radar-1"}, "source esperado"),
-        ({"asset": None}, "asset esperado"),
-        ({"event_id": "rad-000061"}, "prefijo"),
-        ({"event_id": "gps-abc"}, "prefijo"),
+        ({"topic": "citadel.pub.evt.air.d1.TrackUpdated.v1"}, "expected topic"),
+        ({"topic": "citadel.pub.evt.air.d1.PositionUpdated.v2"}, "expected topic"),
+        ({"source": "radar-1"}, "expected source"),
+        ({"asset": None}, "expected asset"),
+        ({"event_id": "rad-000061"}, "lacks the prefix"),
+        ({"event_id": "gps-abc"}, "lacks the prefix"),
         ({"ephemeral": True}, "ephemeral"),
         ({"sim_time": -1.0}, "greater_than_equal"),
         ({"event_time": "2026-10-20 10:01:01"}, "string_pattern_mismatch"),
@@ -73,7 +73,7 @@ def test_chat_topic_follows_conversation_id() -> None:
     assert ok["topic"].endswith("ai.report.AgentReply.v1") and ok["source"] == "ai-chat-report"
     EventDraft.model_validate(ok)
     bad = {**ok, "topic": "citadel.pub.evt.ai.monitor.AgentReply.v1"}
-    with pytest.raises(ValidationError, match="topic esperado"):
+    with pytest.raises(ValidationError, match="expected topic"):
         EventDraft.model_validate(bad)
 
 
@@ -283,7 +283,7 @@ def test_track_metrics_without_radar() -> None:
 def test_loss_only_exists_for_the_gps() -> None:
     assert FaultInjected.model_validate({"source": "gps", "mode": "loss", "origin": "manual"})
     assert FaultCleared.model_validate({"source": "radar", "mode": "mute", "origin": "scenario"})
-    with pytest.raises(ValidationError, match="solo existe para el GPS"):
+    with pytest.raises(ValidationError, match="only exists for the GPS"):
         FaultInjected.model_validate({"source": "radar", "mode": "loss", "origin": "manual"})
     with pytest.raises(ValidationError):  # el tipo de fallo es obligatorio
         FaultInjected.model_validate({"source": "radar", "origin": "manual"})
@@ -306,9 +306,9 @@ def test_labels_of_faults_need_a_source() -> None:
         "also_accepted_causes": ["SENSOR_FAULT"], "eval_window": [245.0, 350.0],
     }  # fmt: skip
     assert Label.model_validate(label).also_accepted_causes == ["SENSOR_FAULT"]
-    with pytest.raises(ValidationError, match="obligatoria en los fallos"):
+    with pytest.raises(ValidationError, match="mandatory in faults"):
         Label.model_validate({**label, "source": None})
-    with pytest.raises(ValidationError, match="obligatoria en los fallos"):
+    with pytest.raises(ValidationError, match="mandatory in faults"):
         Label.model_validate({**label, "type": "wind"})
 
 

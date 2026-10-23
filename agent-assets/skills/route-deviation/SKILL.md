@@ -1,33 +1,33 @@
 ---
 name: route-deviation
-description: Úsala cuando el detector lance ROUTE_DEVIATION (la posición del GPS se aleja de la ruta planificada). Distingue viento, secuestro, recuperación tras un engaño o una pérdida del GPS y causa desconocida.
+description: Use it when the detector raises ROUTE_DEVIATION (the GPS position drifts away from the planned route). It tells apart wind, hijacking, recovery after a spoofing or a GPS loss, and unknown cause.
 ---
-# Desviación de ruta
+# Route deviation
 
-El GPS del dron está lejos de la ruta. Sigue los pasos **en orden** y para en el primero que encaje. Los hechos vienen calculados en `get_track_metrics`: **no compares números ni ángulos tú**, lee los campos `true`/`false`.
+The drone's GPS is far from the route. Follow the steps **in order** and stop at the first one that fits. The facts come computed in `get_track_metrics`: **do not compare numbers or angles yourself**, read the `true`/`false` fields.
 
-## 1. Métricas
-Llama a `get_track_metrics` con `since` = sim_time de la detección − 30 y `until` = ahora.
+## 1. Metrics
+Call `get_track_metrics` with `since` = sim_time of the detection − 30 and `until` = now.
 
-## 2. ¿Recuperación del GPS tras un engaño o una pérdida? (manda sobre todo lo demás)
-Es recuperación si **las dos**: la línea «Alerta del GPS reciente» del estado dice **sí** **y** `gps_radar.disagreed` es `true` o `gps_max_step_m` ≥ 30 (el GPS acaba de saltar a la posición real).
-- **La única causa válida es la de esa alerta** (la línea del estado la dice: «Si este aviso es la recuperación del GPS: causa X, supersedes ai-XXXX»). `severity: medium`. Di que el GPS ha vuelto y el dron corrige hacia la ruta. `supersedes` = esa alerta si sigue abierta. No es viento ni secuestro aunque la desviación sea grande. Recomendación: verificar el receptor GPS.
+## 2. GPS recovery after a spoofing or a loss? (it takes precedence over everything else)
+It is a recovery if **both**: the "Recent GPS alert" line of the state says **yes** **and** `gps_radar.disagreed` is `true` or `gps_max_step_m` ≥ 30 (the GPS has just jumped to the real position).
+- **The only valid cause is that of that alert** (the state line tells it: "If this warning is the GPS recovery: cause X, supersedes ai-XXXX"). `severity: medium`. Say that the GPS is back and the drone is correcting towards the route. `supersedes` = that alert if it is still open. It is not wind or hijacking even if the deviation is large. Recommendation: verify the GPS receiver.
 
-## 3. ¿GPS y radar discrepan?
-Si `gps_radar.disagreed` es `true` (y no es el paso 2), carga la skill `source-discrepancy`.
+## 3. Do GPS and radar disagree?
+If `gps_radar.disagreed` is `true` (and it is not step 2), load the skill `source-discrepancy`.
 
-## 4. ¿Viento?
-- Es **`WIND`** solo si `wind.notable` **y** `wind.with_drift` son `true`. `severity: low` si `gps_deviation_from_plan_m.max` < 80 y no crece; si no, `medium`. `confidence` 0,8–0,9. Evidencias: `wind.last_event_id` y `first_event_ids`/`last_event_ids`. Recomendación: sin intervención; vigilar que recupera la ruta.
-- Si alguno es `false` (o `wind` es `null`), **no es viento: ve al paso 5.**
+## 4. Wind?
+- It is **`WIND`** only if `wind.notable` **and** `wind.with_drift` are `true`. `severity: low` if `gps_deviation_from_plan_m.max` < 80 and it does not grow; otherwise `medium`. `confidence` 0.8–0.9. Evidence: `wind.last_event_id` and `first_event_ids`/`last_event_ids`. Recommendation: no intervention; watch that it recovers the route.
+- If either is `false` (or `wind` is `null`), **it is not wind: go to step 5.**
 
-## 5. ¿Secuestro? Mira el enlace
-Llama a `get_events` con `source` = `link` y `last_n` = 6. El enlace es anómalo si cambia el `controller_id` (p. ej. `UNK-4F2A` en vez de `GCS-1`), `rssi_dbm` varía más de 10 dB o `latency_ms` se multiplica.
-- Enlace anómalo → **`HIJACK`**, `severity: high`, `confidence` 0,8–0,9. Evidencias: los `LinkStatus` que cambiaron.
-- Enlace normal pero `course_deg` difiere más de 45° de `bearing_to_next_waypoint_deg` y la desviación crece → `HIJACK` con `confidence` 0,6–0,7 (solo si la línea «Alerta del GPS reciente» del estado dice **no**).
-- Recomendación: avisar al responsable del dron y verificar el enlace de mando.
+## 5. Hijacking? Look at the link
+Call `get_events` with `source` = `link` and `last_n` = 6. The link is anomalous if the `controller_id` changes (e.g. `UNK-4F2A` instead of `GCS-1`), `rssi_dbm` varies by more than 10 dB or `latency_ms` is multiplied.
+- Anomalous link → **`HIJACK`**, `severity: high`, `confidence` 0.8–0.9. Evidence: the `LinkStatus` events that changed.
+- Normal link but `course_deg` differs by more than 45° from `bearing_to_next_waypoint_deg` and the deviation grows → `HIJACK` with `confidence` 0.6–0.7 (only if the "Recent GPS alert" line of the state says **no**).
+- Recommendation: notify the person in charge of the drone and verify the command link.
 
-## 6. Nada encaja
-`UNKNOWN`, `severity: medium`, `confidence` ≤ 0,4; di qué has comprobado.
+## 6. Nothing fits
+`UNKNOWN`, `severity: medium`, `confidence` ≤ 0.4; say what you have checked.
 
-## Al publicar
-Rellena `checks` con lo que has visto (no inventes: se contrasta con las tools): `gps_alert_recent` (la línea «Alerta del GPS reciente» del estado: sí = `true`), `gps_radar_disagreed`, `wind_notable` y `wind_with_drift` (de `get_track_metrics`), `link_checked` y `link_anomalous` (`null` si no miraste el enlace).
+## When publishing
+Fill in `checks` with what you have seen (do not invent: it is checked against the tools): `gps_alert_recent` (the "Recent GPS alert" line of the state: yes = `true`), `gps_radar_disagreed`, `wind_notable` and `wind_with_drift` (from `get_track_metrics`), `link_checked` and `link_anomalous` (`null` if you did not look at the link).

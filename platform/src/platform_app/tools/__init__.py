@@ -37,10 +37,10 @@ def call_tool(ctx: ToolContext, name: str, raw_args: dict[str, Any] | None) -> d
         args = args_model.model_validate(raw_args or {})
     except ValidationError as exc:
         details = "; ".join(
-            f"{'.'.join(str(p) for p in err['loc']) or 'argumentos'}: {err['msg']}"
+            f"{'.'.join(str(p) for p in err['loc']) or 'arguments'}: {err['msg']}"
             for err in exc.errors()
         )
-        raise ToolFailure(f"argumentos no válidos para {name}: {details}") from exc
+        raise ToolFailure(f"invalid arguments for {name}: {details}") from exc
     return TOOLS[name](ctx, args).model_dump(mode="json")
 
 

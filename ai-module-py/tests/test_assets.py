@@ -12,7 +12,7 @@ ASSETS = Assets()
 def test_skills_index_lists_name_and_description() -> None:
     index = ASSETS.skills_index(["route-deviation", "source-discrepancy"])
     assert index.count("\n") == 1
-    assert "- `route-deviation`: Úsala cuando el detector lance ROUTE_DEVIATION" in index
+    assert "- `route-deviation`: Use it when the detector raises ROUTE_DEVIATION" in index
     assert ASSETS.skills["report-format"].content.startswith("---\nname: report-format")
     with pytest.raises(AssetError):
         ASSETS.skills_index(["no-existe"])

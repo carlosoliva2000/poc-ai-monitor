@@ -29,7 +29,7 @@ MAX_RESULT_CHARS = 4000
 
 
 class ToolError(Exception):
-    """Un error de una tool: el mensaje (en español) vuelve al modelo como resultado."""
+    """Un error de una tool: el mensaje (en inglés) vuelve al modelo como resultado."""
 
 
 class AbortInvocation(Exception):
@@ -60,7 +60,7 @@ def limit_result(text: str, max_chars: int = MAX_RESULT_CHARS) -> tuple[str, boo
     """Recorta un resultado enorme avisando de que se ha recortado."""
     if len(text) <= max_chars:
         return text, False
-    note = f"… [recortado: {max_chars} de {len(text)} caracteres; pide menos datos]"
+    note = f"… [truncated: {max_chars} of {len(text)} characters; ask for less data]"
     return text[:max_chars] + note, True
 
 
@@ -218,10 +218,10 @@ class AgentEngine:
             arguments = json.loads(raw_arguments) if raw_arguments.strip() else {}
         except json.JSONDecodeError as exc:
             trace.invalid_json += 1
-            return _failure(f"los argumentos no son JSON válido ({exc.msg}); reenvíalos")
+            return _failure(f"the arguments are not valid JSON ({exc.msg}); send them again")
         if not isinstance(arguments, dict):
             trace.invalid_json += 1
-            return _failure("los argumentos deben ser un objeto JSON")
+            return _failure("the arguments must be a JSON object")
         try:
             return {"result": await self.execute(name, arguments), "error": None}
         except ToolError as exc:
@@ -230,7 +230,7 @@ class AgentEngine:
             raise
         except Exception as exc:
             log.exception("tool %s failed", name)
-            return _failure(f"error interno de la tool: {type(exc).__name__}: {exc}")
+            return _failure(f"internal tool error: {type(exc).__name__}: {exc}")
 
 
 def _failure(message: str) -> dict:

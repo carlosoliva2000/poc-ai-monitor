@@ -643,3 +643,23 @@ def test_a_run_without_contradictions_says_none(tmp_path: Path) -> None:
     assert ev.contradictions == []
     assert "0 frases que contradicen los checks" in summary(ev)
     assert "## Frases que contradicen los checks\n\nNinguna." in render_markdown(ev)
+
+
+def test_english_phrases_are_checked_with_the_same_rules() -> None:
+    for sentence in (
+        "The wind is notable (3.9 m/s) and pushes against the drift (4.9°).",
+        "The wind pushes in the opposite direction to the drift.",
+        "The drone drift is contrary to the wind.",
+        "GPS and radar disagree by 13.8 m.",
+        "The discrepancy between GPS and radar is 12 m.",
+    ):
+        assert contradicting_rules(sentence, WIND_YES), sentence
+    for sentence in (
+        "The wind pushes in the direction of the drift (4.9°).",
+        "The wind does not push against the drift.",
+        "The wind doesn't push in the opposite direction to the drift.",
+        "The wind pushes the drone contrary to the planned route.",
+        "GPS and radar disagree slightly (6.8 m).",
+        "GPS and radar do not disagree, 6.8 m apart.",
+    ):
+        assert contradicting_rules(sentence, WIND_YES) == [], sentence

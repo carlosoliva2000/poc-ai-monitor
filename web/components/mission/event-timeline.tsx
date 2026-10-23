@@ -29,14 +29,14 @@ export const EventTimeline = memo(function EventTimeline({ events, cursor, total
       <header className="flex flex-col gap-1.5 border-b border-border px-4 py-2.5">
         <div className="flex items-baseline gap-2">
           <h2 id="timeline-title" className="text-sm font-semibold text-foreground">
-            Timeline de eventos
+            Event timeline
           </h2>
-          <span className="font-mono text-xs tabular-nums text-muted-foreground" title="Eventos mostrados; y eventos de la simulación publicados de los esperados sin intervenciones">
-            {events.length} eventos · simulación {cursor}/{total}
+          <span className="font-mono text-xs tabular-nums text-muted-foreground" title="Events shown; and simulation events published out of those expected without interventions">
+            {events.length} events · simulation {cursor}/{total}
           </span>
-          <span className="ml-auto text-[11px] italic text-muted-foreground">«Simulador»: el agente no ve esos eventos</span>
+          <span className="ml-auto text-[11px] italic text-muted-foreground">"Simulator": the agent does not see those events</span>
         </div>
-        <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-label="Filtrar por fuente">
+        <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-label="Filter by source">
           {GROUPS.map((g) => (
             <li key={g.id}>
               <label className="flex cursor-pointer items-center gap-1">
@@ -50,7 +50,7 @@ export const EventTimeline = memo(function EventTimeline({ events, cursor, total
 
       <ol className="min-h-48 flex-1 overflow-y-auto font-mono text-xs" aria-live="off">
         {rows.length === 0 && (
-          <li className="px-4 py-6 text-center font-sans text-sm text-muted-foreground">Sin eventos todavía. Carga un escenario y pulsa Iniciar.</li>
+          <li className="px-4 py-6 text-center font-sans text-sm text-muted-foreground">No events yet. Load a scenario and press Start.</li>
         )}
         {rows.map((event, i) => (
           <li

@@ -13,7 +13,7 @@ SPEEDS = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0)
 
 def _check_speed(value: float) -> float:
     if value not in SPEEDS:
-        raise ValueError(f"velocidad no válida: {value} (valores: {SPEEDS})")
+        raise ValueError(f"invalid speed: {value} (values: {SPEEDS})")
     return value
 
 
@@ -62,7 +62,7 @@ class FaultControl(_Message):
     @model_validator(mode="after")
     def _check_mode(self) -> "FaultControl":
         if self.mode == FaultMode.LOSS and self.source != SensorSource.GPS:
-            raise ValueError("`loss` solo existe para el GPS")
+            raise ValueError("`loss` only exists for the GPS")
         return self
 
 

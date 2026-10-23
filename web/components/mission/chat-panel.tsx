@@ -53,7 +53,7 @@ export function ChatPanel({ title, agentLabel, agentClass, entries, suggestions,
         role="log"
         aria-live="polite"
       >
-        {entries.length === 0 && <p className="m-auto max-w-72 text-center text-xs leading-relaxed text-muted-foreground">Pregunta como operador. El agente contesta con lo que sabe hasta el instante actual de la simulación.</p>}
+        {entries.length === 0 && <p className="m-auto max-w-72 text-center text-xs leading-relaxed text-muted-foreground">Ask as the operator. The agent answers with what it knows up to the current instant of the simulation.</p>}
         {entries.map((m) =>
           m.kind === 'operator' ? (
             <article key={m.key} className="flex flex-col items-end gap-1">
@@ -65,7 +65,7 @@ export function ChatPanel({ title, agentLabel, agentClass, entries, suggestions,
             </article>
           ) : (
             <article key={m.key} className="flex flex-col gap-1 pl-3">
-              <span className={cn('font-mono text-[11px] font-medium', agentClass)}>{agentLabel} → OPERADOR</span>
+              <span className={cn('font-mono text-[11px] font-medium', agentClass)}>{agentLabel} → OPERATOR</span>
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground text-pretty">
                 {m.text}
                 {m.streaming && <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary align-text-bottom" aria-hidden="true" />}
@@ -105,7 +105,7 @@ export function ChatPanel({ title, agentLabel, agentClass, entries, suggestions,
           className="flex items-end gap-2 rounded-lg border border-input bg-background p-2 focus-within:border-ring"
         >
           <label htmlFor={`input-${title}`} className="sr-only">
-            Mensaje del operador a {title}
+            Operator message to {title}
           </label>
           <textarea
             id={`input-${title}`}
@@ -122,7 +122,7 @@ export function ChatPanel({ title, agentLabel, agentClass, entries, suggestions,
             placeholder={placeholder}
             className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-1 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
           />
-          <Button type="submit" size="icon" disabled={!input.trim()} aria-label="Enviar">
+          <Button type="submit" size="icon" disabled={!input.trim()} aria-label="Send">
             <ArrowUp aria-hidden="true" />
           </Button>
         </form>

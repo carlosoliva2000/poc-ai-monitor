@@ -153,16 +153,20 @@ class Simulator:
         current = self._faults.get(source)
         if active:
             if mode == FaultMode.LOSS and source != SensorSource.GPS:
-                raise ValueError("`loss` solo existe para el GPS")
+                raise ValueError("`loss` only exists for the GPS")
             if current is not None:
-                raise ValueError(f"{source.value} ya tiene un fallo activo ({current.mode.value})")
+                raise ValueError(
+                    f"{source.value} already has an active fault ({current.mode.value})"
+                )
             self._start_fault(source, ActiveFault(mode, origin))
             self._queued.append((source, ActiveFault(mode, origin), True))
             return
         if current is None or current.mode != mode:
-            raise ValueError(f"{source.value} no tiene un fallo {mode.value} activo")
+            raise ValueError(f"{source.value} has no active {mode.value} fault")
         if current.origin != origin:
-            raise ValueError(f"el fallo de {source.value} lo programó el escenario: acaba solo")
+            raise ValueError(
+                f"the {source.value} fault was scheduled by the scenario: it ends by itself"
+            )
         self._end_fault(source)
         self._queued.append((source, current, False))
 
@@ -231,7 +235,7 @@ class Simulator:
     def step(self) -> list[EventDraft]:
         """Eventos del instante actual (en el orden del contrato) y avance de 0,1 s."""
         if self.finished:
-            raise RuntimeError("la simulación ha terminado")
+            raise RuntimeError("the simulation has finished")
         d = self.config.drone
         t = self.t
 

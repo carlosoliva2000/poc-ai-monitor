@@ -18,7 +18,7 @@ def load_scenario(name: str, scenarios_dir: Path = SCENARIOS_DIR) -> ScenarioCon
     path = scenario_path(name, scenarios_dir)
     config = ScenarioConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
     if config.name != name:
-        raise ValueError(f"{path.name}: `name` es {config.name!r}, se esperaba {name!r}")
+        raise ValueError(f"{path.name}: `name` is {config.name!r}, expected {name!r}")
     return config
 
 

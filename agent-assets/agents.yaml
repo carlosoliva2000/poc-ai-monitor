@@ -113,4 +113,4 @@ agents:
     max_history_messages: 12
     stream: true
     # Respuesta fija mientras aún no existe el informe (no se llama al LLM).
-    no_report_reply: "Todavía no hay informe: la simulación no ha terminado. Pregúntame cuando haya acabado el ejercicio."
+    no_report_reply: "There is no report yet: the simulation has not finished. Ask me again once the exercise is over."

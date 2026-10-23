@@ -1,45 +1,45 @@
 ---
 name: report-format
-description: Estructura y estilo del informe final del ejercicio. Úsala siempre antes de escribir el informe.
+description: Structure and style of the exercise's final report. Always use it before writing the report.
 ---
-# Formato del informe final
+# Final report format
 
-El informe es un documento en **Markdown**, en español, para un responsable que no ha visto la simulación. Breve: cabe en una pantalla y media. Tiempos como T+mm:ss.
+The report is a **Markdown** document, in English, for a person in charge who has not seen the simulation. Brief: it fits in a screen and a half. Times as T+mm:ss.
 
-## Quién escribe qué
-El informe final lo monta el módulo con estas partes, en este orden:
+## Who writes what
+The module assembles the final report with these parts, in this order:
 
-1. **Cabecera** (módulo): misión, escenario, duración, si se completó, waypoints y número de anomalías.
-2. **Resumen** (tú).
-3. **Cronología** (módulo): tabla con las detecciones, las alertas y los cierres, con su hora.
-4. **Anomalías** (módulo y tú): una subsección por anomalía (cada cadena de alertas que se sustituyen entre sí es **una** anomalía), con la hora y la severidad de su primera alerta, los cambios de la última, las evidencias y el estado, escritos por el módulo. Tú escribes solo el «Qué se vio» de cada una.
-5. **Valoración del monitor** (tú).
-6. **Recomendaciones** (tú).
-7. **Limitaciones** (módulo).
+1. **Header** (module): mission, scenario, duration, whether it was completed, waypoints and number of anomalies.
+2. **Summary** (you).
+3. **Timeline** (module): table with the detections, the alerts and the closures, with their time.
+4. **Anomalies** (module and you): one subsection per anomaly (each chain of alerts that replace one another is **one** anomaly), with the time and severity of its first alert, the changes of the last one, the evidence and the status, written by the module. You write only the "What was seen" of each one.
+5. **Monitor assessment** (you).
+6. **Recommendations** (you).
+7. **Limitations** (module).
 
-## Lo que escribes tú
-Responde **solo** con estos cuatro apartados, con estos títulos exactos y en este orden:
+## What you write
+Respond with **only** these four sections, with these exact headings and in this order:
 
 ```markdown
-## Resumen
-3–5 frases: qué pasó, cuántas anomalías hubo, cuál fue la más grave y si el monitor las identificó a tiempo.
+## Summary
+3–5 sentences: what happened, how many anomalies there were, which was the most serious and whether the monitor identified them in time.
 
-## Qué se vio
+## What was seen
 ### A1
-2–3 frases con cifras y fuentes (lo que vio el detector y lo que comprobó el monitor). Sin repetir la hora, la severidad ni el estado.
+2–3 sentences with figures and sources (what the detector saw and what the monitor checked). Without repeating the time, the severity or the status.
 ### A2
 …
 
-## Valoración del monitor
-Con espíritu crítico, en cuatro viñetas: **Respaldo** (qué comprobaciones sostienen cada causa y qué duda queda), **Retrasos**, **Fallbacks y rechazos** (cifras exactas) y **Ayudas** (cuáles tenía activas y cómo pueden influir en el resultado).
+## Monitor assessment
+Critically, in four bullets: **Support** (which checks support each cause and what doubt remains), **Delays**, **Fallbacks and rejections** (exact figures) and **Aids** (which ones it had active and how they may influence the result).
 
-## Recomendaciones
+## Recommendations
 1. …
 2. …
 ```
 
-## Reglas
-- Cada cifra sale de los datos que te entregan. Si no tienes un dato, escribe «no disponible».
-- No escribas horas, severidades, estados ni ids que no estén en los datos; los hechos los pone el módulo.
-- No copies el JSON de los datos: tradúcelo a frases.
-- Sin adornos ni conclusiones que no salgan de los datos.
+## Rules
+- Every figure comes from the data you are given. If you do not have a piece of data, write "not available".
+- Do not write times, severities, statuses or ids that are not in the data; the module provides the facts.
+- Do not copy the JSON of the data: turn it into sentences.
+- No embellishments or conclusions that do not come from the data.

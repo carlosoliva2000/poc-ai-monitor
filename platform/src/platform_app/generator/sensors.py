@@ -35,7 +35,7 @@ def period_steps(period_s: float) -> int:
     """Pasos de simulación (0,1 s) que dura el periodo; tiene que ser múltiplo de 0,1 s."""
     steps = round(period_s / STEP_S)
     if steps < 1 or abs(steps * STEP_S - period_s) > 1e-9:
-        raise ValueError(f"el periodo {period_s} s no es múltiplo de {STEP_S} s")
+        raise ValueError(f"the period {period_s} s is not a multiple of {STEP_S} s")
     return steps
 
 

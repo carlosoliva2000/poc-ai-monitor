@@ -55,7 +55,7 @@ MAX_TICK_S = 0.5  # tras un atasco no se recupera más de esto de golpe
 WAIT_AGENT_TIMEOUT_S = 90.0  # reloj de pared
 AI_PATTERN = "citadel.pub.evt.ai.>"
 MONITOR_SOURCE = "ai-monitor"
-INTERACTIVE_OFF_MESSAGE = "el modo interactivo está apagado: actívalo para inyectar fallos"
+INTERACTIVE_OFF_MESSAGE = "interactive mode is off: turn it on to inject faults"
 META_KEYS = ("speed", "wait_agent", "interactive")
 
 
@@ -158,7 +158,7 @@ class Player:
 
     def _require_sim(self) -> Simulator:
         if self.sim is None:
-            raise PlayerError("no hay ningún escenario cargado")
+            raise PlayerError("no scenario is loaded")
         return self.sim
 
     # --- Carga y reinicio ---------------------------------------------------------------------
@@ -166,7 +166,7 @@ class Player:
     def load(self, name: str) -> None:
         """Carga un escenario (lo genera en `runs/<nombre>/` si no existe) con un `run_id` nuevo."""
         if name not in list_scenarios(self.scenarios_dir):
-            raise PlayerError(f"escenario desconocido: {name!r}")
+            raise PlayerError(f"unknown scenario: {name!r}")
         config = load_scenario(name, self.scenarios_dir)
         run = generate(config)  # resultado esperado sin intervenciones
         if not (self.runs_dir / name / "events.jsonl").exists():
@@ -210,7 +210,7 @@ class Player:
     def reset(self) -> None:
         """Recarga el mismo escenario: `run_id` nuevo, bus y timeline limpios, `seq` desde 1."""
         if self.config is None:
-            raise PlayerError("no hay ningún escenario cargado")
+            raise PlayerError("no scenario is loaded")
         self.load(self.config.name)
 
     def _new_run_id(self) -> str:
@@ -286,7 +286,7 @@ class Player:
     def play(self) -> None:
         self._require_sim()
         if self._status == PlayerStatus.FINISHED:
-            raise PlayerError("la simulación ha terminado: reiníciala para volver a verla")
+            raise PlayerError("the simulation has finished: restart it to watch it again")
         if self._status == PlayerStatus.RUNNING:
             return
         was_paused = self._status == PlayerStatus.PAUSED
@@ -309,7 +309,7 @@ class Player:
         """Publica el siguiente evento y se queda en pausa."""
         sim = self._require_sim()
         if self._status == PlayerStatus.FINISHED:
-            raise PlayerError("la simulación ha terminado: reiníciala para volver a verla")
+            raise PlayerError("the simulation has finished: restart it to watch it again")
         if self._status == PlayerStatus.RUNNING:
             self._pause(PauseReason.USER)
         self._waiting_for.clear()
@@ -326,7 +326,7 @@ class Player:
 
     def set_speed(self, speed: float) -> None:
         if speed not in SPEEDS:
-            raise PlayerError(f"velocidad no válida: {speed} (valores: {SPEEDS})")
+            raise PlayerError(f"invalid speed: {speed} (values: {SPEEDS})")
         self.speed = speed
         self._record("speed", speed)
         self._notify()
@@ -353,7 +353,7 @@ class Player:
             raise PlayerError(INTERACTIVE_OFF_MESSAGE)
         sim = self._require_sim()
         if sim.finished and not self._queue:
-            raise PlayerError("la simulación ha terminado: no se pueden inyectar fallos")
+            raise PlayerError("the simulation has finished: faults cannot be injected")
         try:
             sim.set_fault(source, mode, active, FaultOrigin.MANUAL)
         except ValueError as exc:

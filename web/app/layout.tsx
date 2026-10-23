@@ -7,9 +7,9 @@ import '@fontsource/ibm-plex-mono/500.css'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Consola de misión · Monitor de IA del dron',
+  title: 'Mission console · Drone AI monitor',
   description:
-    'Simulador de un dron que publica eventos en un bus, detector de reglas y agentes de IA (monitor e informe) que diagnostican lo que pasa.',
+    'A drone simulator that publishes events on a bus, a rule-based detector and AI agents (monitor and report) that diagnose what is happening.',
   icons: { icon: '/icon.svg' },
 }
 
@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className="bg-background">
+    <html lang="en" className="bg-background">
       <body className="font-sans antialiased">{children}</body>
     </html>
   )

@@ -120,7 +120,7 @@ def plan_for(config: ScenarioConfig) -> tuple[PlanFile, list[float]]:
     """`plan.json` del escenario (vuelo sin perturbaciones) y los `eta_s` de la ruta."""
     plan = fly(config, perturbed=False)
     if not plan.completed:
-        raise ValueError("el plan no se completa dentro de max_duration_s")
+        raise ValueError("the plan is not completed within max_duration_s")
     etas = plan_etas(plan)
     return _plan_file(config, plan, etas), etas
 

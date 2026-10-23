@@ -82,8 +82,8 @@ class ReportAgent:
                 run_id=run_id,
                 t_label=format_t(now),
                 sim_time=f"{now:g}",
-                flight_summary=compact_json(summary) if summary else "no disponible",
-                labels=", ".join(labels) or "ninguna",
+                flight_summary=compact_json(summary) if summary else "not available",
+                labels=", ".join(labels) or "none",
                 anomalies=anomalies_for_llm(facts),
                 assessment_facts=assessment_facts(facts, rt.trace.records, aids),
             )
@@ -105,7 +105,7 @@ class ReportAgent:
         if narrative.empty:
             trace.fallback = True
             note = (
-                "Informe con los hechos del módulo y sin narrativa: el agente no concluyó "
+                "Report with the module's facts and without narrative: the agent did not conclude "
                 f"({trace.end_reason})."
             )
         figures = figures_line(monitor_stats(rt.trace.records, aids), facts)
@@ -136,7 +136,7 @@ class ReportAgent:
 
 
 async def _no_tools(name: str, args: dict[str, Any]) -> Any:
-    raise ToolError("este agente no tiene tools")
+    raise ToolError("this agent has no tools")
 
 
 def _wall_iso() -> str:

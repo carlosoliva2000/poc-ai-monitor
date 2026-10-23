@@ -9,29 +9,29 @@ export function formatT(seconds: number) {
 }
 
 export const CAUSE_LABEL: Record<Cause, string> = {
-  WIND: 'Viento',
-  HIJACK: 'Secuestro',
-  GPS_SPOOFING: 'Spoofing del GPS',
-  SENSOR_FAULT: 'Fallo de sensor',
-  GPS_JAMMING: 'Pérdida/interferencia del GPS',
-  UNKNOWN: 'Sin diagnóstico',
+  WIND: 'Wind',
+  HIJACK: 'Hijacking',
+  GPS_SPOOFING: 'GPS spoofing',
+  SENSOR_FAULT: 'Sensor fault',
+  GPS_JAMMING: 'GPS loss/interference',
+  UNKNOWN: 'No diagnosis',
 }
-export const SEVERITY_LABEL: Record<Severity, string> = { low: 'baja', medium: 'media', high: 'alta' }
+export const SEVERITY_LABEL: Record<Severity, string> = { low: 'low', medium: 'medium', high: 'high' }
 export const SOURCE_LABEL: Record<SensorSource, string> = {
   gps: 'GPS',
   radar: 'Radar',
   meteo: 'Meteo',
-  link: 'Enlace',
-  battery: 'Batería',
+  link: 'Link',
+  battery: 'Battery',
 }
 
 export const CHECK_LABEL: Record<string, string> = {
-  gps_alert_recent: 'Hay una alerta del GPS reciente',
-  gps_radar_disagreed: 'GPS y radar discrepan',
-  wind_notable: 'El viento es notable',
-  wind_with_drift: 'La deriva va a favor del viento',
-  link_checked: 'Se ha mirado el enlace de mando',
-  link_anomalous: 'El enlace de mando es anómalo',
+  gps_alert_recent: 'There is a recent GPS alert',
+  gps_radar_disagreed: 'GPS and radar disagree',
+  wind_notable: 'The wind is notable',
+  wind_with_drift: 'The drift goes with the wind',
+  link_checked: 'The command link was checked',
+  link_anomalous: 'The command link is anomalous',
 }
 
 /** Grupo de filtro del timeline: de dónde viene el evento. */
@@ -40,14 +40,14 @@ export const GROUPS: { id: Group; label: string }[] = [
   { id: 'gps', label: 'GPS' },
   { id: 'radar', label: 'Radar' },
   { id: 'meteo', label: 'Meteo' },
-  { id: 'link', label: 'Enlace' },
-  { id: 'battery', label: 'Batería' },
-  { id: 'mission', label: 'Misión' },
+  { id: 'link', label: 'Link' },
+  { id: 'battery', label: 'Battery' },
+  { id: 'mission', label: 'Mission' },
   { id: 'detector', label: 'Detector' },
   { id: 'monitor', label: 'Monitor' },
-  { id: 'report', label: 'Informe' },
+  { id: 'report', label: 'Report' },
   { id: 'chat', label: 'Chat' },
-  { id: 'sim', label: 'Simulador' },
+  { id: 'sim', label: 'Simulator' },
 ]
 
 export function groupOf(e: Envelope): Group {
@@ -111,11 +111,11 @@ export function payloadSummary(e: Envelope): string {
   const p = e.payload as Record<string, unknown>
   switch (e.type) {
     case 'PositionUpdated':
-      return `x=${n(p.x, 0)} y=${n(p.y, 0)} v=${n(p.speed_mps)} rumbo=${n(p.heading_deg, 0)}° fix=${p.fix} sats=${p.sats} hdop=${n(p.hdop)}`
+      return `x=${n(p.x, 0)} y=${n(p.y, 0)} v=${n(p.speed_mps)} heading=${n(p.heading_deg, 0)}° fix=${p.fix} sats=${p.sats} hdop=${n(p.hdop)}`
     case 'TrackUpdated':
-      return `x=${n(p.x, 0)} y=${n(p.y, 0)} v=${n(p.speed_mps)} calidad=${n(p.quality, 2)}`
+      return `x=${n(p.x, 0)} y=${n(p.y, 0)} v=${n(p.speed_mps)} quality=${n(p.quality, 2)}`
     case 'WindReported':
-      return `${n(p.speed_mps)} m/s (racha ${n(p.gust_mps)}) desde ${n(p.from_deg, 0)}°`
+      return `${n(p.speed_mps)} m/s (gust ${n(p.gust_mps)}) from ${n(p.from_deg, 0)}°`
     case 'LinkStatus':
       return `${p.controller_id} rssi=${n(p.rssi_dbm, 0)} dBm lat=${n(p.latency_ms, 0)} ms`
     case 'BatteryStatus':
@@ -126,26 +126,26 @@ export function payloadSummary(e: Envelope): string {
     case 'DetectionUpdated':
       return `${p.detection_id} ${p.rule} (${p.severity}) ${p.message}`
     case 'DetectionCleared':
-      return `${p.detection_id} ${p.rule} · duró ${n(p.duration_s, 0)} s`
+      return `${p.detection_id} ${p.rule} · lasted ${n(p.duration_s, 0)} s`
     case 'AnomalyDetected':
       return `${p.alert_id} ${p.cause} (${p.severity}) ${p.summary}`
     case 'AlertClosed':
       return `${p.alert_id} ${stripFieldValues(String(p.reason))}`
     case 'DetectionAcknowledged':
-      return `${p.detection_id} → ${p.alert_id ?? 'sin alerta'}`
+      return `${p.detection_id} → ${p.alert_id ?? 'no alert'}`
     case 'FaultInjected':
     case 'FaultCleared':
       return `${p.source} ${p.mode} (${p.origin})`
     case 'InteractiveModeChanged':
-      return p.interactive ? 'modo interactivo ON' : 'modo interactivo OFF'
+      return p.interactive ? 'interactive mode ON' : 'interactive mode OFF'
     case 'SimulationPaused':
-      return `motivo: ${p.reason}`
+      return `reason: ${p.reason}`
     case 'OperatorMessage':
       return `[${p.conversation_id}] ${p.text}`
     case 'AgentReply':
       return `[${p.conversation_id}] ${String(p.text).slice(0, 120)}`
     case 'ReportGenerated':
-      return `${p.alerts_count} alertas`
+      return `${p.alerts_count} alerts`
     default:
       return Object.entries(p)
         .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)

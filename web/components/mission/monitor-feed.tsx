@@ -66,7 +66,7 @@ export function MonitorFeed({ events, data, activity }: Props) {
       >
         {feed.length === 0 && (
           <p className="m-auto max-w-64 text-center text-sm leading-relaxed text-muted-foreground text-pretty">
-            Esperando al detector. Cuando una regla salte, el monitor diagnosticará la causa y publicará una alerta aquí.
+            Waiting for the detector. When a rule fires, the monitor will diagnose the cause and publish an alert here.
           </p>
         )}
         {feed.map((e) => (
@@ -83,7 +83,7 @@ export function MonitorFeed({ events, data, activity }: Props) {
 function Episodes({ data }: { data: Derived }) {
   if (data.episodes.length === 0) return null
   return (
-    <ul className="flex flex-wrap gap-1.5 border-b border-border px-4 py-2 text-xs" aria-label="Alertas (una por episodio)">
+    <ul className="flex flex-wrap gap-1.5 border-b border-border px-4 py-2 text-xs" aria-label="Alerts (one per episode)">
       {data.episodes.map((ep) => {
         const a = ep.head.event.payload
         return (
@@ -95,8 +95,8 @@ function Episodes({ data }: { data: Derived }) {
             <span className="font-mono font-medium">{ep.label}</span>
             <span>{CAUSE_LABEL[a.cause]}</span>
             <span className={cn('rounded-sm px-1 text-[10px] font-medium', SEVERITY_CLASS[a.severity])}>{SEVERITY_LABEL[a.severity]}</span>
-            <span>{ep.open ? 'abierta' : 'cerrada'}</span>
-            {ep.chain.length > 1 && <span className="text-muted-foreground">· {ep.chain.length} alertas</span>}
+            <span>{ep.open ? 'open' : 'closed'}</span>
+            {ep.chain.length > 1 && <span className="text-muted-foreground">· {ep.chain.length} alerts</span>}
           </li>
         )
       })}
@@ -106,12 +106,12 @@ function Episodes({ data }: { data: Derived }) {
 
 function Analyzing({ event, busy }: { event: Envelope; busy: boolean }) {
   const p = event.payload as unknown as { detection_id: string }
-  const what = event.type === 'DetectionCleared' ? `el cierre de ${p.detection_id}` : p.detection_id
+  const what = event.type === 'DetectionCleared' ? `the closure of ${p.detection_id}` : p.detection_id
   return (
     <div className="flex items-center gap-2 pl-3 text-xs text-muted-foreground">
       <span className="font-mono font-medium text-primary">MONITOR</span>
-      analizando {what}…
-      {busy ? <TypingDots /> : <span>(en cola)</span>}
+      analysing {what}…
+      {busy ? <TypingDots /> : <span>(queued)</span>}
     </div>
   )
 }
@@ -124,12 +124,12 @@ function FeedEntry({ event, data, byId }: { event: Envelope; data: Derived; byId
       const updated = event.type === 'DetectionUpdated'
       return (
         <article className="flex flex-col gap-1 rounded-md border border-dashed border-border bg-muted/60 px-3 py-2">
-          <Who label={updated ? 'DETECTOR · ACTUALIZACIÓN' : 'DETECTOR'} className="text-muted-foreground" t={event.sim_time} />
+          <Who label={updated ? 'DETECTOR · UPDATE' : 'DETECTOR'} className="text-muted-foreground" t={event.sim_time} />
           <p className="text-sm text-foreground">
             <span className="mr-1.5 font-mono text-xs font-medium">{p.rule}</span>
-            <span className={cn('mr-1.5 rounded-sm px-1.5 py-px text-[10px] font-medium', SEVERITY_CLASS[p.severity])}>{updated ? `sube a ${SEVERITY_LABEL[p.severity]}` : SEVERITY_LABEL[p.severity]}</span>
+            <span className={cn('mr-1.5 rounded-sm px-1.5 py-px text-[10px] font-medium', SEVERITY_CLASS[p.severity])}>{updated ? `rises to ${SEVERITY_LABEL[p.severity]}` : SEVERITY_LABEL[p.severity]}</span>
             {p.message}
-            {p.source && <span className="text-muted-foreground"> · fuente {SOURCE_LABEL[p.source]}</span>}
+            {p.source && <span className="text-muted-foreground"> · source {SOURCE_LABEL[p.source]}</span>}
           </p>
           <span className="font-mono text-[10px] text-muted-foreground">{p.detection_id}</span>
         </article>
@@ -139,10 +139,10 @@ function FeedEntry({ event, data, byId }: { event: Envelope; data: Derived; byId
       const p = event.payload as unknown as DetectionCleared
       return (
         <article className="flex flex-col gap-1 rounded-md border border-dashed border-border bg-muted/60 px-3 py-2">
-          <Who label="DETECTOR · CIERRE" className="text-muted-foreground" t={event.sim_time} />
+          <Who label="DETECTOR · CLEARED" className="text-muted-foreground" t={event.sim_time} />
           <p className="text-sm text-foreground">
             <span className="mr-1.5 font-mono text-xs font-medium">{p.rule}</span>
-            {p.detection_id} cerrada tras {p.duration_s.toFixed(0)} s (máximo {p.max_value.toFixed(1)})
+            {p.detection_id} cleared after {p.duration_s.toFixed(0)} s (maximum {p.max_value.toFixed(1)})
           </p>
         </article>
       )
@@ -154,9 +154,9 @@ function FeedEntry({ event, data, byId }: { event: Envelope; data: Derived; byId
       const ep = data.alerts.get(p.alert_id)?.episode
       return (
         <article className="flex flex-col gap-1 pl-3">
-          <Who label="MONITOR · CIERRE" className="text-primary" t={event.sim_time} />
+          <Who label="MONITOR · CLOSURE" className="text-primary" t={event.sim_time} />
           <p className="text-sm text-foreground">
-            Cierra la alerta <span className="font-mono">{p.alert_id}</span>
+            Closes alert <span className="font-mono">{p.alert_id}</span>
             {ep && <span className="font-mono text-muted-foreground"> ({ep})</span>}: {stripFieldValues(p.reason)}
           </p>
         </article>
@@ -165,10 +165,10 @@ function FeedEntry({ event, data, byId }: { event: Envelope; data: Derived; byId
     case 'DetectionAcknowledged': {
       const p = event.payload as unknown as DetectionAcknowledged
       const ep = p.alert_id ? data.alerts.get(p.alert_id)?.episode : null
-      const text = p.fallback ? 'sin diagnóstico (el agente no concluyó)' : p.alert_id ? `sigue la alerta ${p.alert_id}${ep ? ` (${ep})` : ''}` : 'sin alerta'
+      const text = p.fallback ? 'no diagnosis (the agent did not conclude)' : p.alert_id ? `alert ${p.alert_id} continues${ep ? ` (${ep})` : ''}` : 'no alert'
       return (
         <article className="flex flex-col gap-1 pl-3">
-          <Who label="MONITOR · RECONOCE" className="text-primary" t={event.sim_time} />
+          <Who label="MONITOR · ACKNOWLEDGES" className="text-primary" t={event.sim_time} />
           <p className="text-sm text-foreground">
             <span className="font-mono text-xs">{p.detection_id}</span> <ArrowRight className="inline size-3" aria-hidden="true" /> <strong className="font-medium">{text}</strong>
             <span className="text-muted-foreground"> · {stripFieldValues(p.reason)}</span>
@@ -188,53 +188,53 @@ function AlertCard({ event, data, byId }: { event: Envelope<Anomaly>; data: Deri
   const respondsTo = responds ? (responds.payload as { detection_id: string }).detection_id : event.causation_id
   return (
     <article className="flex flex-col gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-2" data-testid="alert-card">
-      <Who label="MONITOR · ALERTA" className="text-primary" t={event.sim_time} />
+      <Who label="MONITOR · ALERT" className="text-primary" t={event.sim_time} />
       <div className="flex flex-wrap items-center gap-1.5 text-sm">
         {view && <span className="rounded-sm bg-foreground px-1.5 py-px font-mono text-[10px] font-medium text-background">{view.episode}</span>}
         <span className="font-mono text-xs">{a.alert_id}</span>
         <strong className="font-medium">{CAUSE_LABEL[a.cause]}</strong>
         <span className={cn('rounded-sm px-1.5 py-px text-[10px] font-medium', SEVERITY_CLASS[a.severity])}>{SEVERITY_LABEL[a.severity]}</span>
-        <span className="text-xs text-muted-foreground">confianza {(a.confidence * 100).toFixed(0)} %</span>
-        {a.fallback && <span className="rounded-sm bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">fallback: sin diagnóstico</span>}
+        <span className="text-xs text-muted-foreground">confidence {(a.confidence * 100).toFixed(0)} %</span>
+        {a.fallback && <span className="rounded-sm bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">fallback: no diagnosis</span>}
       </div>
       {a.supersedes && (
         <p className="flex items-center gap-1 text-xs font-medium text-primary" data-testid="supersedes">
           <Repeat2 className="size-3.5" aria-hidden="true" />
-          Sustituye a {a.supersedes} (misma alerta, {view?.episode})
+          Supersedes {a.supersedes} (same alert, {view?.episode})
         </p>
       )}
       <p className="text-sm leading-relaxed text-foreground text-pretty">{a.summary}</p>
       <details className="group text-sm">
         <summary className="cursor-pointer list-none text-xs font-medium text-primary [&::-webkit-details-marker]:hidden">
           <span className="mr-1 inline-block transition-transform group-open:rotate-90">›</span>
-          Razonamiento, comprobaciones y evidencias
+          Reasoning, checks and evidence
         </summary>
         <div className="mt-2 flex flex-col gap-2">
-          <Section title="Explicación">{stripFieldValues(a.explanation)}</Section>
-          <Section title="Recomendación">{stripFieldValues(a.recommendation)}</Section>
+          <Section title="Explanation">{stripFieldValues(a.explanation)}</Section>
+          <Section title="Recommendation">{stripFieldValues(a.recommendation)}</Section>
           <div>
-            <h4 className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Comprobaciones (checks)</h4>
+            <h4 className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Checks</h4>
             {a.checks ? (
               <ul className="grid gap-0.5 text-xs" data-testid="checks">
                 {Object.entries(a.checks).map(([key, value]) => (
                   <li key={key} className="flex items-center gap-2">
                     <span className={cn('w-8 shrink-0 rounded-sm px-1 text-center font-mono text-[10px] font-medium', value === true ? 'bg-primary/15 text-primary' : value === false ? 'bg-muted text-muted-foreground' : 'bg-muted/60 text-muted-foreground')}>
-                      {value === true ? 'sí' : value === false ? 'no' : '—'}
+                      {value === true ? 'yes' : value === false ? 'no' : '—'}
                     </span>
                     <span className="text-foreground">{CHECK_LABEL[key] ?? key}</span>
-                    {value === null && <span className="text-muted-foreground">(no se miró)</span>}
+                    {value === null && <span className="text-muted-foreground">(not checked)</span>}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-xs text-muted-foreground">Sin comprobaciones (alerta de fallback).</p>
+              <p className="text-xs text-muted-foreground">No checks (fallback alert).</p>
             )}
           </div>
-          <Section title="Evidencias">
-            <span className="font-mono text-xs">{a.evidence_event_ids.join(', ') || 'ninguna'}</span>
+          <Section title="Evidence">
+            <span className="font-mono text-xs">{a.evidence_event_ids.join(', ') || 'none'}</span>
           </Section>
           <p className="font-mono text-[10px] text-muted-foreground">
-            responde a {respondsTo ?? '—'} · detecciones {a.detection_ids.join(', ')} · datos hasta {formatT(a.as_of_sim_time)}
+            responds to {respondsTo ?? '—'} · detections {a.detection_ids.join(', ')} · data up to {formatT(a.as_of_sim_time)}
           </p>
         </div>
       </details>

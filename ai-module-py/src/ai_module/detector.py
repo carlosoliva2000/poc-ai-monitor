@@ -67,11 +67,11 @@ _SOURCE_OF_TYPE: dict[EventType, SensorSource] = {
 
 # Cómo se nombra cada fuente en los mensajes.
 _SOURCE_NAMES: dict[SensorSource, str] = {
-    SensorSource.GPS: "El GPS",
-    SensorSource.RADAR: "El radar",
-    SensorSource.METEO: "La estación meteo",
-    SensorSource.LINK: "El enlace de mando",
-    SensorSource.BATTERY: "La batería",
+    SensorSource.GPS: "The GPS",
+    SensorSource.RADAR: "The radar",
+    SensorSource.METEO: "The weather station",
+    SensorSource.LINK: "The command link",
+    SensorSource.BATTERY: "The battery",
 }
 
 _SILENT_SEVERITY: dict[SensorSource, Severity] = {
@@ -180,8 +180,8 @@ class _Sample:
 
 
 def _fmt(value: float, decimals: int = 1) -> str:
-    """Número con coma decimal, como en los textos para personas."""
-    return f"{value:.{decimals}f}".replace(".", ",")
+    """Número con punto decimal, como en los textos para personas."""
+    return f"{value:.{decimals}f}"
 
 
 def _event_time(t0: datetime, sim_time: float) -> str:
@@ -310,8 +310,8 @@ class Detector:
                     since=self._last_seen[source],
                     trigger=trigger,
                     message=(
-                        f"{name} lleva {_fmt(elapsed)} s sin enviar eventos "
-                        f"(umbral {_fmt(threshold)} s)"
+                        f"{name} has sent no events for {_fmt(elapsed)} s "
+                        f"(threshold {_fmt(threshold)} s)"
                     ),
                 )
             )
@@ -395,7 +395,7 @@ class Detector:
                 cfg,
                 dev,
                 previous,
-                f"La posición del GPS se aleja {_fmt(dev)} m de la ruta planificada",
+                f"The GPS position is {_fmt(dev)} m away from the planned route",
             )
         out += self._gps_quality(pos, event)
         return out
@@ -427,8 +427,8 @@ class Detector:
             cfg,
             mean,
             [gps_id, event.event_id],
-            f"El GPS y el radar difieren {_fmt(mean)} m (media de las últimas "
-            f"{len(samples)} medidas)",
+            f"GPS and radar differ by {_fmt(mean)} m (mean of the last "
+            f"{len(samples)} measurements)",
         )
 
     def _gps_at(self, t: float, max_gap_s: float) -> tuple[Point, str] | None:
@@ -459,17 +459,17 @@ class Detector:
         severity = Severity.HIGH if pos.fix == GpsFix.NONE else Severity.MEDIUM
         if pos.fix == GpsFix.NONE:
             message = (
-                f"El GPS ha perdido el fix (fix none, {pos.sats} satélites, hdop {_fmt(pos.hdop)})"
+                f"The GPS has lost the fix (fix none, {pos.sats} satellites, hdop {_fmt(pos.hdop)})"
             )
         else:
             reasons = []
             if pos.fix != GpsFix.FIX_3D:
                 reasons.append(f"fix {pos.fix.value}")
             if pos.sats < cfg.min_sats:
-                reasons.append(f"{pos.sats} satélites (mínimo {cfg.min_sats})")
+                reasons.append(f"{pos.sats} satellites (minimum {cfg.min_sats})")
             if pos.hdop > cfg.max_hdop:
-                reasons.append(f"hdop {_fmt(pos.hdop)} (máximo {_fmt(cfg.max_hdop)})")
-            message = "La calidad del GPS se ha degradado: " + ", ".join(reasons)
+                reasons.append(f"hdop {_fmt(pos.hdop)} (maximum {_fmt(cfg.max_hdop)})")
+            message = "The GPS quality has degraded: " + ", ".join(reasons)
 
         if episode is None:
             if not bad:

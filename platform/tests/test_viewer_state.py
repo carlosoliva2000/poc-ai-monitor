@@ -49,7 +49,7 @@ def test_clock_format() -> None:
 def test_state_message_updates_the_status_line() -> None:
     s = live()
     line = s.status_line()
-    for part in ("demo", "T+01:01", "4×", "running", "esperar al agente: no", "interactivo: no"):
+    for part in ("demo", "T+01:01", "4×", "running", "wait for the agent: no", "interactive: no"):
         assert part in line
     s.apply_message(
         {**STATE, "interactive": True, "wait_agent": True,
@@ -57,10 +57,10 @@ def test_state_message_updates_the_status_line() -> None:
                            {"source": "gps", "mode": "loss", "origin": "manual"}]}
     )  # fmt: skip
     line = s.status_line()
-    assert "interactivo: SÍ" in line and "esperar al agente: sí" in line
+    assert "interactive: YES" in line and "wait for the agent: yes" in line
     assert "radar(mute), gps(loss)" in line
     assert s.silenced_sources() == ["radar"]
-    assert ViewerState().status_line() == "sin conexión con la plataforma"
+    assert ViewerState().status_line() == "no connection to the platform"
 
 
 def test_gps_trail_drone_and_fix() -> None:
@@ -81,7 +81,7 @@ def test_radar_points_wind_and_bounds() -> None:
         s.apply_message(ev("TrackUpdated", {"x": float(k), "y": 0.0}, k))
     assert len(s.radar) == 45
     s.apply_message(ev("WindReported", {"speed_mps": 12.0, "gust_mps": 15, "from_deg": 0.0}, 10))
-    assert s.wind_text().startswith("viento 12.0 m/s del 0°")
+    assert s.wind_text().startswith("wind 12.0 m/s from 0°")
     wx, wy = s.wind_vector()
     assert (round(wx, 6), round(wy, 6)) == (0.0, -1.0)  # viento del norte: sopla hacia el sur
     x0, x1, y0, y1 = s.bounds(margin_m=10)
@@ -109,8 +109,8 @@ def test_open_detections_are_highlighted_until_cleared() -> None:
     s.apply_message(detection("DetectionRaised", "det-2", "SOURCE_SILENT", 70.0, "radar"))
     assert s.highlight_since() == 70.0
     assert s.detections_lines() == [
-        "SOURCE_SILENT (radar) · medium · desde T+01:10",
-        "ROUTE_DEVIATION · medium · desde T+01:20",
+        "SOURCE_SILENT (radar) · medium · since T+01:10",
+        "ROUTE_DEVIATION · medium · since T+01:20",
     ]
     s.apply_message(detection("DetectionUpdated", "det-1", "ROUTE_DEVIATION", 80.0))
     assert len(s.detections) == 2
@@ -174,7 +174,7 @@ def test_fault_keys_need_the_interactive_mode() -> None:
     s = live()
     for key in "12345g":
         action = s.key_action(key)
-        assert action.message is None and "interactivo" in action.notice
+        assert action.message is None and "interactive" in action.notice
     s.apply_message({**STATE, "interactive": True})
     sources = {"1": "gps", "2": "radar", "3": "meteo", "4": "link", "5": "battery"}
     for key, source in sources.items():

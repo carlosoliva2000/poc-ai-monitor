@@ -50,19 +50,19 @@ export function useLayers() {
 }
 
 const ITEMS: { id: keyof Layers; label: string; swatch: string; note?: string }[] = [
-  { id: 'plan', label: 'Ruta planificada', swatch: 'border-t-2 border-dashed border-primary w-5' },
+  { id: 'plan', label: 'Planned route', swatch: 'border-t-2 border-dashed border-primary w-5' },
   { id: 'waypoints', label: 'Waypoints', swatch: 'size-2.5 rotate-45 border-2 border-primary bg-card' },
-  { id: 'gpsTrail', label: 'Estela del GPS', swatch: 'h-1 w-5 rounded-full bg-accent' },
-  { id: 'gpsPoints', label: 'Puntos del GPS', swatch: 'size-2 rounded-full bg-accent' },
-  { id: 'radarPoints', label: 'Puntos del radar', swatch: 'size-2 rounded-full bg-[oklch(0.55_0.12_195)]' },
-  { id: 'truth', label: 'Mostrar verdad', swatch: 'h-1 w-5 rounded-full bg-foreground/70', note: 'solo simulador, el agente no la ve' },
-  { id: 'wind', label: 'Viento', swatch: 'size-2 rounded-full bg-muted-foreground' },
-  { id: 'highlight', label: 'Resalte de detecciones', swatch: 'h-1 w-5 rounded-full bg-destructive/60' },
+  { id: 'gpsTrail', label: 'GPS trail', swatch: 'h-1 w-5 rounded-full bg-accent' },
+  { id: 'gpsPoints', label: 'GPS points', swatch: 'size-2 rounded-full bg-accent' },
+  { id: 'radarPoints', label: 'Radar points', swatch: 'size-2 rounded-full bg-[oklch(0.55_0.12_195)]' },
+  { id: 'truth', label: 'Show truth', swatch: 'h-1 w-5 rounded-full bg-foreground/70', note: 'simulator only, the agent does not see it' },
+  { id: 'wind', label: 'Wind', swatch: 'size-2 rounded-full bg-muted-foreground' },
+  { id: 'highlight', label: 'Detection highlight', swatch: 'h-1 w-5 rounded-full bg-destructive/60' },
 ]
 
 export function LayersPanel({ layers, onChange }: { layers: Layers; onChange: (l: Layers) => void }) {
   return (
-    <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Capas del mapa">
+    <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Map layers">
       {ITEMS.map((item) => (
         <li key={item.id}>
           <label className="flex cursor-pointer items-center gap-1.5" title={item.note}>

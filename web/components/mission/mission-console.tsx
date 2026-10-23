@@ -28,9 +28,9 @@ export function MissionConsole() {
   if (waitingAgent) {
     if (next) {
       const id = (next.payload as { detection_id: string }).detection_id
-      waiting = `Esperando al monitor: analizando ${next.type === 'DetectionCleared' ? `el cierre de ${id}` : id}…`
+      waiting = `Waiting for the monitor: analysing ${next.type === 'DetectionCleared' ? `the closure of ${id}` : id}…`
     } else {
-      waiting = 'Esperando al monitor…'
+      waiting = 'Waiting for the monitor…'
     }
   }
   const agentBusy = Object.keys(activity).length > 0
@@ -50,7 +50,7 @@ export function MissionConsole() {
       )}
       {connection === 'closed' && (
         <p className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive" role="alert">
-          Sin conexión con la plataforma (ws://127.0.0.1:8100/ws). Reintentando…
+          No connection to the platform (ws://127.0.0.1:8100/ws). Retrying…
         </p>
       )}
 
@@ -59,7 +59,7 @@ export function MissionConsole() {
           <section aria-labelledby="map-title" className="flex flex-col">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5">
               <h2 id="map-title" className="text-sm font-semibold text-foreground">
-                Vista cenital · plano x,y (m) · y hacia el norte
+                Top view · x,y plane (m) · y towards the north
               </h2>
               <LayersPanel layers={layers} onChange={setLayers} />
             </div>

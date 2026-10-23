@@ -25,12 +25,12 @@ from poc_contracts.payloads import (
 from .outbox import format_t
 
 CHECK_LABELS = {
-    "gps_alert_recent": "alerta del GPS reciente",
-    "gps_radar_disagreed": "GPS y radar discrepan",
-    "wind_notable": "viento notable",
-    "wind_with_drift": "deriva a favor del viento",
-    "link_checked": "enlace mirado",
-    "link_anomalous": "enlace anómalo",
+    "gps_alert_recent": "recent GPS alert",
+    "gps_radar_disagreed": "GPS and radar disagree",
+    "wind_notable": "notable wind",
+    "wind_with_drift": "drift in favour of the wind",
+    "link_checked": "link checked",
+    "link_anomalous": "link anomalous",
 }
 """Cómo se llama cada comprobación de `AnomalyDetected.checks` en los textos para personas."""
 
@@ -169,9 +169,9 @@ class MonitorState:
                 record.alert_id = p.alert_id
         self._decide(
             event.sim_time,
-            f"{', '.join(p.detection_ids)} → alerta {p.alert_id} {p.cause.value} "
-            f"({p.severity.value}, confianza {p.confidence:g})"
-            + (f", sustituye a {p.supersedes}" if p.supersedes else ""),
+            f"{', '.join(p.detection_ids)} → alert {p.alert_id} {p.cause.value} "
+            f"({p.severity.value}, confidence {p.confidence:g})"
+            + (f", supersedes {p.supersedes}" if p.supersedes else ""),
         )
 
     def _on_closed(self, event: EventDraft) -> None:
@@ -180,7 +180,7 @@ class MonitorState:
         if alert is not None:
             alert.status = AlertStatus.CLOSED
             alert.closed_at = event.sim_time
-        self._decide(event.sim_time, f"alerta {p.alert_id} cerrada")
+        self._decide(event.sim_time, f"alert {p.alert_id} closed")
 
     def _on_ack(self, event: EventDraft) -> None:
         p = DetectionAcknowledged.model_validate(event.payload)
@@ -189,8 +189,8 @@ class MonitorState:
         if record is not None and alert is not None:
             record.alert_id = alert.alert_id
             alert.detection_ids.add(p.detection_id)
-        target = f"alerta {p.alert_id}" if p.alert_id else "sin alerta"
-        self._decide(event.sim_time, f"{p.detection_id} → reconocida ({target})")
+        target = f"alert {p.alert_id}" if p.alert_id else "no alert"
+        self._decide(event.sim_time, f"{p.detection_id} → acknowledged ({target})")
 
     def _decide(self, sim_time: float, text: str) -> None:
         self.decisions.append(f"{format_t(sim_time)} {text}")
@@ -241,19 +241,19 @@ class MonitorState:
         return self.recent_gps_alert(now, grace_s) is not None
 
     def describe_gps_alert(self, now: float) -> str:
-        """La línea fija del estado del prompt: «sí — ai-0008 GPS_SPOOFING (abierta). Si este aviso
-        es la recuperación del GPS: causa GPS_SPOOFING, supersedes ai-0008» o «no»."""
+        """La línea fija del estado del prompt: «yes — ai-0008 GPS_SPOOFING (open). If this warning
+        is the GPS recovery: cause GPS_SPOOFING, supersedes ai-0008» o «no»."""
         alert = self.recent_gps_alert(now)
         if alert is None:
             return "no"
         if alert.status == AlertStatus.OPEN:
-            state, supersedes = "abierta", f"supersedes {alert.alert_id}"
+            state, supersedes = "open", f"supersedes {alert.alert_id}"
         else:
             ago = now - (alert.closed_at or now)
-            state, supersedes = f"cerrada hace {ago:.0f} s", "sin supersedes (ya está cerrada)"
+            state, supersedes = f"closed {ago:.0f} s ago", "no supersedes (already closed)"
         return (
-            f"sí — {alert.alert_id} {alert.cause} ({state}). Si este aviso es la recuperación del "
-            f"GPS: causa {alert.cause}, {supersedes}"
+            f"yes — {alert.alert_id} {alert.cause} ({state}). If this warning is the GPS "
+            f"recovery: cause {alert.cause}, {supersedes}"
         )
 
     def open_alerts(self) -> list[AlertRecord]:
@@ -271,67 +271,67 @@ class MonitorState:
     def open_detections_of(self, alert_id: str) -> list[DetectionRecord]:
         return [d for d in self.detections_of(alert_id) if d.open]
 
-    # --- Texto para el prompt (en español) ------------------------------------------------
+    # --- Texto para el prompt (en inglés) ------------------------------------------------
 
     def describe_open_alerts(self) -> str:
         alerts = self.open_alerts()
         if not alerts:
-            return "ninguna"
+            return "none"
         parts = []
         for a in alerts:
             members = ", ".join(
-                f"{d.detection_id} ({'abierta' if d.open else 'cerrada'})"
+                f"{d.detection_id} ({'open' if d.open else 'closed'})"
                 for d in self.detections_of(a.alert_id)
             )
             parts.append(
-                f"{a.alert_id} {a.cause} ({a.severity}, confianza {a.confidence:g}) «{a.summary}»"
-                f" · detecciones: {members or 'ninguna'}"
+                f"{a.alert_id} {a.cause} ({a.severity}, confidence {a.confidence:g}) "
+                f'"{a.summary}" · detections: {members or "none"}'
             )
         return "; ".join(parts)
 
     def describe_open_detections(self) -> str:
         detections = self.open_detections()
         if not detections:
-            return "ninguna"
+            return "none"
         parts = []
         for d in detections:
             alert = self.head(d.alert_id)
-            where = f"en la alerta {alert.alert_id}" if alert else "sin alerta"
+            where = f"in alert {alert.alert_id}" if alert else "no alert"
             source = f" {d.source}" if d.source else ""
             parts.append(
-                f"{d.detection_id} {d.rule}{source} ({d.severity}, desde {format_t(d.since)}, "
+                f"{d.detection_id} {d.rule}{source} ({d.severity}, since {format_t(d.since)}, "
                 f"{where})"
             )
         return "; ".join(parts)
 
     def describe_decisions(self) -> str:
-        return "; ".join(self.decisions) if self.decisions else "ninguna todavía"
+        return "; ".join(self.decisions) if self.decisions else "none yet"
 
     def describe_alert_chains(self) -> str:
         """Para el informe: una línea por cadena de alertas (la alerta en vigor y las que
         sustituyó) con sus detecciones y su estado final."""
         heads = [a for a in self.alerts.values() if a.superseded_by is None]
         if not heads:
-            return "No hubo alertas."
+            return "There were no alerts."
         lines = []
         for head in heads:
             chain = [head]
             while chain[-1].supersedes and chain[-1].supersedes in self.alerts:
                 chain.append(self.alerts[chain[-1].supersedes])
             history = " ← ".join(
-                f"{a.alert_id} {a.cause} ({a.severity}, confianza {a.confidence:g}) a "
+                f"{a.alert_id} {a.cause} ({a.severity}, confidence {a.confidence:g}) at "
                 f"{format_t(a.sim_time)}"
                 for a in chain
             )
             end = (
-                f"cerrada a {format_t(head.closed_at)}"
+                f"closed at {format_t(head.closed_at)}"
                 if head.closed_at is not None
-                else "ABIERTA al final"
+                else "OPEN at the end"
             )
             detections = ", ".join(d.detection_id for d in self.detections_of(head.alert_id))
-            fallback = " [diagnóstico de fallback: el agente no concluyó]" if head.fallback else ""
+            fallback = " [fallback diagnosis: the agent did not conclude]" if head.fallback else ""
             lines.append(
-                f"- {history}{fallback}: «{head.summary}» · detecciones: {detections or 'ninguna'}"
+                f'- {history}{fallback}: "{head.summary}" · detections: {detections or "none"}'
                 f" · {end}"
             )
         return "\n".join(lines)
@@ -339,16 +339,16 @@ class MonitorState:
     def describe_detection_log(self) -> str:
         """Para el informe: una línea por detección (regla, inicio, cierre y alerta)."""
         if not self.detections:
-            return "No hubo detecciones."
+            return "There were no detections."
         lines = []
         for d in self.detections.values():
             alert = self.head(d.alert_id)
-            end = format_t(d.closed_at) if d.closed_at is not None else "sigue abierta"
+            end = format_t(d.closed_at) if d.closed_at is not None else "still open"
             source = f" {d.source}" if d.source else ""
-            where = f"alerta {alert.alert_id}" if alert else "sin alerta"
+            where = f"alert {alert.alert_id}" if alert else "no alert"
             lines.append(
                 f"- {d.detection_id} {d.rule}{source} ({d.severity}): "
-                f"de {format_t(d.since)} a {end} · {where}"
+                f"from {format_t(d.since)} to {end} · {where}"
             )
         return "\n".join(lines)
 
@@ -357,13 +357,13 @@ class MonitorState:
         `explanation`, con el razonamiento en prosa del monitor (que puede contradecir sus propias
         comprobaciones: los chats lo reciben sin él)."""
         if not self.alerts:
-            return "Ninguna."
+            return "None."
         lines = []
         for a in self.alerts.values():
             state = {
-                AlertStatus.OPEN: "abierta",
-                AlertStatus.CLOSED: f"cerrada a {format_t(a.closed_at or 0)}",
-                AlertStatus.SUPERSEDED: f"sustituida por {a.superseded_by}",
+                AlertStatus.OPEN: "open",
+                AlertStatus.CLOSED: f"closed at {format_t(a.closed_at or 0)}",
+                AlertStatus.SUPERSEDED: f"superseded by {a.superseded_by}",
             }[a.status]
             prose = (
                 a.explanation
@@ -372,25 +372,25 @@ class MonitorState:
             )
             checks = (
                 "; ".join(
-                    f"{CHECK_LABELS[k]}: {'sí' if v else 'no' if v is False else 'no se miró'}"
+                    f"{CHECK_LABELS[k]}: {'yes' if v else 'no' if v is False else 'not looked at'}"
                     for k, v in a.checks.items()
                 )
                 if a.checks
-                else "sin comprobaciones (alerta de fallback)"
+                else "no checks (fallback alert)"
             )
             lines.append(
-                f"- {a.alert_id} {a.cause} ({a.severity}, confianza {a.confidence:g}) a "
-                f"{format_t(a.sim_time)}, {state}: «{a.summary}». "
-                f"{f'Explicación: {prose} ' if explanation else ''}"
-                f"Recomendación: {a.recommendation} Comprobaciones: {checks}. "
-                f"Evidencias: {', '.join(a.evidence_ids) or 'ninguna'}."
+                f"- {a.alert_id} {a.cause} ({a.severity}, confidence {a.confidence:g}) at "
+                f'{format_t(a.sim_time)}, {state}: "{a.summary}". '
+                f"{f'Explanation: {prose} ' if explanation else ''}"
+                f"Recommendation: {a.recommendation} Checks: {checks}. "
+                f"Evidence: {', '.join(a.evidence_ids) or 'none'}."
             )
         return "\n".join(lines)
 
     def describe_related_alerts(self, detection_id: str) -> str:
         alert = self.alert_of(detection_id)
         if alert is None:
-            return "ninguna"
+            return "none"
         return f"{alert.alert_id} ({alert.cause}, {alert.severity}, {alert.status.value})"
 
 

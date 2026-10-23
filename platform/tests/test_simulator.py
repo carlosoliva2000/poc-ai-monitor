@@ -126,12 +126,12 @@ def test_loss_is_navigation_on_estimate_it_ignores_the_wind() -> None:
 
 def test_manual_fault_rules() -> None:
     sim = Simulator(scenario_config("fallos"))
-    with pytest.raises(ValueError, match="solo existe para el GPS"):
+    with pytest.raises(ValueError, match="only exists for the GPS"):
         sim.set_fault(RADAR, FaultMode.LOSS, True, MANUAL)
     sim.set_fault(RADAR, FaultMode.MUTE, True, MANUAL)
-    with pytest.raises(ValueError, match="ya tiene un fallo"):
+    with pytest.raises(ValueError, match="already has an active fault"):
         sim.set_fault(RADAR, FaultMode.MUTE, True, MANUAL)
-    with pytest.raises(ValueError, match="no tiene un fallo"):
+    with pytest.raises(ValueError, match="has no active"):
         sim.set_fault(GPS, FaultMode.MUTE, False, MANUAL)
     sim.set_fault(RADAR, FaultMode.MUTE, False, MANUAL)
     events = sim.start() + sim.step()
@@ -145,7 +145,7 @@ def test_a_scheduled_fault_cannot_be_ended_by_hand() -> None:
     sim = Simulator(scenario_config("fallos"))
     while sim.t <= 121:
         sim.step()
-    with pytest.raises(ValueError, match="escenario"):
+    with pytest.raises(ValueError, match="scenario"):
         sim.set_fault(RADAR, FaultMode.MUTE, False, MANUAL)
 
 

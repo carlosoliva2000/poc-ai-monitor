@@ -43,7 +43,7 @@ def get_events(ctx: ToolContext, args: GetEventsArgs) -> GetEventsResult:
 def mission_planned(ctx: ToolContext) -> MissionPlanned:
     event = ctx.latest(EventType.MISSION_PLANNED)
     if event is None:
-        raise ToolFailure("todavía no hay plan de misión: la simulación no ha empezado")
+        raise ToolFailure("there is no mission plan yet: the simulation has not started")
     return MissionPlanned.model_validate(event.payload)
 
 

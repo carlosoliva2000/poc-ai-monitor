@@ -14,7 +14,7 @@ from poc_contracts.enums import ConversationId, EventType
 from poc_contracts.envelope import EventDraft
 from poc_contracts.topics import topic_for
 
-OFF = "el modo interactivo está apagado: actívalo para inyectar fallos"
+OFF = "interactive mode is off: turn it on to inject faults"
 
 
 @pytest.fixture
@@ -106,14 +106,14 @@ def test_messages_before_hello_and_garbage_are_rejected(client: TestClient) -> N
     with client.websocket_connect("/ws") as ws:
         ws.receive_json()
         ws.send_json({"op": "subscribe", "patterns": ["citadel.>"]})
-        assert ws.receive_json() == {"op": "error", "message": "el primer mensaje debe ser hello"}
+        assert ws.receive_json() == {"op": "error", "message": "the first message must be hello"}
         ws.send_text("{no es json")
-        assert ws.receive_json()["message"] == "el mensaje no es un JSON válido"
+        assert ws.receive_json()["message"] == "the message is not valid JSON"
         ws.send_json({"op": "hello", "client": "robot"})
-        assert ws.receive_json()["message"].startswith("mensaje no válido")
+        assert ws.receive_json()["message"].startswith("invalid message")
         hello(ws)
         ws.send_json({"op": "subscribe", "patterns": ["citadel.pub.>.x"]})
-        assert ws.receive_json()["message"].startswith("mensaje no válido")
+        assert ws.receive_json()["message"].startswith("invalid message")
 
 
 def test_a_second_hello_cannot_change_the_client_kind(client: TestClient) -> None:
@@ -121,7 +121,9 @@ def test_a_second_hello_cannot_change_the_client_kind(client: TestClient) -> Non
         ws.receive_json()
         ws.send_json({"op": "hello", "client": "web"})
         ws.send_json({"op": "hello", "client": "ai-module"})
-        assert ws.receive_json()["message"] == "el cliente ya se presentó con otro tipo"
+        assert (
+            ws.receive_json()["message"] == "the client already introduced itself as another type"
+        )
 
 
 def test_only_web_clients_can_send_control(client: TestClient) -> None:
@@ -131,7 +133,7 @@ def test_only_web_clients_can_send_control(client: TestClient) -> None:
         for action, value in (("play", None), ("interactive", True), ("load", "nominal")):
             messages = control(ai, action, value)
             assert messages == [
-                {"op": "error", "message": "solo los clientes de tipo web pueden enviar control"}
+                {"op": "error", "message": "only clients of type web can send control"}
             ]
         with client.websocket_connect("/ws") as web:
             web.receive_json()
@@ -199,7 +201,7 @@ def test_publish_valid_and_rejected(client: TestClient) -> None:
         assert errors == [
             {
                 "op": "error",
-                "message": "el cliente 'web' no puede publicar en el dominio 'ai'",
+                "message": "client 'web' cannot publish in the domain 'ai'",
             }
         ]
         assert not [m for m in drain(ai) if m["op"] == "event"]
@@ -211,15 +213,17 @@ def test_publish_valid_and_rejected(client: TestClient) -> None:
         assert [e["event_id"] for e in got] == ["det-0001"]
         ai.send_json({"op": "publish", "event": operator_message(2)})
         errors = [m for m in drain(ai) if m["op"] == "error"]
-        assert "no puede publicar en el dominio 'ops'" in errors[0]["message"]
+        assert "cannot publish in the domain 'ops'" in errors[0]["message"]
 
         # id repetido y evento mal formado
         ai.send_json({"op": "publish", "event": detection_message(1)})
-        assert "ya existe" in [m for m in drain(ai) if m["op"] == "error"][0]["message"]
+        assert "already exists" in [m for m in drain(ai) if m["op"] == "error"][0]["message"]
         bad = detection_message(2)
         bad["payload"]["rule"] = "NOPE"
         ai.send_json({"op": "publish", "event": bad})
-        assert [m for m in drain(ai) if m["op"] == "error"][0]["message"].startswith("mensaje no")
+        assert [m for m in drain(ai) if m["op"] == "error"][0]["message"].startswith(
+            "invalid message"
+        )
         assert player(client).bus.timeline.get("det-0002") is None
 
 
@@ -233,7 +237,7 @@ def test_control_speed_wait_agent_and_validation(client: TestClient) -> None:
         state = [m for m in control(ws, "wait_agent", True) if m["op"] == "state"][-1]
         assert state["wait_agent"] is True
         errors = [m for m in control(ws, "speed", 3) if m["op"] == "error"]
-        assert errors and errors[0]["message"].startswith("mensaje no válido")
+        assert errors and errors[0]["message"].startswith("invalid message")
         assert control(ws, "play", None)[-1]["status"] == "running"
         assert control(ws, "pause", None)[-1]["status"] == "paused"
         errors = [m for m in control(ws, "dance") if m["op"] == "error"]
@@ -244,10 +248,8 @@ def test_control_without_scenario_reports_a_clear_error(client: TestClient) -> N
     with client.websocket_connect("/ws") as ws:
         ws.receive_json()
         hello(ws)
-        assert control(ws, "play") == [
-            {"op": "error", "message": "no hay ningún escenario cargado"}
-        ]
-        assert "desconocido" in control(ws, "load", "marte")[0]["message"]
+        assert control(ws, "play") == [{"op": "error", "message": "no scenario is loaded"}]
+        assert "unknown" in control(ws, "load", "marte")[0]["message"]
 
 
 def test_interactive_and_faults_over_the_websocket(client: TestClient) -> None:
@@ -278,7 +280,7 @@ def test_interactive_and_faults_over_the_websocket(client: TestClient) -> None:
         assert [(e["type"], e["event_id"]) for e in injected] == [("FaultInjected", "sim-0001")]
 
         bad = control(ws, "fault", {"source": "radar", "mode": "loss", "active": True})
-        assert bad[0]["message"].startswith("mensaje no válido")
+        assert bad[0]["message"].startswith("invalid message")
         clear = {"source": "radar", "mode": "mute", "active": False}
         assert [m for m in control(ws, "fault", clear) if m["op"] == "state"][-1][
             "active_faults"
@@ -394,7 +396,7 @@ def test_timeline_has_no_time_cut_and_filters(client: TestClient) -> None:
 
 def test_tools_endpoint(client: TestClient) -> None:
     err = client.post("/api/tools/get_events", json={"source": "gps"}).json()
-    assert err == {"ok": False, "error": "no hay ningún escenario cargado"}
+    assert err == {"ok": False, "error": "no scenario is loaded"}
     with client.websocket_connect("/ws") as ws:
         ws.receive_json()
         hello(ws)
@@ -411,7 +413,7 @@ def test_tools_endpoint(client: TestClient) -> None:
     assert metrics["ok"] and metrics["result"]["until"] == pytest.approx(40.5)
     for body in ({"source": "sim"}, {}, {"source": "gps", "last_n": "x"}):
         bad = client.post("/api/tools/get_events", json=body).json()
-        assert bad["ok"] is False and bad["error"].startswith("argumentos no válidos")
+        assert bad["ok"] is False and bad["error"].startswith("invalid arguments")
     assert client.post("/api/tools/nope", json={}).json()["ok"] is False
     assert client.post("/api/tools/get_events", content="{x").json()["ok"] is False
     assert client.post("/api/tools/get_events", json=[1]).json()["ok"] is False

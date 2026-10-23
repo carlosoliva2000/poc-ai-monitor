@@ -93,15 +93,15 @@ async def call_platform_tool(
     try:
         body = await asyncio.to_thread(_post_tool, platform_url, name, args, timeout_s)
     except (OSError, urllib.error.URLError, ValueError) as exc:
-        raise PlatformToolError(f"la plataforma no responde: {exc}") from exc
+        raise PlatformToolError(f"the platform does not respond: {exc}") from exc
     if not isinstance(body, dict) or not body.get("ok"):
         message = body.get("error") if isinstance(body, dict) else None
-        raise PlatformToolError(str(message or f"respuesta inesperada: {body!r}"))
+        raise PlatformToolError(str(message or f"unexpected response: {body!r}"))
     return body.get("result")
 
 
 class PlatformToolError(Exception):
-    """Una tool de datos de la plataforma ha fallado (mensaje en español)."""
+    """Una tool de datos de la plataforma ha fallado (mensaje en inglés)."""
 
 
 async def fetch_mission_plan(platform_url: str, timeout_s: float = 5.0) -> dict[str, Any] | None:

@@ -62,9 +62,9 @@ MARGIN_M = 450.0
 FIG_DPI = 150
 
 LABEL_NAMES = {
-    LabelType.WIND: "viento",
-    LabelType.HIJACK: "secuestro",
-    LabelType.GPS_SPOOFING: "spoofing GPS",
+    LabelType.WIND: "wind",
+    LabelType.HIJACK: "hijacking",
+    LabelType.GPS_SPOOFING: "GPS spoofing",
 }
 
 # Umbrales de las reglas del detector, para ver a qué altura caen las medidas
@@ -102,9 +102,9 @@ def _clock(seconds: float, prefix: str = "T+") -> str:
 
 def _label_name(label: Label) -> str:
     if label.type == LabelType.SOURCE_SILENT:
-        return f"{label.source.value if label.source else '?'} silenciado"
+        return f"{label.source.value if label.source else '?'} silent"
     if label.type == LabelType.GPS_LOSS:
-        return "pérdida de GPS"
+        return "GPS loss"
     return LABEL_NAMES[label.type]
 
 
@@ -171,8 +171,8 @@ def _style_xy(ax: Axes, xs: Sequence[float], ys: Sequence[float]) -> None:
     ax.set_aspect("equal")
     ax.set_xlim(min(xs) - MARGIN_M, max(xs) + MARGIN_M)
     ax.set_ylim(min(ys) - MARGIN_M, max(ys) + MARGIN_M)
-    ax.set_xlabel("x (m, hacia el este)")
-    ax.set_ylabel("y (m, hacia el norte)")
+    ax.set_xlabel("x (m, east)")
+    ax.set_ylabel("y (m, north)")
     ax.grid(True)
     ax.set_axisbelow(True)
     ax.annotate("N", xy=(0.965, 0.93), xytext=(0.965, 0.84), xycoords="axes fraction",
@@ -187,7 +187,7 @@ def _titles(fig: Figure, title: str, subtitle: str) -> None:
 
 def _speed_colorbar(fig: Figure, mappable, ax: Axes) -> None:
     bar = fig.colorbar(mappable, ax=ax, shrink=0.75, pad=0.02)
-    bar.set_label("velocidad sobre el suelo (m/s)", color=INK_SOFT)
+    bar.set_label("ground speed (m/s)", color=INK_SOFT)
     bar.outline.set_edgecolor(GRID)
 
 
@@ -216,11 +216,11 @@ def plot_plan(name: str, out_dir: Path) -> Path:
 
     _titles(
         fig,
-        f"{name} · plan de vuelo (sin perturbaciones)",
-        f"misión {plan.mission_id} · velocidad de crucero {plan.cruise_speed_mps:.0f} m/s · "
-        f"altitud {plan.altitude_m:.0f} m · duración prevista {plan.duration_s // 60:.0f} min "
+        f"{name} · flight plan (no disturbances)",
+        f"mission {plan.mission_id} · cruise speed {plan.cruise_speed_mps:.0f} m/s · "
+        f"altitude {plan.altitude_m:.0f} m · planned duration {plan.duration_s // 60:.0f} min "
         f"{plan.duration_s % 60:.0f} s · "
-        f"una flecha cada {ARROW_EVERY_S} s",
+        f"one arrow every {ARROW_EVERY_S} s",
     )
     path = out_dir / "plan_xy.png"
     fig.savefig(path, dpi=FIG_DPI)
@@ -301,7 +301,7 @@ def plot_xy(name: str, out_dir: Path) -> Path:
         t = config.hijack.target
         ax.scatter([t.x], [t.y], marker="X", s=140, color=INK, zorder=7)
         ax.annotate(
-            "destino del secuestro", (t.x, t.y), xytext=(0, -20), textcoords="offset points",
+            "hijack destination", (t.x, t.y), xytext=(0, -20), textcoords="offset points",
             ha="center", fontsize=9, color=INK_SOFT,
         )  # fmt: skip
         xs_all.append(t.x)
@@ -311,17 +311,17 @@ def plot_xy(name: str, out_dir: Path) -> Path:
     _speed_colorbar(fig, arrows, ax)
 
     handles = [
-        Line2D([], [], color=PLAN_LIGHT, lw=3, label="trayectoria planificada"),
+        Line2D([], [], color=PLAN_LIGHT, lw=3, label="planned trajectory"),
         Line2D([], [], color=TRUTH, lw=1.2, marker=">", markersize=6,
-               label="trayectoria real (flecha: rumbo; color: velocidad)"),
+               label="real trajectory (arrow: heading; colour: speed)"),
         Line2D([], [], color=GPS, lw=0, marker="o", markersize=5, label="GPS (1 Hz)"),
-        Line2D([], [], color=RADAR, lw=0, marker="D", markersize=5, label="radar (0,5 Hz)"),
-        Line2D([], [], color=BAND, lw=9, alpha=0.25, label="tramo con anomalía o fallo"),
+        Line2D([], [], color=RADAR, lw=0, marker="D", markersize=5, label="radar (0.5 Hz)"),
+        Line2D([], [], color=BAND, lw=9, alpha=0.25, label="leg with anomaly or fault"),
     ]  # fmt: skip
     if estimated:
         handles.append(
             Line2D([], [], color=GPS, lw=0, marker="o", markersize=6, markerfacecolor="none",
-                   label="GPS sin fix (posición estimada)")
+                   label="GPS without fix (estimated position)")
         )  # fmt: skip
     fig.legend(handles=handles, loc="lower center", ncol=3, fontsize=8.5)
     _titles(fig, f"{name} · trayectoria planificada y real", _summary(run))
@@ -334,11 +334,11 @@ def plot_xy(name: str, out_dir: Path) -> Path:
 def _summary(run: RunData) -> str:
     """Una línea con las anomalías del escenario y su ventana."""
     if not run.labels:
-        return f"misión {run.plan.mission_id} · sin anomalías ni fallos"
+        return f"mission {run.plan.mission_id} · no anomalies or faults"
     parts = [
         f"{lb.id} {_label_name(lb)} {_clock(lb.start_s)}–{_clock(lb.end_s)}" for lb in run.labels
     ]
-    return f"misión {run.plan.mission_id} · " + " · ".join(parts)
+    return f"mission {run.plan.mission_id} · " + " · ".join(parts)
 
 
 # --- scenario_time.png ----------------------------------------------------------------------
@@ -376,42 +376,42 @@ def plot_time(name: str, out_dir: Path) -> Path:
     # 1) desviación respecto a la ruta planificada
     dev = truth_deviation(run)
     gps_dev = _with_gaps(reported_deviation(run, "PositionUpdated"), 3.0)
-    dev_ax.plot(*gps_dev, color=GPS, lw=1.0, label="GPS (lo que reporta el dron)", zorder=2)
+    dev_ax.plot(*gps_dev, color=GPS, lw=1.0, label="GPS (what the drone reports)", zorder=2)
     dev_ax.plot(
-        *zip(*dev, strict=True), color=TRUTH, lw=1.8, label="verdad (posición real)", zorder=3
+        *zip(*dev, strict=True), color=TRUTH, lw=1.8, label="truth (real position)", zorder=3
     )
-    rule = f"ROUTE_DEVIATION abre {ROUTE_DEVIATION_OPEN_M:.0f} m, "
-    _threshold(dev_ax, ROUTE_DEVIATION_OPEN_M, rule + f"cierra {ROUTE_DEVIATION_CLOSE_M:.0f}")
+    rule = f"ROUTE_DEVIATION opens {ROUTE_DEVIATION_OPEN_M:.0f} m, "
+    _threshold(dev_ax, ROUTE_DEVIATION_OPEN_M, rule + f"closes {ROUTE_DEVIATION_CLOSE_M:.0f}")
     dev_ax.axhline(ROUTE_DEVIATION_CLOSE_M, color=INK_SOFT, lw=0.8, ls=(0, (4, 3)), zorder=1)
     peak = max(v for _, v in dev)
     if peak > 200:  # un pico grande aplastaría el resto: lineal hasta 100 m y logarítmica desde ahí
         dev_ax.set_yscale("symlog", linthresh=100, linscale=1.0)
         dev_ax.set_yticks([0, 25, 50, 75, 100, 200, 400, 700])
         dev_ax.get_yaxis().set_major_formatter(FuncFormatter(lambda v, _: f"{v:.0f}"))
-        dev_ax.set_ylabel("desviación respecto al plan (m)\nlineal hasta 100, log. desde ahí")
+        dev_ax.set_ylabel("deviation from the plan (m)\nlinear up to 100, log from there")
     else:
-        dev_ax.set_ylabel("desviación respecto\nal plan (m)")
+        dev_ax.set_ylabel("deviation from\nthe plan (m)")
     dev_ax.set_ylim(0, peak * (1.25 if peak < 200 else 1.8))
     dev_ax.legend(loc="center right", fontsize=8.5)
 
     # 2) distancia GPS–radar (media de las 3 últimas)
     disc_ax.plot(*_with_gaps(gps_radar_distance(run), 5.0), color=DISCREPANCY, lw=1.6, zorder=3)
-    _threshold(disc_ax, DISCREPANCY_OPEN_M, f"SOURCE_DISCREPANCY abre {DISCREPANCY_OPEN_M:.0f} m")
-    _threshold(disc_ax, DISCREPANCY_CLOSE_M, f"cierra {DISCREPANCY_CLOSE_M:.0f} m")
-    disc_ax.set_ylabel("distancia GPS–radar (m)\nmedia de 3 medidas")
+    _threshold(disc_ax, DISCREPANCY_OPEN_M, f"SOURCE_DISCREPANCY opens {DISCREPANCY_OPEN_M:.0f} m")
+    _threshold(disc_ax, DISCREPANCY_CLOSE_M, f"closes {DISCREPANCY_CLOSE_M:.0f} m")
+    disc_ax.set_ylabel("GPS–radar distance (m)\nmean of 3 measurements")
     disc_ax.set_ylim(bottom=0)
 
     # 3) viento real y lo que reporta la estación
     wind = run.truth.wind
     wind_ax.plot([w.t for w in wind], [w.speed_mps for w in wind], color=TRUTH, lw=1.8,
-                 label="viento real (velocidad media)", zorder=3)  # fmt: skip
+                 label="real wind (mean speed)", zorder=3)  # fmt: skip
     met = run.of_type("WindReported")
     wind_ax.scatter([e["sim_time"] for e in met], [e["payload"]["speed_mps"] for e in met],
-                    s=14, color=METEO, zorder=4, label="estación meteo: velocidad")  # fmt: skip
+                    s=14, color=METEO, zorder=4, label="weather station: speed")  # fmt: skip
     wind_ax.scatter([e["sim_time"] for e in met], [e["payload"]["gust_mps"] for e in met],
                     s=18, facecolor="none", edgecolor=METEO, linewidth=1.0, zorder=4,
-                    label="estación meteo: racha")  # fmt: skip
-    wind_ax.set_ylabel("viento (m/s)")
+                    label="weather station: gust")  # fmt: skip
+    wind_ax.set_ylabel("wind (m/s)")
     wind_top = max([w.gust_mps for w in wind] + [e["payload"]["gust_mps"] for e in met])
     wind_ax.set_ylim(0, wind_top * 1.3)
     wind_ax.legend(loc="upper right", fontsize=8.5, ncol=3)
@@ -427,8 +427,8 @@ def plot_time(name: str, out_dir: Path) -> Path:
     wind_ax.set_xlim(0, end)
     wind_ax.xaxis.set_major_locator(MultipleLocator(60))
     wind_ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: _clock(v)))
-    wind_ax.set_xlabel("tiempo de simulación (zonas sombreadas: ventanas de anomalía o fallo)")
-    _titles(fig, f"{name} · desviación, discrepancia entre fuentes y viento", _summary(run))
+    wind_ax.set_xlabel("simulation time (shaded zones: anomaly or fault windows)")
+    _titles(fig, f"{name} · deviation, discrepancy between sources and wind", _summary(run))
     path = out_dir / "scenario_time.png"
     fig.savefig(path, dpi=FIG_DPI)
     plt.close(fig)
@@ -445,9 +445,9 @@ def plot_scenario(name: str, only: str | None = None, runs_dir: Path = RUNS_DIR)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("names", nargs="*", help="escenarios con salida en runs/")
-    parser.add_argument("--all", action="store_true", help="todos los de runs/")
-    parser.add_argument("--only", choices=["plan", "xy", "time"], help="una sola figura")
+    parser.add_argument("names", nargs="*", help="scenarios with output in runs/")
+    parser.add_argument("--all", action="store_true", help="all of those in runs/")
+    parser.add_argument("--only", choices=["plan", "xy", "time"], help="a single figure")
     args = parser.parse_args()
     names = (
         sorted(p.name for p in RUNS_DIR.iterdir() if (p / "plan.json").exists())
@@ -455,7 +455,7 @@ def main() -> None:
         else args.names
     )
     if not names:
-        parser.error("indica uno o más escenarios, o --all")
+        parser.error("give one or more scenarios, or --all")
     for name in names:
         for path in plot_scenario(name, args.only):
             print(path)

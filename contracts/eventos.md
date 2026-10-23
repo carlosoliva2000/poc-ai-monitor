@@ -1,13 +1,13 @@
 # Contratos de `poc-ai-monitor`
 
-> **Fuente de verdad** de lo que se intercambian los componentes: eventos, topics, mensajes del WebSocket, API HTTP y tools. Versión 0.10 (22/10/2026: `chk-` y `act-` para los eventos efímeros (`AgentReplyChunk`, `AgentActivity`); `run_meta.json` lo escribe la plataforma (§8.6); `load` y `reset` apagan el modo interactivo; la recuperación excluyente comprueba también `severity medium`; v0.9, 22/10/2026: con «esperar al agente», el reproductor pausa también con `DetectionCleared` y se reanuda con la respuesta del monitor a ese cierre; `publish_alert` rechaza un `supersedes` que no cambia ni la causa ni la severidad; v0.8, 21/10/2026: ids opcionales en `publish_alert`, `acknowledge_detection` y `close_alert` (los rellena el módulo); v0.7: hechos calculados en `get_track_metrics` (`wind.notable`, `wind.with_drift`, `gps_radar.disagreed`, `gps_max_step_m`) y `checks` en `publish_alert` y en `AnomalyDetected`; v0.6: respuesta del monitor a cada detección: evento `DetectionAcknowledged`, tool `acknowledge_detection` y fallbacks de §4; `wind` en el resultado de `get_track_metrics`; v0.5, 20/10/2026: simulación en directo y modo interactivo; tipo de fallo `mute`/`loss` (pérdida de GPS) en `control` → `fault`, en `FaultInjected`/`FaultCleared`, en `faults` del YAML y en `state` (`active_faults`, `interactive`); regla `GPS_DEGRADED`, causa `GPS_JAMMING`, evento `InteractiveModeChanged` (ids `plr-` para el estado del reproductor); v0.4: ficheros del generador y YAML de escenario (§8), la ruta de `MissionPlanned` incluye la vuelta a la base; v0.3: `source` y `asset` del sobre, `fix`, `GET /scenarios`, resultado de `get_flight_summary` y `get_track_metrics` sin datos de una fuente, patrón de suscripción de ejemplo corregido en §3; v0.2, 16/10/2026: fallos manuales y regla `SOURCE_SILENT`). Cualquier cambio se hace aquí primero y después en `contracts/python` (Pydantic), `contracts/schemas/` (JSON Schema exportado) y en todos los componentes, en el mismo cambio.
+> **Fuente de verdad** de lo que se intercambian los componentes: eventos, topics, mensajes del WebSocket, API HTTP y tools. Versión 0.10 (22/10/2026; 23/10/2026: textos de los ejemplos y de los errores en inglés, sin cambio de campos: `chk-` y `act-` para los eventos efímeros (`AgentReplyChunk`, `AgentActivity`); `run_meta.json` lo escribe la plataforma (§8.6); `load` y `reset` apagan el modo interactivo; la recuperación excluyente comprueba también `severity medium`; v0.9, 22/10/2026: con «esperar al agente», el reproductor pausa también con `DetectionCleared` y se reanuda con la respuesta del monitor a ese cierre; `publish_alert` rechaza un `supersedes` que no cambia ni la causa ni la severidad; v0.8, 21/10/2026: ids opcionales en `publish_alert`, `acknowledge_detection` y `close_alert` (los rellena el módulo); v0.7: hechos calculados en `get_track_metrics` (`wind.notable`, `wind.with_drift`, `gps_radar.disagreed`, `gps_max_step_m`) y `checks` en `publish_alert` y en `AnomalyDetected`; v0.6: respuesta del monitor a cada detección: evento `DetectionAcknowledged`, tool `acknowledge_detection` y fallbacks de §4; `wind` en el resultado de `get_track_metrics`; v0.5, 20/10/2026: simulación en directo y modo interactivo; tipo de fallo `mute`/`loss` (pérdida de GPS) en `control` → `fault`, en `FaultInjected`/`FaultCleared`, en `faults` del YAML y en `state` (`active_faults`, `interactive`); regla `GPS_DEGRADED`, causa `GPS_JAMMING`, evento `InteractiveModeChanged` (ids `plr-` para el estado del reproductor); v0.4: ficheros del generador y YAML de escenario (§8), la ruta de `MissionPlanned` incluye la vuelta a la base; v0.3: `source` y `asset` del sobre, `fix`, `GET /scenarios`, resultado de `get_flight_summary` y `get_track_metrics` sin datos de una fuente, patrón de suscripción de ejemplo corregido en §3; v0.2, 16/10/2026: fallos manuales y regla `SOURCE_SILENT`). Cualquier cambio se hace aquí primero y después en `contracts/python` (Pydantic), `contracts/schemas/` (JSON Schema exportado) y en todos los componentes, en el mismo cambio.
 
 ## 1. Convenciones
 - **Unidades:** metros, segundos, m/s, grados. Plano x,y con origen en la base: **x hacia el este, y hacia el norte**.
 - **Ángulos:** rumbos en grados 0–360, **0 = norte, 90 = este** (sentido horario). El viento se da por **dirección de procedencia** (convención meteorológica): `from_deg: 0` es viento del norte, que empuja hacia el sur.
 - **Tiempo:** `sim_time` (s desde el inicio de la simulación, float); `event_time` = `t0` del escenario + `sim_time`, en ISO 8601 UTC; `ingestion_time` lo pone el bus con el reloj de pared, ISO 8601 UTC con milisegundos.
 - **Ids:** prefijo por fuente y número con ceros: `gps-000061`, `rad-000030`, `met-0006`, `lnk-0012`, `bat-0006`, `mis-0003`, `det-0001`, `ai-0001` (alertas, cierres, reconocimientos, informe y respuestas del chat), `chk-0001` (trozos de streaming del chat, `AgentReplyChunk`), `act-0001` (`AgentActivity`), `ops-0001`, `sim-0001` (fallos), `plr-0001` (estado del reproductor). Únicos en una ejecución. Los eventos efímeros llevan su propio prefijo y contador para que los ids `ai-` de alertas y respuestas no den saltos.
-- **Nombres de campos** en `snake_case`. Textos para personas, en español.
+- **Nombres de campos** en `snake_case`. Textos para personas y para el modelo, en inglés.
 
 ## 2. Sobre (común a todos los eventos)
 ```json
@@ -102,7 +102,7 @@ Al recuperarse, la posición salta a la real.
   "source": null,
   "window": {"since": 80.0, "until": 84.0},
   "trigger_event_ids": ["gps-000083", "gps-000084"],
-  "message": "La posición del GPS se aleja 34,8 m de la ruta planificada" }
+  "message": "The GPS position is 34.8 m away from the planned route" }
 ```
 `rule`: `ROUTE_DEVIATION` | `SOURCE_DISCREPANCY` | `SOURCE_SILENT` | `GPS_DEGRADED`. `source`: la fuente afectada; obligatoria en `SOURCE_SILENT` (`gps` | `radar` | `meteo` | `link` | `battery`; `value` = segundos sin eventos, `unit: "s"`) y `"gps"` en `GPS_DEGRADED` (`value` = el `hdop` del último `PositionUpdated`, `threshold: 3.0`, `unit: "hdop"`; el `message` dice qué falla: `fix`, `sats` o `hdop`), `null` en las demás. `severity`: `low` | `medium` | `high`. `DetectionUpdated` usa el mismo `detection_id` y una severidad mayor.
 
@@ -113,7 +113,7 @@ Ejemplo de `GPS_DEGRADED`:
   "source": "gps",
   "window": {"since": 245.0, "until": 245.0},
   "trigger_event_ids": ["gps-000245"],
-  "message": "El GPS ha perdido el fix (fix none, 0 satélites, hdop 99,9)" }
+  "message": "The GPS has lost the fix (fix none, 0 satellites, hdop 99.9)" }
 ```
 
 **`DetectionCleared`** `{ "detection_id": "det-0002", "rule": "ROUTE_DEVIATION", "duration_s": 46.0, "max_value": 71.5 }`
@@ -123,9 +123,9 @@ Ejemplo de `GPS_DEGRADED`:
 ```json
 { "alert_id": "ai-0003", "detection_ids": ["det-0002"],
   "cause": "WIND", "severity": "low", "confidence": 0.8,
-  "summary": "Deriva por viento fuerte del norte; el dron corrige solo",
-  "explanation": "Entre T+01:20 y T+01:24 el GPS y el radar coinciden (≤ 6 m) y ambos se alejan 35 m del plan hacia el sur (182°). La estación meteo reporta 14 m/s del norte (met-0008). La deriva va a favor del viento.",
-  "recommendation": "Sin intervención. Vigilar que recupera la ruta antes de WP3.",
+  "summary": "Drift caused by strong northerly wind; the drone corrects by itself",
+  "explanation": "Between T+01:20 and T+01:24 GPS and radar agree (≤ 6 m) and both move 35 m away from the plan towards the south (182°). The weather station reports 14 m/s from the north (met-0008). The drift goes with the wind.",
+  "recommendation": "No intervention. Watch that it recovers the route before WP3.",
   "evidence_event_ids": ["gps-000084", "rad-000042", "met-0008"],
   "supersedes": null, "as_of_sim_time": 84.0, "fallback": false,
   "checks": { "gps_alert_recent": false, "gps_radar_disagreed": false, "wind_notable": true,
@@ -133,11 +133,11 @@ Ejemplo de `GPS_DEGRADED`:
 ```
 `cause`: `WIND` | `HIJACK` | `GPS_SPOOFING` | `SENSOR_FAULT` | `GPS_JAMMING` | `UNKNOWN` (reservada para el futuro: `REPLAY`). `supersedes`: `alert_id` de una alerta anterior a la que esta sustituye (p. ej. al cambiar la causa o la severidad); las alertas encadenadas por `supersedes` son **una sola alerta** (un episodio). `fallback: true` si lo publicó el módulo porque el agente no concluyó. `checks` (opcional, `null` en las alertas de fallback): las comprobaciones que el monitor declaró antes de elegir la causa, para que el operador vea por qué se decidió: `gps_alert_recent` (hay una alerta del GPS abierta o cerrada hace 60 s o menos), `gps_radar_disagreed`, `wind_notable` y `wind_with_drift` (los hechos de `get_track_metrics`; falsos si no se llamó), `link_checked` (se miró el enlace con `get_events`) y `link_anomalous` (`null` si no se miró). El módulo comprueba que coinciden con los resultados de las tools de esa invocación (§7).
 
-**`AlertClosed`** `{ "alert_id": "ai-0003", "reason": "La desviación se ha corregido (det-0002 cerrada)", "as_of_sim_time": 130.0 }`
+**`AlertClosed`** `{ "alert_id": "ai-0003", "reason": "The deviation has been corrected (det-0002 cleared)", "as_of_sim_time": 130.0 }`
 
 **`DetectionAcknowledged`** (`ai-`, `causation_id` = el `event_id` del evento de detección al que responde)
 ```json
-{ "detection_id": "det-0002", "alert_id": "ai-0003", "reason": "Sigue la misma deriva por viento; la alerta ai-0003 ya lo explica", "as_of_sim_time": 258.0, "fallback": false }
+{ "detection_id": "det-0002", "alert_id": "ai-0003", "reason": "The same wind drift continues; alert ai-0003 already explains it", "as_of_sim_time": 258.0, "fallback": false }
 ```
 `alert_id`: la alerta abierta a la que pertenece la detección, o `null` si el monitor decide que no hace falta alerta (o no concluye, con `fallback: true`).
 
@@ -160,9 +160,9 @@ Si una alerta incluye varias detecciones del lote, la `AnomalyDetected` responde
 **`ReportGenerated`** `{ "run_id": "…", "markdown": "# Informe…", "alerts_count": 3 }` (`alerts_count`: alertas distintas; una cadena de `supersedes` cuenta como una)
 
 ### Del chat
-**`OperatorMessage`** (`ops-`) `{ "conversation_id": "monitor", "text": "¿Por qué crees que es viento?" }`
+**`OperatorMessage`** (`ops-`) `{ "conversation_id": "monitor", "text": "Why do you think it is wind?" }`
 **`AgentReplyChunk`** (`ephemeral: true`) `{ "conversation_id": "monitor", "reply_to": "ops-0004", "delta": "Porque la" }`
-**`AgentReply`** `{ "conversation_id": "monitor", "reply_to": "ops-0004", "text": "Porque la estación…", "tool_calls": ["get_events", "get_track_metrics"] }`
+**`AgentReply`** `{ "conversation_id": "monitor", "reply_to": "ops-0004", "text": "Because the station…", "tool_calls": ["get_events", "get_track_metrics"] }`
 **`AgentActivity`** (`ephemeral: true`) `{ "agent": "monitor", "state": "started", "invocation_id": "inv-0007", "causation_id": "det-0002" }` (`agent`: `monitor` | `report` | `chat-monitor` | `chat-report`; `state`: `started` | `finished`)
 
 ## 5. WebSocket (`ws://127.0.0.1:8100/ws`)
@@ -174,7 +174,7 @@ Cliente → plataforma:
 | `hello` | `client: "web" \| "ai-module"` | Primer mensaje |
 | `subscribe` | `patterns: ["citadel.pub.evt.>"]` | Se suscribe (acumula) |
 | `publish` | `event` (sobre sin `seq` ni `ingestion_time`) | Publica en el bus. La plataforma valida el sobre y rechaza topics que no sean de ese cliente (web: solo `ops`; módulo de IA: solo `ai`) |
-| `control` | **Solo clientes `web`**: si lo manda otro tipo de cliente (p. ej. `ai-module`), la plataforma responde `error` ("solo los clientes de tipo web pueden enviar control") y no hace nada. Si el módulo de IA necesita una señal para el reproductor (p. ej. para «esperar al agente»), se define como mensaje propio en este documento, no como `control` genérico. `action: "load" \| "play" \| "pause" \| "step" \| "reset" \| "speed" \| "wait_agent" \| "interactive" \| "fault"`, `value` | `load` con nombre de escenario (si no está generado, la plataforma lo genera antes de cargarlo); `speed` con 0.5/1/2/4/8/16; `wait_agent` con `true`/`false`; `interactive` con `true`/`false` (modo interactivo, apagado por defecto; se puede cambiar en cualquier momento y queda registrado en el timeline con `InteractiveModeChanged`; **cada `load` y `reset` lo apaga**, así que hay que volver a encenderlo después de cargar); `fault` con `{"source": "gps", "mode": "loss", "active": true}` (activa o termina un fallo desde el instante actual; `loss` solo para `gps`). **`fault` solo se acepta con el modo interactivo encendido**: apagado, la plataforma responde `error` ("el modo interactivo está apagado: actívalo para inyectar fallos") y no cambia nada. Un fallo programado por el escenario acaba solo: no se puede terminar a mano |
+| `control` | **Solo clientes `web`**: si lo manda otro tipo de cliente (p. ej. `ai-module`), la plataforma responde `error` ("only clients of type web can send control") y no hace nada. Si el módulo de IA necesita una señal para el reproductor (p. ej. para «esperar al agente»), se define como mensaje propio en este documento, no como `control` genérico. `action: "load" \| "play" \| "pause" \| "step" \| "reset" \| "speed" \| "wait_agent" \| "interactive" \| "fault"`, `value` | `load` con nombre de escenario (si no está generado, la plataforma lo genera antes de cargarlo); `speed` con 0.5/1/2/4/8/16; `wait_agent` con `true`/`false`; `interactive` con `true`/`false` (modo interactivo, apagado por defecto; se puede cambiar en cualquier momento y queda registrado en el timeline con `InteractiveModeChanged`; **cada `load` y `reset` lo apaga**, así que hay que volver a encenderlo después de cargar); `fault` con `{"source": "gps", "mode": "loss", "active": true}` (activa o termina un fallo desde el instante actual; `loss` solo para `gps`). **`fault` solo se acepta con el modo interactivo encendido**: apagado, la plataforma responde `error` ("interactive mode is off: turn it on to inject faults") y no cambia nada. Un fallo programado por el escenario acaba solo: no se puede terminar a mano |
 
 Plataforma → cliente:
 | `op` | Campos |

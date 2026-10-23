@@ -1,6 +1,6 @@
 name: viento
 description: >-
-  Episodio de viento fuerte del norte en el tramo WP1→WP2. Causa esperada: WIND.
+  Strong northerly wind episode on the WP1→WP2 leg. Expected cause: WIND.
 seed: 42
 t0: "2026-10-20T10:00:00Z"
 max_duration_s: 900

@@ -1,6 +1,6 @@
 name: spoofing
 description: >-
-  Engaño del GPS en el tramo WP2→WP3: el dron cree ir en ruta y se desvía de verdad; el radar lo ve. Causa esperada: GPS_SPOOFING.
+  GPS spoofing on the WP2→WP3 leg: the drone believes it is on route and really drifts off; the radar sees it. Expected cause: GPS_SPOOFING.
 seed: 42
 t0: "2026-10-20T10:00:00Z"
 max_duration_s: 900

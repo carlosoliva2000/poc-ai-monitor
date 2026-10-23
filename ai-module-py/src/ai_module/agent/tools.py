@@ -86,15 +86,15 @@ class Toolbox:
                 )
             except PlatformToolError as exc:
                 raise ToolError(str(exc)) from exc
-        raise ToolError(f"tool desconocida: {name!r}")
+        raise ToolError(f"unknown tool: {name!r}")
 
     def _load_skill(self, args: dict[str, Any]) -> str:
         name = args.get("name")
         if name not in self.skills:
-            raise ToolError(f"skill desconocida: {name!r} (disponibles: {', '.join(self.skills)})")
+            raise ToolError(f"unknown skill: {name!r} (available: {', '.join(self.skills)})")
         if name in self._loaded:
             # no se reenvía: repetirla gasta contexto e iteraciones (el modelo alternaba skills)
-            return f"Ya tienes cargada la skill {name} (más arriba): sigue con su siguiente paso."
+            return f"You already have the skill {name} loaded (above): continue with its next step."
         self._loaded.add(name)
         if self._on_skill is not None:
             self._on_skill(name)

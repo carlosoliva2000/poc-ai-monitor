@@ -110,9 +110,9 @@ def test_get_events_compact_format_and_limits(runs_dir: Path) -> None:
 
 def test_bad_arguments_and_unknown_tool(runs_dir: Path) -> None:
     _, ctx = at(runs_dir, "nominal", 5.0)
-    with pytest.raises(ToolFailure, match="argumentos no válidos"):
+    with pytest.raises(ToolFailure, match="invalid arguments"):
         call_tool(ctx, "get_events", {"source": "sim"})
-    with pytest.raises(ToolFailure, match="argumentos no válidos"):
+    with pytest.raises(ToolFailure, match="invalid arguments"):
         call_tool(ctx, "get_events", {"source": "gps", "extra": 1})
     with pytest.raises(ToolFailure, match="desconocida"):
         call_tool(ctx, "publish_alert", {})
@@ -124,7 +124,7 @@ def test_mission_plan_and_next_waypoint(runs_dir: Path) -> None:
     player = make_player(runs_dir)
     player.load("demo")
     ctx = context(player)
-    with pytest.raises(ToolFailure, match="plan de misión"):
+    with pytest.raises(ToolFailure, match="mission plan"):
         call_tool(ctx, "get_mission_plan", {})
     player.play()
     player.advance(1)

@@ -134,13 +134,15 @@ class Chat:
             result = await engine.run(messages, trace, on_delta=chunk)
             text = result.streamed_text.strip() or result.text.strip()
             if not text:
-                text = (
-                    f"No he podido responder ({result.end_reason}). Prueba a repetir la pregunta."
-                )
+                text = f"I could not answer ({result.end_reason}). Try asking the question again."
             tool_names = result.tool_names
         except Exception:
             log.exception("chat engine failed")
-            text, tool_names, trace.end_reason = "No he podido responder por un error.", [], "error"
+            text, tool_names, trace.end_reason = (
+                "I could not answer because of an error.",
+                [],
+                "error",
+            )
         reply = await self._reply(event, text, tool_names)
         trace.published.append(
             {"event_id": reply.event_id, "type": "AgentReply", "causation_id": event.event_id}

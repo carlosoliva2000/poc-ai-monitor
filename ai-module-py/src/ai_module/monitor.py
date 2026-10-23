@@ -212,17 +212,17 @@ class Monitor:
                 continue
             alert = state.alert_of(detection_id)
             if alert is None:
-                reason = f"La detección {detection_id} se ha cerrado y no tenía alerta asociada."
+                reason = f"Detection {detection_id} was cleared and had no associated alert."
             elif alert.status.value != "open":
                 reason = (
-                    f"La detección {detection_id} se ha cerrado; su alerta {alert.alert_id} "
-                    "ya estaba cerrada."
+                    f"Detection {detection_id} was cleared; its alert {alert.alert_id} "
+                    "was already closed."
                 )
             elif remaining := state.open_detections_of(alert.alert_id):
                 ids = ", ".join(d.detection_id for d in remaining)
                 reason = (
-                    f"La detección {detection_id} se ha cerrado; la alerta {alert.alert_id} "
-                    f"sigue abierta porque aún tiene detecciones abiertas ({ids})."
+                    f"Detection {detection_id} was cleared; alert {alert.alert_id} "
+                    f"stays open because it still has open detections ({ids})."
                 )
             else:
                 for_llm.append(Pending(event, kind, detection_id, last_open_of=alert.alert_id))
@@ -269,12 +269,12 @@ class Monitor:
             if name == "get_track_metrics" and isinstance(result, dict):
                 rt.last_metrics = result
                 rt.last_metrics_note = (
-                    f"consulta del monitor a {format_t(inv.as_of)} (ventana {result['since']:g}"
+                    f"monitor query at {format_t(inv.as_of)} (window {result['since']:g}"
                     f"–{result['until']:g} s)"
                 )
             if name == "get_events" and args.get("source") == "link" and isinstance(result, dict):
                 rt.last_link = list(result.get("events", []))
-                rt.last_link_note = f"lo miró el monitor a {format_t(inv.as_of)}"
+                rt.last_link_note = f"looked at by the monitor at {format_t(inv.as_of)}"
             if name == "get_track_metrics" and not cfg.computed_facts:
                 result = strip_computed_facts(result)  # el módulo los conserva para los checks
             inv.seen_ids |= set(ID_RE.findall(compact_json(result)))
@@ -415,8 +415,8 @@ class Monitor:
                 raw["detection_ids"] = batch
             elif list(given) != batch:
                 return raw, [
-                    f"Esta invocación atiende {batch[0]}, no {', '.join(map(str, given))}: usa "
-                    f"{batch[0]} (o no pongas detection_ids)"
+                    f"This invocation handles {batch[0]}, not {', '.join(map(str, given))}: use "
+                    f"{batch[0]} (or leave out detection_ids)"
                 ]
         closure = {p.last_open_of for p in inv.pending if p.kind == "cleared" and p.last_open_of}
         only_closures = all(p.kind == "cleared" and p.last_open_of for p in inv.pending)
@@ -427,8 +427,8 @@ class Monitor:
                 raw["alert_id"] = expected
             elif given_alert != expected:
                 return raw, [
-                    f"En este aviso de cierre la alerta es {expected}, no {given_alert}: usa "
-                    f"{expected} (o no pongas alert_id)"
+                    f"In this closing warning the alert is {expected}, not {given_alert}: use "
+                    f"{expected} (or leave out alert_id)"
                 ]
         return raw, []
 
@@ -444,11 +444,11 @@ class Monitor:
             if inv.repeats[key] >= 2:
                 # segunda repetición: no se gastan más iteraciones, fallback
                 inv.trace.guardrail_rejections.append(
-                    {"tool": tool, "errors": ["repite por segunda vez una llamada rechazada"]}
+                    {"tool": tool, "errors": ["repeats a rejected call for the second time"]}
                 )
-                raise AbortInvocation(f"{tool}: llamada rechazada repetida por segunda vez")
+                raise AbortInvocation(f"{tool}: rejected call repeated for the second time")
             errors = [
-                "Es la misma llamada que antes; cambia lo que te indiqué.",
+                "This is the same call as before; change what I told you.",
                 *inv.rejected[key],
             ]
         else:
@@ -484,7 +484,7 @@ class Monitor:
             if index > 0:  # el resto de avisos de esas detecciones: respuesta enlazada a la alerta
                 await self._acknowledge(
                     inv.trace, pending.event_id, pending.detection_id, alert_id,
-                    f"Incluida en la alerta {alert_id}.", inv.as_of, fallback=False,
+                    f"Included in alert {alert_id}.", inv.as_of, fallback=False,
                 )  # fmt: skip
         return {"ok": True, "alert_id": alert_id}
 
@@ -539,7 +539,7 @@ class Monitor:
         for p in covered[1:]:
             await self._acknowledge(
                 inv.trace, p.event_id, p.detection_id, args.alert_id,
-                f"La alerta {args.alert_id} se ha cerrado.", inv.as_of, fallback=False,
+                f"Alert {args.alert_id} was closed.", inv.as_of, fallback=False,
             )  # fmt: skip
         return {"ok": True, "alert_id": args.alert_id}
 
@@ -585,7 +585,7 @@ class Monitor:
         state, trace = self.rt.state, inv.trace
         trace.fallback = True
         no_open_alert = not state.open_alerts()  # foto previa a los fallbacks
-        why = f"el agente no concluyó ({trace.end_reason})"
+        why = f"the agent did not conclude ({trace.end_reason})"
         for p in left:
             if p.kind == "raised" and no_open_alert:
                 evidence = list(p.event.payload.get("trigger_event_ids", []))[
@@ -599,11 +599,11 @@ class Monitor:
                         "cause": "UNKNOWN",
                         "severity": p.event.payload.get("severity", "medium"),
                         "confidence": 0.1,
-                        "summary": f"Sin diagnóstico automático para {rule} ({p.detection_id}): "
-                        "requiere revisión del operador",
-                        "explanation": f"El detector avisó de {p.event.payload.get('message')}. "
-                        f"No hay diagnóstico: {why}.",
-                        "recommendation": "Revisión por el operador.",
+                        "summary": f"No automatic diagnosis for {rule} ({p.detection_id}): "
+                        "needs operator review",
+                        "explanation": f"The detector warned of {p.event.payload.get('message')}. "
+                        f"There is no diagnosis: {why}.",
+                        "recommendation": "Review by the operator.",
                         "evidence_event_ids": evidence or [p.event_id],
                         "supersedes": None,
                     },
@@ -616,7 +616,7 @@ class Monitor:
                 if alert is not None and alert.status.value == "open":
                     trace.fallback_close = True
                     await self._close(
-                        inv, alert.alert_id, "todas sus detecciones se han cerrado", p
+                        inv, alert.alert_id, "all its detections have been cleared", p
                     )
                 else:
                     await self._acknowledge(

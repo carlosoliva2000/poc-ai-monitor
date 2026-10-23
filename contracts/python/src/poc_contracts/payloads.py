@@ -142,7 +142,7 @@ class _Fault(Payload):
     @model_validator(mode="after")
     def _check_mode(self) -> "_Fault":
         if self.mode == FaultMode.LOSS and self.source != SensorSource.GPS:
-            raise ValueError("`loss` solo existe para el GPS")
+            raise ValueError("`loss` only exists for the GPS")
         return self
 
 

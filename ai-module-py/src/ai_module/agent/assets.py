@@ -20,7 +20,7 @@ SECTION_RE = re.compile(r"^## (\w+)\s*$", re.M)
 
 
 class AssetError(Exception):
-    """Un recurso falta o está mal formado (mensaje en español)."""
+    """Un recurso falta o está mal formado (mensaje en inglés)."""
 
 
 @dataclass(frozen=True)
@@ -116,7 +116,7 @@ def render(template: str, **values: object) -> str:
     (así un marcador mal escrito no llega al modelo)."""
     missing = sorted({m for m in MARKER_RE.findall(template) if m not in values})
     if missing:
-        raise AssetError(f"faltan valores para los marcadores: {', '.join(missing)}")
+        raise AssetError(f"missing values for the placeholders: {', '.join(missing)}")
     return MARKER_RE.sub(lambda m: str(values[m.group(1)]), template)
 
 
@@ -143,7 +143,7 @@ class Assets:
         try:
             raw = yaml.safe_load((root / "agents.yaml").read_text(encoding="utf-8"))
         except OSError as exc:
-            raise AssetError(f"no se puede leer {root / 'agents.yaml'}: {exc}") from exc
+            raise AssetError(f"cannot read {root / 'agents.yaml'}: {exc}") from exc
         self._raw: dict[str, Any] = raw
         self.llm = LlmSettings(
             base_url=raw["llm"]["base_url"],
@@ -164,7 +164,7 @@ class Assets:
             text = path.read_text(encoding="utf-8")
             match = re.match(r"---\n(.*?)\n---\n", text, re.S)
             if not match:
-                raise AssetError(f"{path}: falta la cabecera name/description")
+                raise AssetError(f"{path}: the name/description header is missing")
             header = yaml.safe_load(match.group(1))
             skills[header["name"]] = Skill(header["name"], header["description"], text)
         return skills
@@ -198,7 +198,7 @@ class Assets:
         lines = []
         for name in names:
             if name not in self.skills:
-                raise AssetError(f"skill desconocida en agents.yaml: {name}")
+                raise AssetError(f"unknown skill in agents.yaml: {name}")
             lines.append(f"- `{name}`: {self.skills[name].description}")
         return "\n".join(lines)
 
@@ -209,7 +209,7 @@ class Assets:
         known = {t["function"]["name"] for t in self.tools_json}
         unknown = sorted(set(names) - known)
         if unknown:
-            raise AssetError(f"tools desconocidas en agents.yaml: {', '.join(unknown)}")
+            raise AssetError(f"unknown tools in agents.yaml: {', '.join(unknown)}")
         return [t for t in self.tools_json if t["function"]["name"] in names]
 
     # --- Prompts --------------------------------------------------------------------------

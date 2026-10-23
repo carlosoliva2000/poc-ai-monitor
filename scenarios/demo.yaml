@@ -1,6 +1,6 @@
 name: demo
 description: >-
-  Las tres anomalías en un vuelo: viento (WP1→WP2), spoofing (WP2→WP3) y secuestro (WP4→BASE).
+  All three anomalies in one flight: wind (WP1→WP2), spoofing (WP2→WP3) and hijacking (WP4→BASE).
 seed: 42
 t0: "2026-10-20T10:00:00Z"
 max_duration_s: 900

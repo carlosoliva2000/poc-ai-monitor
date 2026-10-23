@@ -209,9 +209,9 @@ class ViewerState:
 
     def wind_text(self) -> str:
         if self.wind is None:
-            return "viento: sin datos"
+            return "wind: no data"
         w = self.wind
-        return f"viento {w.speed_mps:.1f} m/s del {w.from_deg:.0f}° ({clock(w.t)})"
+        return f"wind {w.speed_mps:.1f} m/s from {w.from_deg:.0f}° ({clock(w.t)})"
 
     def wind_vector(self) -> tuple[float, float] | None:
         """Hacia dónde sopla (este, norte), de módulo 1; `None` sin datos."""
@@ -222,22 +222,22 @@ class ViewerState:
 
     def faults_text(self) -> str:
         if not self.active_faults:
-            return "ninguno"
+            return "none"
         return ", ".join(f"{f['source']}({f['mode']})" for f in self.active_faults)
 
     def status_line(self, now: float | None = None) -> str:
         """Línea de estado: tiempo, velocidad, estado, esperar al agente, interactivo y fallos."""
         if not self.connected:
-            return "sin conexión con la plataforma"
-        yes = {True: "sí", False: "no"}
+            return "no connection to the platform"
+        yes = {True: "yes", False: "no"}
         parts = [
             f"{self.scenario or '—'}",
             clock(self.sim_time),
             f"{self.speed:g}×",
             self.status,
-            f"esperar al agente: {yes[self.wait_agent]}",
-            f"interactivo: {'SÍ' if self.interactive else 'no'}",
-            f"fallos: {self.faults_text()}",
+            f"wait for the agent: {yes[self.wait_agent]}",
+            f"interactive: {'YES' if self.interactive else 'no'}",
+            f"faults: {self.faults_text()}",
         ]
         line = " · ".join(parts)
         if self.notice and (time.monotonic() if now is None else now) < self.notice_until:
@@ -248,7 +248,7 @@ class ViewerState:
         lines = []
         for d in sorted(self.detections.values(), key=lambda d: d.since):
             what = f"{d.rule} ({d.source})" if d.source else d.rule
-            lines.append(f"{what} · {d.severity} · desde {clock(d.since)}")
+            lines.append(f"{what} · {d.severity} · since {clock(d.since)}")
         return lines
 
     # --- teclado ------------------------------------------------------------------------------
@@ -276,7 +276,7 @@ class ViewerState:
             return Action(ask_scenario=True)
         if key in FAULT_SOURCES or key == "g":
             if not self.interactive:
-                return Action(notice="enciende el modo interactivo (tecla i) para inyectar fallos")
+                return Action(notice="turn on interactive mode (key i) to inject faults")
             if key == "g":
                 return Action(control("fault", self._fault("gps", "loss")))
             return Action(control("fault", self._fault(FAULT_SOURCES[key], "mute")))

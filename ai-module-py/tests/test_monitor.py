@@ -75,7 +75,7 @@ def test_a_new_alert_answers_its_detection(tmp_path: Path) -> None:
     assert trace["published"][0]["causation_id"] == event.event_id
     # el prompt lleva el estado y la detección
     first_user = llm.requests[0]["messages"][1]["content"]
-    assert "Alertas abiertas: ninguna" in first_user and "det-0001" in first_user
+    assert "Open alerts: none" in first_user and "det-0001" in first_user
     assert "<<" not in first_user
 
 
@@ -89,7 +89,7 @@ def test_text_only_gets_one_reminder_then_unknown_fallback(tmp_path: Path) -> No
     assert fallback.causation_id == event.event_id
     assert fallback.payload["evidence_event_ids"] == ["gps-000001", "gps-000002"]
     assert len(llm.requests) == 2  # un recordatorio, y a la segunda se rinde
-    assert "Aún no has respondido a: det-0001" in llm.requests[1]["messages"][-1]["content"]
+    assert "You have not yet responded to: det-0001" in llm.requests[1]["messages"][-1]["content"]
     [trace] = rt.trace.records
     assert trace["fallback"] and trace["reminders"] == 1 and trace["end_reason"] == "text"
 
@@ -182,7 +182,7 @@ def test_a_batch_of_three_gets_three_responses(tmp_path: Path) -> None:
     alert_id = next(e for e in answers if e.type == EventType.ANOMALY_DETECTED).event_id
     assert all(e.payload["alert_id"] == alert_id for e in answers if e.payload.get("alert_id"))
     assert len(llm.requests) == 1
-    assert "Tienes 3 avisos" in llm.requests[0]["messages"][1]["content"]
+    assert "You have 3 detector warnings" in llm.requests[0]["messages"][1]["content"]
 
 
 def test_a_batch_with_one_unanswered_event_gets_the_fallback_for_that_one(tmp_path: Path) -> None:
@@ -210,7 +210,7 @@ def test_deterministic_acknowledge_for_a_cleared_that_changes_nothing(tmp_path: 
     rt.state.apply(alert("ai-0010", ["det-0002", "det-0003"]))
     c2 = detection_event("cleared", "det-0002", 40.0)
     run(monitor.handle_batch([c2]))
-    # 3) la alerta ya está cerrada
+    # 3) la alerta is already closed
     rt.state.apply(detection_event("cleared", "det-0003", 41.0))
     from test_monitor_state import closed
 
@@ -222,11 +222,11 @@ def test_deterministic_acknowledge_for_a_cleared_that_changes_nothing(tmp_path: 
     assert [e.causation_id for e in answers] == [c1.event_id, c2.event_id, c3.event_id]
     assert all(e.type == EventType.DETECTION_ACKNOWLEDGED for e in answers)
     assert answers[0].payload["alert_id"] is None and answers[1].payload["alert_id"] == "ai-0010"
-    assert "aún tiene detecciones abiertas (det-0003)" in answers[1].payload["reason"]
+    assert "still has open detections (det-0003)" in answers[1].payload["reason"]
     # la alerta ya cerrada no es «la alerta abierta a la que pertenece»: alert_id nulo
     assert (
         answers[2].payload["alert_id"] is None
-        and "ya estaba cerrada" in answers[2].payload["reason"]
+        and "was already closed" in answers[2].payload["reason"]
     )
     assert all(t["deterministic"] for t in rt.trace.records)
     assert activity(published) == []  # sin LLM no hay actividad de agente
@@ -246,7 +246,7 @@ def test_the_last_cleared_of_an_alert_goes_to_the_llm_which_closes_it(tmp_path: 
     assert closed.payload["alert_id"] == "ai-0090"
     assert rt.state.open_alerts() == []
     assert (
-        "era la **última detección abierta** de la alerta ai-0090"
+        "was the **last open detection** of alert ai-0090"
         in (llm.requests[0]["messages"][1]["content"])
     )
 
@@ -274,7 +274,7 @@ def test_fallback_close_when_the_last_cleared_ends_without_conclusion(tmp_path: 
     run(monitor.handle_batch([cleared]))
     [closed] = responses(published)
     assert closed.type == EventType.ALERT_CLOSED
-    assert closed.payload["reason"] == "todas sus detecciones se han cerrado"
+    assert closed.payload["reason"] == "all its detections have been cleared"
     assert closed.causation_id == cleared.event_id
     assert rt.state.open_alerts() == []
     [trace] = rt.trace.records

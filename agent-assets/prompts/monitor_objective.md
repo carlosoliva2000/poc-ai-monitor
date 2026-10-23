@@ -1,35 +1,35 @@
 <!-- Plantilla del prompt de objetivo del monitor. El código elige las secciones según el tipo de
      cada aviso pendiente y sustituye los marcadores <<...>>. Lo que va antes de la primera sección
      es común. -->
-Instante actual: <<t_label>> (sim_time <<sim_time>> s).
+Current time: <<t_label>> (sim_time <<sim_time>> s).
 
-Estado:
-- Alertas abiertas: <<open_alerts>>
-- Detecciones abiertas: <<open_detections>>
-- Alerta del GPS reciente (abierta o cerrada hace ≤ 60 s): <<gps_alert_recent>>
-- Tus últimas decisiones: <<last_decisions>>
+State:
+- Open alerts: <<open_alerts>>
+- Open detections: <<open_detections>>
+- Recent GPS alert (open or closed ≤ 60 s ago): <<gps_alert_recent>>
+- Your latest decisions: <<last_decisions>>
 
 ## batch
-Tienes <<count>> avisos del detector pendientes de respuesta (detecciones: <<detection_ids>>). **Cada uno necesita respuesta.** Si son del mismo problema, agrúpalos en una sola alerta (`publish_alert` con todas sus `detection_ids`) o en un solo `acknowledge_detection`.
+You have <<count>> detector warnings pending a response (detections: <<detection_ids>>). **Each one needs a response.** If they are about the same problem, group them in a single alert (`publish_alert` with all their `detection_ids`) or in a single `acknowledge_detection`.
 
 ## raised
-Nueva detección <<detection_id>>: <<detection_json>>
-Alertas tuyas asociadas: <<related_alerts>>.
-Tarea: diagnostica la causa más probable y responde:
-- Si no hay una alerta abierta que ya lo explique: `publish_alert` (alerta nueva).
-- Si una alerta abierta ya lo explica y no cambia nada: `acknowledge_detection` con su `alert_id`.
-- Si pertenece a una alerta abierta pero cambia la causa o la severidad: `publish_alert` con `supersedes` apuntando a ella.
-- Si decides que no hace falta alerta: `acknowledge_detection` sin `alert_id`.
+New detection <<detection_id>>: <<detection_json>>
+Your associated alerts: <<related_alerts>>.
+Task: diagnose the most probable cause and respond:
+- If there is no open alert that already explains it: `publish_alert` (new alert).
+- If an open alert already explains it and nothing changes: `acknowledge_detection` with its `alert_id`.
+- If it belongs to an open alert but changes the cause or the severity: `publish_alert` with `supersedes` pointing to it.
+- If you decide no alert is needed: `acknowledge_detection` without `alert_id`.
 
 ## updated
-La detección <<detection_id>> ha empeorado: <<detection_json>>
-Alertas tuyas asociadas: <<related_alerts>>.
-Tarea: comprueba si tu diagnóstico sigue siendo correcto. Si cambia la causa o la severidad, publica una alerta nueva con `publish_alert` y `supersedes`. Si no cambia nada, responde con `acknowledge_detection` y el `alert_id` de la alerta.
+Detection <<detection_id>> has got worse: <<detection_json>>
+Your associated alerts: <<related_alerts>>.
+Task: check whether your diagnosis is still correct. If the cause or the severity changes, publish a new alert with `publish_alert` and `supersedes`. If nothing changes, respond with `acknowledge_detection` and the alert's `alert_id`.
 
 ## cleared
-La detección <<detection_id>> se ha cerrado y era la **última detección abierta** de la alerta <<last_open_alert>>: <<detection_json>>
-Alertas tuyas asociadas: <<related_alerts>>.
-Tarea: llama **una sola vez** a `get_track_metrics` con `since` = <<detection_since>> y `until` = <<sim_time>> (desde el inicio de la detección hasta ahora) y decide con ese resultado. Si la situación se ha normalizado (la desviación vuelve a bajar y GPS y radar coinciden), cierra con `close_alert` y di por qué. Si crees que el problema sigue (por ejemplo, otra fuente sigue mal), no la cierres: responde con `acknowledge_detection` (con el `alert_id`) y explica por qué en `reason`.
+Detection <<detection_id>> has been cleared and it was the **last open detection** of alert <<last_open_alert>>: <<detection_json>>
+Your associated alerts: <<related_alerts>>.
+Task: call `get_track_metrics` **once** with `since` = <<detection_since>> and `until` = <<sim_time>> (from the start of the detection until now) and decide with that result. If the situation has returned to normal (the deviation goes down again and GPS and radar agree), close with `close_alert` and say why. If you think the problem continues (for example, another source is still wrong), do not close it: respond with `acknowledge_detection` (with the `alert_id`) and explain why in `reason`.
 
 ## reminder
-Aún no has respondido a: <<pending>>. Un texto no cuenta como respuesta: responde ahora llamando a `publish_alert`, `acknowledge_detection` o `close_alert`.
+You have not yet responded to: <<pending>>. A text does not count as a response: respond now by calling `publish_alert`, `acknowledge_detection` or `close_alert`.

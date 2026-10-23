@@ -52,18 +52,17 @@ def test_each_chain_is_one_anomaly_with_the_first_alert_and_the_last_if_it_chang
     assert spoofing.detected_at == 100.0 and spoofing.delay_s == 1.0 and spoofing.closed_at == 150.0
     assert facts.labels == {"ai-0002": "A1", "ai-0004": "A2", "ai-0006": "A2"}
     text = assemble("demo", SUMMARY, state, facts, Narrative(seen={"A2": "Saltó 68 m."}))
-    assert "### A2 · Spoofing del GPS (alta, confianza 0.8)" in text  # la primera alerta
+    assert "### A2 · GPS spoofing (high, confidence 0.8)" in text  # la primera alerta
     assert (
-        "detección a T+01:40 (SOURCE_DISCREPANCY, ROUTE_DEVIATION), primera alerta a T+01:41"
-        in text
+        "detection at T+01:40 (SOURCE_DISCREPANCY, ROUTE_DEVIATION), first alert at T+01:41" in text
     )
-    assert "**Última alerta:** ai-0006 a T+02:11 (severidad alta → media; 2 alertas" in text
-    assert "- **Qué se vio:** Saltó 68 m." in text
+    assert "**Last alert:** ai-0006 at T+02:11 (severity high → medium; 2 alerts" in text
+    assert "- **What was seen:** Saltó 68 m." in text
     assert (
-        "- **Estado:** cerrada por el monitor a T+02:30" in text
-        and "- **Estado:** ABIERTA al final." in text
+        "- **Status:** closed by the monitor at T+02:30" in text
+        and "- **Status:** OPEN at the end." in text
     )
-    assert "(abiertas al final: 1)" in text and "**Waypoints alcanzados:** 1 de 2" in text
+    assert "(open at the end: 1)" in text and "**Waypoints reached:** 1 of 2" in text
 
 
 def test_timeline_is_in_time_order_with_every_t_of_the_state() -> None:
@@ -72,17 +71,16 @@ def test_timeline_is_in_time_order_with_every_t_of_the_state() -> None:
     rows = table.splitlines()[2:]
     times = [row.split("|")[1].strip() for row in rows]
     assert times == sorted(times)
-    assert "| T+00:00 | Misión | Inicio de la misión MSN |" in table
+    assert "| T+00:00 | Mission | Start of mission MSN |" in table
     assert (
-        "| T+01:41 | Monitor | Alerta ai-0004 (A2): Spoofing del GPS (alta, confianza 0.8) |"
-        in table
+        "| T+01:41 | Monitor | Alert ai-0004 (A2): GPS spoofing (high, confidence 0.8) |" in table
     )
     assert (
-        "sustituye a ai-0004" in table
-        and "| T+02:30 | Monitor | Cierre de la alerta ai-0006 (A2)" in table
+        "supersedes ai-0004" in table
+        and "| T+02:30 | Monitor | Closure of alert ai-0006 (A2)" in table
     )
-    assert "det-0003 SOURCE_DISCREPANCY cerrada (duró 40 s; máximo 40,0 m)" in table
-    assert "| T+03:20 | Misión | Fin de la misión: regreso a base |" in table
+    assert "det-0003 SOURCE_DISCREPANCY cleared (lasted 40 s; maximum 40.0 m)" in table
+    assert "| T+03:20 | Mission | End of mission: returned to base |" in table
 
 
 def test_detections_without_alert_are_listed() -> None:
@@ -93,8 +91,8 @@ def test_detections_without_alert_are_listed() -> None:
     facts = build_facts(state)
     text = assemble("v", None, state, facts, Narrative())
     assert facts.anomalies == [] and [d.detection_id for d in facts.without_alert] == ["det-0001"]
-    assert "El monitor no publicó ninguna alerta." in text and "## Detecciones sin alerta" in text
-    assert "datos del vuelo no disponibles" in text and text.count(MISSING) == 3
+    assert "The monitor published no alerts." in text and "## Detections without an alert" in text
+    assert "flight data not available" in text and text.count(MISSING) == 3
 
 
 def test_assessment_facts_carry_delays_fallbacks_rejections_and_aids() -> None:
@@ -112,12 +110,15 @@ def test_assessment_facts_carry_delays_fallbacks_rejections_and_aids() -> None:
     ]  # fmt: skip
     aids = {"tool_choice": "required", "coherence_guardrail": True, "require_checks": False}
     text = assessment_facts(build_facts(state), records, aids)
-    assert "A1: la primera alerta llegó 1,0 s de simulación después de la detección" in text
-    assert "tardó 12 s de reloj" in text and "Invocaciones del monitor con LLM: 2" in text
-    assert "Número de fallbacks (el módulo respondió por el monitor porque no concluyó): 1" in text
-    assert "rechazadas por los guardrails: 1." in text and "publish_alert 1" in text
-    assert "Motivo: «Falta `ids`»" in text
-    assert "tool_choice «required»" in text and "guardrail de coherencia" in text
+    assert "A1: the first alert arrived 1.0 s of simulation after the detection" in text
+    assert "took 12 s of wall clock" in text and "Monitor invocations with LLM: 2" in text
+    assert (
+        "Number of fallbacks (the module answered for the monitor because it did not conclude): 1"
+        in text
+    )
+    assert "rejected by the guardrails: 1." in text and "publish_alert 1" in text
+    assert 'Reason: "Falta `ids`"' in text
+    assert 'tool_choice "required"' in text and "coherence guardrail" in text
     assert "comprobaciones (`checks`) obligatorias" not in text  # apagada
 
 
@@ -162,14 +163,14 @@ def test_parse_narrative_tolerates_titles_and_missing_parts() -> None:
 def test_anomalies_for_llm_gives_detector_numbers_and_monitor_reasoning() -> None:
     text = anomalies_for_llm(build_facts(spoofing_state()))
     assert (
-        "### A2 · Spoofing del GPS — detección a T+01:40, primera alerta a T+01:41, "
-        "cerrada por el monitor a T+02:30" in text
+        "### A2 · GPS spoofing — detection at T+01:40, first alert at T+01:41, "
+        "closed by the monitor at T+02:30" in text
     )
     assert (
-        "- Detector det-0003 SOURCE_DISCREPANCY a T+01:40: «desviación de prueba» "
-        "(valor 35,0 m, umbral 30,0 m, máximo 40,0 m)" in text
+        '- Detector det-0003 SOURCE_DISCREPANCY at T+01:40: "desviación de prueba" '
+        "(value 35.0 m, threshold 30.0 m, maximum 40.0 m)" in text
     )
-    assert "- Monitor ai-0006 a T+02:11: Spoofing del GPS (media" in text
+    assert "- Monitor ai-0006 at T+02:11: GPS spoofing (medium" in text
 
 
 def test_parse_narrative_unwraps_a_code_block_and_drops_what_follows() -> None:
@@ -189,13 +190,13 @@ def test_figures_line_is_written_by_the_module_and_status_says_when_detections_e
          "guardrail_rejections": []},
     ]  # fmt: skip
     line = figures_line(monitor_stats(records, {"coherence_guardrail": True}), facts)
-    assert "2 invocaciones (1 con LLM y 1 deterministas)" in line and "media 10 s" in line
-    assert "fallbacks: 1 · rechazos de los guardrails: 1 · alertas abiertas al final: 1" in line
-    assert "ayudas activas: guardrail de coherencia" in line
+    assert "2 invocations (1 with LLM and 1 deterministic)" in line and "mean 10 s" in line
+    assert "fallbacks: 1 · guardrail rejections: 1 · alerts open at the end: 1" in line
+    assert "active aids: coherence guardrail" in line
     text = assemble("demo", SUMMARY, state, facts, Narrative(), figures=line)
-    assert "## Valoración del monitor\n\n**Cifras del monitor**" in text
+    assert "## Monitor assessment\n\n**Monitor figures**" in text
     assert (
-        "cerrada por el monitor a T+02:30 (la última detección de la cadena terminó a T+02:20)"
+        "closed by the monitor at T+02:30 (the last detection of the chain ended at T+02:20)"
         in text
     )
 
@@ -206,10 +207,10 @@ def test_status_only_explains_the_gap_when_the_closure_is_late() -> None:
     state.apply(detection_event("cleared", "det-0005", 135.0))
     state.alerts["ai-0006"].closed_at = 142.0  # 2 s después de que terminara det-0003 (T+02:20)
     spoofing = build_facts(state).anomalies[1]
-    assert spoofing.status == "cerrada por el monitor a T+02:22"
+    assert spoofing.status == "closed by the monitor at T+02:22"
     state.alerts["ai-0006"].closed_at = 150.0
     assert spoofing.status == (
-        "cerrada por el monitor a T+02:30 (la última detección de la cadena terminó a T+02:20)"
+        "closed by the monitor at T+02:30 (the last detection of the chain ended at T+02:20)"
     )
 
 
@@ -222,7 +223,21 @@ def test_detection_updates_show_as_a_severity_rise_and_keep_the_opening_values()
     state.apply(updated)
     table = timeline_table(state, build_facts(state), None)
     assert (
-        "| T+00:10 | Detector | det-0001 ROUTE_DEVIATION (media): desviación de prueba |" in table
+        "| T+00:10 | Detector | det-0001 ROUTE_DEVIATION (medium): desviación de prueba |" in table
     )
-    assert "| T+00:15 | Detector | det-0001 ROUTE_DEVIATION sube a alta: ya 90 m |" in table
+    assert "| T+00:15 | Detector | det-0001 ROUTE_DEVIATION rises to high: ya 90 m |" in table
     assert state.detections["det-0001"].value == 35.0
+
+
+def test_parse_narrative_reads_the_english_titles() -> None:
+    text = (
+        "## Summary\nTwo anomalies.\n\n## What was seen\n### A1\nWind of 9 m/s.\n\n"
+        "## Monitor assessment\nSupported.\n\n## Recommendations\n1. One."
+    )
+    n = parse_narrative(text, ["A1"])
+    assert (n.summary, n.seen, n.assessment, n.recommendations) == (
+        "Two anomalies.",
+        {"A1": "Wind of 9 m/s."},
+        "Supported.",
+        "1. One.",
+    )

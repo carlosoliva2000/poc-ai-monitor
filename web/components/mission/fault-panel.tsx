@@ -27,10 +27,10 @@ export function FaultPanel({ state, onControl }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="fault-title" className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
           <ZapOff className="size-4 text-muted-foreground" aria-hidden="true" />
-          Inyectar fallo
+          Inject fault
         </h2>
-        {!enabled && <span className="text-xs text-muted-foreground">Activa el «Modo interactivo» (y carga un escenario) para inyectar fallos.</span>}
-        <span className="text-[11px] italic text-muted-foreground">el agente no ve estos eventos, solo sus efectos</span>
+        {!enabled && <span className="text-xs text-muted-foreground">Turn on "Interactive mode" (and load a scenario) to inject faults.</span>}
+        <span className="text-[11px] italic text-muted-foreground">the agent does not see these events, only their effects</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -45,7 +45,7 @@ export function FaultPanel({ state, onControl }: Props) {
               type="button"
               role="switch"
               aria-checked={muted}
-              aria-label={`Silenciar ${SOURCE_LABEL[source]}`}
+              aria-label={`Mute ${SOURCE_LABEL[source]}`}
               disabled={!enabled || blocked || (muted && fault?.origin === 'scenario')}
               onClick={() => set(source, 'mute', !muted)}
               className={cn(
@@ -53,7 +53,7 @@ export function FaultPanel({ state, onControl }: Props) {
                 muted ? 'border-destructive bg-destructive/10 text-destructive' : 'border-border bg-background text-foreground hover:bg-muted',
               )}
             >
-              {muted ? 'Silenciado: ' : 'Silenciar '}
+              {muted ? 'Muted: ' : 'Mute '}
               {SOURCE_LABEL[source]}
             </button>
           )
@@ -62,7 +62,7 @@ export function FaultPanel({ state, onControl }: Props) {
           type="button"
           role="switch"
           aria-checked={find('gps')?.mode === 'loss'}
-          aria-label="Pérdida de GPS"
+          aria-label="GPS loss"
           disabled={!enabled || (Boolean(find('gps')) && find('gps')?.mode !== 'loss') || (find('gps')?.mode === 'loss' && find('gps')?.origin === 'scenario')}
           onClick={() => set('gps', 'loss', find('gps')?.mode !== 'loss')}
           className={cn(
@@ -70,14 +70,14 @@ export function FaultPanel({ state, onControl }: Props) {
             find('gps')?.mode === 'loss' ? 'border-destructive bg-destructive/10 text-destructive' : 'border-border bg-background text-foreground hover:bg-muted',
           )}
         >
-          {find('gps')?.mode === 'loss' ? 'Pérdida de GPS en curso' : 'Pérdida de GPS'}
+          {find('gps')?.mode === 'loss' ? 'GPS loss in progress' : 'GPS loss'}
         </button>
       </div>
 
       <p className="text-xs text-muted-foreground" data-testid="active-faults">
         {active.length === 0
-          ? 'Sin fallos en curso.'
-          : `En curso: ${active.map((f) => `${SOURCE_LABEL[f.source]} · ${f.mode === 'mute' ? 'silenciado' : 'pérdida'} (${f.origin === 'manual' ? 'manual' : 'programado'})`).join(' · ')}`}
+          ? 'No faults in progress.'
+          : `In progress: ${active.map((f) => `${SOURCE_LABEL[f.source]} · ${f.mode === 'mute' ? 'muted' : 'loss'} (${f.origin === 'manual' ? 'manual' : 'scheduled'})`).join(' · ')}`}
       </p>
     </section>
   )

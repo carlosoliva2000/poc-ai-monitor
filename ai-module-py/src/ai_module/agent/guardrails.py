@@ -1,6 +1,6 @@
 """Guardrails de las tools que publican (`contracts/eventos.md` §7). Funciones puras.
 
-Un rechazo no es una excepción: devuelve la lista de errores (en español), que vuelve al modelo
+Un rechazo no es una excepción: devuelve la lista de errores (en inglés), que vuelve al modelo
 como resultado de la tool y cuenta como iteración.
 """
 
@@ -105,22 +105,22 @@ def _json(value: bool | None) -> str:
     return "null" if value is None else str(value).lower()
 
 
-def _es(value: float | None) -> str:
-    return "n/d" if value is None else f"{value:g}".replace(".", ",")
+def _num(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:g}"
 
 
 def _source_of(name: str, facts: InvocationFacts, state: MonitorState) -> str:
     """De dónde sale el valor esperado de un check (para el mensaje de rechazo)."""
     if name == "gps_alert_recent":
-        return "el estado (alertas abiertas: " + state.describe_open_alerts() + ")"
+        return "the state (open alerts: " + state.describe_open_alerts() + ")"
     if name.startswith("link"):
         return (
-            "los eventos de enlace que has pedido"
+            "the link events you requested"
             if facts.link_events
-            else "no has mirado el enlace"
+            else "you have not looked at the link"
         )
     if facts.metrics is None:
-        return "no has llamado a get_track_metrics"
+        return "you have not called get_track_metrics"
     return "get_track_metrics"
 
 
@@ -139,13 +139,13 @@ def check_coherence(
     errors: list[str] = []
     if args.checks is None:
         if require_checks:
-            errors.append("falta `checks`: rellena las comprobaciones antes de elegir la causa")
+            errors.append("`checks` is missing: fill in the checks before choosing the cause")
     else:
         given = args.checks.model_dump()
         for name, want in expected.items():
             if given[name] != want:
                 errors.append(
-                    f"checks.{name} = {_json(given[name])} no coincide con "
+                    f"checks.{name} = {_json(given[name])} does not match "
                     f"{_source_of(name, facts, state)} ({_json(want)})"
                 )
     metrics = facts.metrics or {}
@@ -153,19 +153,19 @@ def check_coherence(
     cause = args.cause.value
     if cause == "WIND":
         if facts.metrics is None:
-            errors.append("WIND exige llamar antes a get_track_metrics (viento de la ventana)")
+            errors.append("WIND requires calling get_track_metrics first (wind of the window)")
         elif not expected["wind_notable"]:
             errors.append(
-                f"WIND exige viento notable: media {_es(wind.get('mean_speed_mps'))} y racha "
-                f"{_es(wind.get('max_gust_mps'))} no lo son; mira el enlace (paso 5)"
+                f"WIND requires notable wind: mean {_num(wind.get('mean_speed_mps'))} and gust "
+                f"{_num(wind.get('max_gust_mps'))} are not; look at the link (step 5)"
             )
         elif not expected["wind_with_drift"]:
             errors.append(
-                "WIND exige que la deriva vaya a favor del viento: difieren "
-                f"{_es(wind.get('drift_vs_wind_deg'))}° (máximo 45°); mira el enlace (paso 5)"
+                "WIND requires the drift to go with the wind: they differ by "
+                f"{_num(wind.get('drift_vs_wind_deg'))}° (maximum 45°); look at the link (step 5)"
             )
     if cause == "HIJACK" and not expected["link_checked"]:
-        errors.append("HIJACK exige haber mirado el enlace: llama a get_events con source link")
+        errors.append("HIJACK requires having looked at the link: call get_events with source link")
     on_route_deviation = any(
         (d := state.detections.get(i)) is not None and d.rule == "ROUTE_DEVIATION"
         for i in args.detection_ids
@@ -183,8 +183,8 @@ def check_coherence(
             want_supersedes = recent.alert_id if still_open else None
             if still_open and recent.severity == RECOVERY_SEVERITY:
                 errors.append(
-                    f"Es la recuperación del {recent.cause} de {recent.alert_id}, que ya es "
-                    f"{RECOVERY_SEVERITY}: no cambia nada, usa acknowledge_detection con "
+                    f"This is the recovery from the {recent.cause} of {recent.alert_id}, which is "
+                    f"already {RECOVERY_SEVERITY}: nothing changes, use acknowledge_detection with "
                     f"alert_id {recent.alert_id}"
                 )
             elif (
@@ -195,19 +195,20 @@ def check_coherence(
                 how = (
                     f"supersedes {recent.alert_id}"
                     if still_open
-                    else f"sin supersedes ({recent.alert_id} ya está cerrada)"
+                    else f"no supersedes ({recent.alert_id} is already closed)"
                 )
                 errors.append(
-                    f"Es la recuperación del {recent.cause} de {recent.alert_id}: publica "
-                    f"cause {recent.cause}, severity {RECOVERY_SEVERITY} y {how}"
+                    f"This is the recovery from the {recent.cause} of {recent.alert_id}: publish "
+                    f"cause {recent.cause}, severity {RECOVERY_SEVERITY} and {how}"
                 )
         elif cause in RECOVERY_CAUSES:
             errors.append(
-                f"una desviación de ruta con causa {cause} es la recuperación del GPS y exige una "
-                "alerta del GPS abierta o de hace 60 s o menos "
-                f"({'la hay' if recent is not None else 'no la hay'}) y que GPS y radar "
-                f"discrepasen (gps_radar.disagreed={str(expected['gps_radar_disagreed']).lower()}) "
-                f"o un salto del GPS de 30 m o más (gps_max_step_m={_es(step)})"
+                f"a route deviation with cause {cause} is the GPS recovery and requires a GPS "
+                "alert that is open or from 60 s ago or less "
+                f"({'there is one' if recent is not None else 'there is none'}) and that GPS and "
+                "radar disagreed "
+                f"(gps_radar.disagreed={str(expected['gps_radar_disagreed']).lower()}) "
+                f"or a GPS jump of 30 m or more (gps_max_step_m={_num(step)})"
             )
     return errors
 
@@ -227,43 +228,43 @@ class Verdict:
 
 
 FIELD_HINTS = {
-    "evidence_event_ids": "pon ahí, no en la explicación, de 2 a 6 ids que hayas visto, como "
-    "met-0010 o gps-000106",
-    "checks": "rellénalo con las seis comprobaciones antes de elegir la causa",
-    "detection_ids": "indica el det-… de los avisos que atiendes",
-    "cause": "una de WIND, HIJACK, GPS_SPOOFING, SENSOR_FAULT, GPS_JAMMING o UNKNOWN",
-    "severity": "low, medium o high",
-    "confidence": "un número entre 0 y 1",
-    "summary": "una frase de menos de 160 caracteres",
-    "explanation": "el razonamiento, con cifras, fuentes y tiempos T+mm:ss",
-    "recommendation": "qué recomiendas al responsable del dron (tú no puedes actuar)",
-    "reason": "una frase con datos",
-    "alert_id": "el alert_id de una alerta abierta",
-    "checks.link_anomalous": "true, false, o null si no has mirado el enlace",
+    "evidence_event_ids": "put there, not in the explanation, 2 to 6 ids you have seen, such as "
+    "met-0010 or gps-000106",
+    "checks": "fill it in with the six checks before choosing the cause",
+    "detection_ids": "give the det-… of the warnings you are handling",
+    "cause": "one of WIND, HIJACK, GPS_SPOOFING, SENSOR_FAULT, GPS_JAMMING or UNKNOWN",
+    "severity": "low, medium or high",
+    "confidence": "a number between 0 and 1",
+    "summary": "one sentence of fewer than 160 characters",
+    "explanation": "the reasoning, with figures, sources and T+mm:ss times",
+    "recommendation": "what you recommend to the person in charge of the drone (you cannot act)",
+    "reason": "one sentence with data",
+    "alert_id": "the alert_id of an open alert",
+    "checks.link_anomalous": "true, false, or null if you have not looked at the link",
 }
 
 
 def _describe(exc: ValidationError) -> list[str]:
-    """Errores de validación en español y accionables: qué falta o sobra y cómo arreglarlo."""
+    """Errores de validación en inglés y accionables: qué falta o sobra y cómo arreglarlo."""
     out = []
     for e in exc.errors():
-        name = ".".join(str(p) for p in e["loc"]) or "argumentos"
+        name = ".".join(str(p) for p in e["loc"]) or "arguments"
         hint = FIELD_HINTS.get(name, "")
         kind = e["type"]
         if kind == "missing":
-            out.append(f"Falta `{name}`" + (f": {hint}" if hint else ""))
+            out.append(f"`{name}` is missing" + (f": {hint}" if hint else ""))
         elif kind in ("string_too_long", "too_long"):
-            out.append(f"`{name}` es demasiado largo" + (f": {hint}" if hint else ""))
+            out.append(f"`{name}` is too long" + (f": {hint}" if hint else ""))
         elif kind == "too_short":
-            out.append(f"`{name}` está vacío" + (f": {hint}" if hint else ""))
+            out.append(f"`{name}` is empty" + (f": {hint}" if hint else ""))
         elif kind in ("greater_than_equal", "less_than_equal"):
-            out.append(f"`{name}` fuera de rango" + (f": {hint}" if hint else ""))
+            out.append(f"`{name}` is out of range" + (f": {hint}" if hint else ""))
         elif kind in ("enum", "literal_error"):
-            out.append(f"`{name}` no es un valor permitido" + (f": usa {hint}" if hint else ""))
+            out.append(f"`{name}` is not an allowed value" + (f": use {hint}" if hint else ""))
         elif kind == "extra_forbidden":
-            out.append(f"`{name}` sobra: quítalo (no es un argumento de esta tool)")
+            out.append(f"`{name}` is not needed: remove it (it is not an argument of this tool)")
         else:
-            out.append(f"`{name}` no es válido ({e['msg']})" + (f": {hint}" if hint else ""))
+            out.append(f"`{name}` is not valid ({e['msg']})" + (f": {hint}" if hint else ""))
     return out
 
 
@@ -297,46 +298,48 @@ def check_publish_alert(
     for event_id in args.evidence_event_ids:
         sim_time = index.get(event_id)
         if sim_time is None:
-            errors.append(f"la evidencia {event_id!r} no existe: cita solo ids que hayas visto")
+            errors.append(f"evidence {event_id!r} does not exist: cite only ids you have seen")
         elif sim_time > as_of + 1e-9:
-            errors.append(f"la evidencia {event_id!r} es posterior al instante actual")
+            errors.append(f"evidence {event_id!r} is later than the current time")
         elif event_id not in seen_ids:
             unseen.append(event_id)
     for detection_id in args.detection_ids:
         if detection_id not in state.detections:
-            errors.append(f"la detección {detection_id!r} no existe: usa un det-… de los avisos")
+            errors.append(
+                f"detection {detection_id!r} does not exist: use a det-… from the warnings"
+            )
         elif pending is not None and detection_id not in pending:
             errors.append(
-                f"la detección {detection_id} no es de las que atiendes ahora "
-                f"({', '.join(sorted(pending))}): usa solo esas; lo anterior de la cadena se "
-                "hereda con `supersedes`"
+                f"detection {detection_id} is not one you are handling now "
+                f"({', '.join(sorted(pending))}): use only those; what came earlier in the chain "
+                "is inherited with `supersedes`"
             )
     no_new = unanswered is not None and not unanswered.intersection(args.detection_ids)
     if pending is not None and not errors and no_new:
         errors.append(
-            "esas detecciones ya tienen respuesta: incluye alguna de las que aún no la "
-            f"tienen ({', '.join(sorted(unanswered or set())) or 'ninguna'})"
+            "those detections already have a response: include one of those that do not have "
+            f"one yet ({', '.join(sorted(unanswered or set())) or 'none'})"
         )
     if args.supersedes is not None:
         target = state.alerts.get(args.supersedes)
         if target is None or target.status != AlertStatus.OPEN:
-            errors.append(f"supersedes: {args.supersedes!r} no es una alerta abierta")
+            errors.append(f"supersedes: {args.supersedes!r} is not an open alert")
         elif args.cause.value == target.cause and args.severity.value == target.severity:
             # una alerta que sustituye a otra tiene que cambiar algo; si no, es un reconocimiento.
             # Se comprueba al final: en la recuperación del GPS la regla específica (publicar con
             # severity medium) debe pasar por delante, o este mensaje mandaría reconocer.
             no_change = (
-                f"No cambia nada respecto a {target.alert_id} (misma causa y severidad): "
-                f"usa acknowledge_detection con alert_id {target.alert_id}"
+                f"Nothing changes with respect to {target.alert_id} (same cause and severity): "
+                f"use acknowledge_detection with alert_id {target.alert_id}"
             )
     else:
         for detection_id in args.detection_ids:
             alert = state.alert_of(detection_id)
             if alert is not None and alert.status == AlertStatus.OPEN:
                 errors.append(
-                    f"la detección {detection_id} ya está en la alerta abierta {alert.alert_id}: "
-                    "usa acknowledge_detection si no cambia nada, o publish_alert con "
-                    f"supersedes={alert.alert_id!r} si cambia la causa o la severidad"
+                    f"detection {detection_id} is already in the open alert {alert.alert_id}: "
+                    "use acknowledge_detection if nothing changes, or publish_alert with "
+                    f"supersedes={alert.alert_id!r} if the cause or the severity changes"
                 )
     if coherence and not errors:
         errors += check_coherence(
@@ -349,7 +352,7 @@ def check_publish_alert(
 
 def _missing_detection_ids(pending: set[str] | None) -> str:
     listed = f" ({', '.join(sorted(pending))})" if pending else ""
-    return f"Falta `detection_ids`: hay varias detecciones pendientes{listed}; indica cuáles"
+    return f"`detection_ids` is missing: there are several pending detections{listed}; say which"
 
 
 def check_acknowledge(
@@ -365,15 +368,15 @@ def check_acknowledge(
     if args.alert_id is not None:
         alert = state.alerts.get(args.alert_id)
         if alert is None or alert.status != AlertStatus.OPEN:
-            errors.append(f"alert_id: {args.alert_id!r} no es una alerta abierta")
+            errors.append(f"alert_id: {args.alert_id!r} is not an open alert")
     for detection_id in args.detection_ids:
         if detection_id not in pending:
             errors.append(
-                f"la detección {detection_id!r} no es de las que debes atender ahora "
+                f"detection {detection_id!r} is not one you must handle now "
                 f"({', '.join(sorted(pending))})"
             )
         elif detection_id not in unanswered:
-            errors.append(f"la detección {detection_id!r} ya tiene respuesta")
+            errors.append(f"detection {detection_id!r} already has a response")
     return Verdict(args=args, errors=errors)
 
 
@@ -382,23 +385,23 @@ def check_close_alert(raw: dict[str, Any], *, state: MonitorState) -> Verdict:
     if args is None:
         return Verdict(errors=errors)
     if args.alert_id is None:
-        return Verdict(errors=["Falta `alert_id`: indica la alerta que cierras"])
+        return Verdict(errors=["`alert_id` is missing: say which alert you are closing"])
     alert = state.alerts.get(args.alert_id)
     if alert is None:
-        errors.append(f"la alerta {args.alert_id!r} no existe")
+        errors.append(f"alert {args.alert_id!r} does not exist")
     elif alert.status == AlertStatus.SUPERSEDED:
         head = state.head(alert.alert_id)
         errors.append(
-            f"la alerta {alert.alert_id} está sustituida por {head.alert_id if head else '?'}: "
-            "cierra la vigente"
+            f"alert {alert.alert_id} has been superseded by {head.alert_id if head else '?'}: "
+            "close the current one"
         )
     elif alert.status == AlertStatus.CLOSED:
-        errors.append(f"la alerta {alert.alert_id} ya está cerrada")
+        errors.append(f"alert {alert.alert_id} is already closed")
     else:
         still_open = state.open_detections_of(alert.alert_id)
         if still_open:
             ids = ", ".join(d.detection_id for d in still_open)
             errors.append(
-                f"no se puede cerrar {alert.alert_id}: aún tiene detecciones abiertas ({ids})"
+                f"{alert.alert_id} cannot be closed: it still has open detections ({ids})"
             )
     return Verdict(args=args, errors=errors)

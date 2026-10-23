@@ -69,9 +69,9 @@ def drone_marker(heading_deg: float) -> MarkerStyle:
 
 
 HELP = (
-    "espacio play/pausa · n paso · +/- velocidad · 0 reinicio · w esperar al agente · "
-    "t verdad · i interactivo · 1-5 silenciar gps/radar/meteo/enlace/batería · g pérdida GPS · "
-    "l cargar escenario"
+    "space play/pause · n step · +/- speed · 0 restart · w wait for the agent · "
+    "t truth · i interactive · 1-5 mute gps/radar/meteo/link/battery · g GPS loss · "
+    "l load scenario"
 )
 
 
@@ -151,35 +151,33 @@ class Renderer:
         self._wind_arrow = None
 
         ax.set_aspect("equal", adjustable="datalim")
-        ax.set_xlabel("x (m, hacia el este)")
-        ax.set_ylabel("y (m, hacia el norte)")
+        ax.set_xlabel("x (m, east)")
+        ax.set_ylabel("y (m, north)")
         ax.grid(True, color=GRID, lw=0.8)
         for side in ("top", "right"):
             ax.spines[side].set_visible(False)
 
         (self.route_line,) = ax.plot([], [], color=PLAN, lw=2.5, ls=(0, (6, 4)), zorder=1,
-                                     label="ruta planificada")  # fmt: skip
+                                     label="planned route")  # fmt: skip
         (self.truth_line,) = ax.plot(
-            [], [], color=TRUTH, lw=1.6, zorder=3, label="verdad (solo simulador)"
+            [], [], color=TRUTH, lw=1.6, zorder=3, label="truth (simulator only)"
         )
         (self.truth_dot,) = ax.plot([], [], color=TRUTH, marker="o", ms=7, ls="", zorder=3)
-        (self.trail,) = ax.plot(
-            [], [], color=GPS, lw=1.2, alpha=0.8, zorder=4, label="GPS (estela)"
-        )
+        (self.trail,) = ax.plot([], [], color=GPS, lw=1.2, alpha=0.8, zorder=4, label="GPS (trail)")
         (self.trail_hot,) = ax.plot(
-            [], [], color=ALERT, lw=2.4, zorder=5, label="con detección abierta"
+            [], [], color=ALERT, lw=2.4, zorder=5, label="with open detection"
         )
         (self.gps_dots,) = ax.plot(
             [], [], color=GPS, marker="o", ms=3.5, ls="", alpha=0.6, zorder=4
         )
         (self.gps_est,) = ax.plot([], [], color=GPS, marker="o", ms=5, ls="", mfc="none", zorder=4,
-                                  label="GPS sin fix (estima)")  # fmt: skip
+                                  label="GPS without fix (estimate)")  # fmt: skip
         (self.radar,) = ax.plot([], [], color=RADAR, marker="D", ms=5, ls="", alpha=0.7, zorder=4,
                                 label="radar")  # fmt: skip
         (self.ring,) = ax.plot([], [], color=ALERT, marker="o", ms=24, ls="", mfc="none", mew=2,
                                zorder=6)  # fmt: skip
         (self.drone,) = ax.plot([], [], color=INK, marker=drone_marker(0), ms=20, ls="", zorder=7,
-                                label="dron (rumbo)")  # fmt: skip
+                                label="drone (heading)")  # fmt: skip
         ax.legend(loc="lower left", fontsize=8, frameon=False)
 
         self.det_text = ax.text(0.01, 0.99, "", transform=ax.transAxes, va="top", ha="left",
@@ -357,15 +355,15 @@ class Viewer:
         if action.ask_scenario:
             threading.Thread(target=self._ask_scenario, daemon=True).start()
         if action.message is not None and not self.link.send(action.message):
-            st.set_notice("sin conexión con la plataforma")
+            st.set_notice("no connection to the platform")
 
     def _ask_scenario(self) -> None:
         try:
-            name = input("Escenario a cargar (nombre del YAML): ").strip()
+            name = input("Scenario to load (YAML name): ").strip()
         except EOFError:
             return
         if name and not self.link.send({"op": "control", "action": "load", "value": name}):
-            self.state.set_notice("sin conexión con la plataforma")
+            self.state.set_notice("no connection to the platform")
 
 
 def window_available() -> bool:
@@ -388,7 +386,7 @@ def run_window(viewer: Viewer) -> None:
     import matplotlib.pyplot as plt
 
     fig, renderer = make_figure()
-    fig.canvas.manager.set_window_title("poc-ai-monitor · visor en directo")
+    fig.canvas.manager.set_window_title("poc-ai-monitor · live viewer")
     fig.canvas.mpl_connect("key_press_event", lambda e: viewer.on_key(e.key or ""))
 
     def tick() -> None:
@@ -424,7 +422,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
     )
-    parser.add_argument("--platform", default=DEFAULT_PLATFORM, help="URL de la plataforma")
+    parser.add_argument("--platform", default=DEFAULT_PLATFORM, help="platform URL")
     parser.add_argument("--png", type=Path, help="no abrir ventana: guardar un PNG cada segundo")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")

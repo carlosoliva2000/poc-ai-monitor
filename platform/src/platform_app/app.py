@@ -117,7 +117,7 @@ class Hub:
 
 def _describe(exc: ValidationError) -> str:
     return "; ".join(
-        f"{'.'.join(str(p) for p in e['loc']) or 'mensaje'}: {e['msg']}" for e in exc.errors()[:3]
+        f"{'.'.join(str(p) for p in e['loc']) or 'message'}: {e['msg']}" for e in exc.errors()[:3]
     )
 
 
@@ -160,20 +160,22 @@ def _handle_message(app: FastAPI, client: Client, text: str) -> None:
     try:
         message = _MESSAGE.validate_python(json.loads(text))
     except json.JSONDecodeError:
-        client.send(ErrorMessage(message="el mensaje no es un JSON válido"))
+        client.send(ErrorMessage(message="the message is not valid JSON"))
         return
     except ValidationError as exc:
-        client.send(ErrorMessage(message=f"mensaje no válido: {_describe(exc)}"))
+        client.send(ErrorMessage(message=f"invalid message: {_describe(exc)}"))
         return
 
     if isinstance(message, Hello):
         if client.kind is not None and client.kind != message.client:
-            client.send(ErrorMessage(message="el cliente ya se presentó con otro tipo"))
+            client.send(
+                ErrorMessage(message="the client already introduced itself as another type")
+            )
             return
         client.kind = message.client
         return
     if client.kind is None:
-        client.send(ErrorMessage(message="el primer mensaje debe ser hello"))
+        client.send(ErrorMessage(message="the first message must be hello"))
         return
     if isinstance(message, Subscribe):
         client.patterns += [p for p in message.patterns if p not in client.patterns]
@@ -184,17 +186,16 @@ def _handle_message(app: FastAPI, client: Client, text: str) -> None:
             domain = topic_domain(event.topic)
             client.send(
                 ErrorMessage(
-                    message=f"el cliente {client.kind.value!r} no puede publicar en el "
-                    f"dominio {domain!r}"
+                    message=f"client {client.kind.value!r} cannot publish in the domain {domain!r}"
                 )
             )
         elif bus.timeline.get(event.event_id) is not None:
-            client.send(ErrorMessage(message=f"ya existe un evento con id {event.event_id!r}"))
+            client.send(ErrorMessage(message=f"an event with id {event.event_id!r} already exists"))
         else:
             bus.publish(event)
         return
     if client.kind != ClientKind.WEB:
-        client.send(ErrorMessage(message="solo los clientes de tipo web pueden enviar control"))
+        client.send(ErrorMessage(message="only clients of type web can send control"))
         return
     try:
         _handle_control(player, message)
@@ -282,7 +283,7 @@ def create_app(
     @api.get("/plan")
     def plan() -> PlanFile:
         if player.plan is None:
-            raise HTTPException(status_code=404, detail="no hay ningún escenario cargado")
+            raise HTTPException(status_code=404, detail="no scenario is loaded")
         return player.plan
 
     @api.get("/truth")
@@ -312,11 +313,11 @@ def create_app(
         try:
             args = json.loads(raw) if raw.strip() else {}
         except json.JSONDecodeError:
-            return ToolError(error="el cuerpo no es un JSON válido")
+            return ToolError(error="the body is not valid JSON")
         if not isinstance(args, dict):
-            return ToolError(error="los argumentos deben ser un objeto JSON")
+            return ToolError(error="the arguments must be a JSON object")
         if player.config is None:
-            return ToolError(error="no hay ningún escenario cargado")
+            return ToolError(error="no scenario is loaded")
         try:
             return ToolOk(result=call_tool(tools, name, args))
         except ToolFailure as exc:
@@ -346,8 +347,8 @@ def create_app(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Plataforma: reproductor, bus, API y WebSocket")
-    parser.add_argument("--port", type=int, default=PORT, help=f"puerto (por defecto {PORT})")
+    parser = argparse.ArgumentParser(description="Platform: player, bus, API and WebSocket")
+    parser.add_argument("--port", type=int, default=PORT, help=f"port (default {PORT})")
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"

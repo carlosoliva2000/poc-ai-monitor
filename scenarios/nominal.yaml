@@ -1,6 +1,6 @@
 name: nominal
 description: >-
-  Misión sin anomalías: viento flojo y ruido normal. No debe saltar ninguna regla.
+  Mission without anomalies: light wind and normal noise. No rule should fire.
 seed: 42
 t0: "2026-10-20T10:00:00Z"
 max_duration_s: 900

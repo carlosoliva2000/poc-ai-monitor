@@ -124,23 +124,23 @@ def test_only_the_last_decisions_are_kept_and_text_is_in_spanish() -> None:
     for n in range(5):
         state.apply(ack(f"ai-{n}", f"det-{n}", None, t=float(n)))
     assert len(state.decisions) == 3
-    assert state.decisions[-1].startswith("T+00:04 det-4 → reconocida")
+    assert state.decisions[-1].startswith("T+00:04 det-4 → acknowledged")
     assert state.describe_decisions().count(";") == 2
-    assert MonitorState().describe_decisions() == "ninguna todavía"
-    assert MonitorState().describe_open_alerts() == "ninguna"
+    assert MonitorState().describe_decisions() == "none yet"
+    assert MonitorState().describe_open_alerts() == "none"
 
 
 def test_descriptions_for_the_prompt() -> None:
     state = MonitorState()
     state.apply(detection_event("raised", "det-1", 5.0, rule="GPS_DEGRADED", source="gps"))
     state.apply(alert("ai-1", ["det-1"]))
-    assert "det-1 GPS_DEGRADED gps (medium, desde T+00:05, en la alerta ai-1)" in (
+    assert "det-1 GPS_DEGRADED gps (medium, since T+00:05, in alert ai-1)" in (
         state.describe_open_detections()
     )
     assert "ai-1 GPS_JAMMING" in state.describe_open_alerts()
-    assert "det-1 (abierta)" in state.describe_open_alerts()
+    assert "det-1 (open)" in state.describe_open_alerts()
     assert state.describe_related_alerts("det-1") == "ai-1 (GPS_JAMMING, high, open)"
-    assert state.describe_related_alerts("det-9") == "ninguna"
+    assert state.describe_related_alerts("det-9") == "none"
 
 
 def test_reset_clears_everything() -> None:

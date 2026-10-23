@@ -23,22 +23,20 @@ WIND_DEMO = {
              "drift_vs_wind_deg": 4.9, "notable": True, "with_drift": True},
     "gps_radar": {"disagreed": False}, "gps_max_step_m": 14.8,
 }  # fmt: skip
-NOTE = "consulta del monitor a T+01:46 (ventana 76–106 s)"
+NOTE = "monitor query at T+01:46 (window 76–106 s)"
 
 
 def test_the_injected_facts_carry_the_interpretation_next_to_the_figures() -> None:
     text = describe_metrics(WIND_DEMO, NOTE)
     assert text.startswith(NOTE)
-    assert "El viento es notable: sí (media 3,9 m/s, racha 9,7 m/s)" in text
-    assert "La deriva va a favor del viento: sí (el viento empuja en el mismo sentido" in text
-    assert "diferencia de 4,9°" in text
-    assert "GPS y radar discrepan: no (distancia media de 6,6 m, máxima de 9,0 m)" in text
-    assert (
-        "Salto brusco del GPS" in text and ": no (" in text.split("Salto brusco")[1].split("\n")[0]
-    )
+    assert "The wind is notable: yes (mean 3.9 m/s, gust 9.7 m/s)" in text
+    assert "The drift goes with the wind: yes (the wind pushes in the same direction" in text
+    assert "difference of 4.9°" in text
+    assert "GPS and radar disagree: no (mean distance of 6.6 m, maximum of 9.0 m)" in text
+    assert "Sudden GPS jump" in text and ": no (" in text.split("Sudden GPS jump")[1].split("\n")[0]
     # sin ángulos de procedencia ni de deriva: puestos uno junto a otro, el 14B los compara él
     assert "326" not in text and "146" not in text and "151" not in text
-    assert "Desviación del GPS respecto a la ruta planificada: media 20,1 m, máxima 30,5 m" in text
+    assert "GPS deviation from the planned route: mean 20.1 m, maximum 30.5 m" in text
 
 
 def test_the_injected_facts_have_no_field_names() -> None:
@@ -56,25 +54,24 @@ def test_the_judgement_changes_with_the_facts_not_with_the_model() -> None:
         "gps_max_step_m": 68.0,
     }  # fmt: skip
     text = describe_metrics(other, NOTE)
-    assert "El viento es notable: no (media 1,7 m/s, racha 2,4 m/s)" in text
-    assert "La deriva va a favor del viento: no (el viento no empuja en el sentido" in text
-    assert "diferencia de 140,0°" in text
-    assert "GPS y radar discrepan: sí (distancia media de 41,0 m, máxima de 73,0 m)" in text
-    assert "recuperación tras un engaño o una pérdida): sí (" in text
+    assert "The wind is notable: no (mean 1.7 m/s, gust 2.4 m/s)" in text
+    assert "The drift goes with the wind: no (the wind does not push in the direction" in text
+    assert "difference of 140.0°" in text
+    assert "GPS and radar disagree: yes (mean distance of 41.0 m, maximum of 73.0 m)" in text
+    assert "recovery after a spoofing or a loss): yes (" in text
 
 
 def test_missing_data_is_said_not_invented() -> None:
     text = describe_metrics({"wind": None, "gps_radar": None, "gps_max_step_m": None}, NOTE)
-    assert "No hay datos de viento" in text
-    assert "GPS y radar discrepan: no se puede saber" in text
-    assert "Salto brusco del GPS: no se puede saber" in text
+    assert "There is no wind data" in text
+    assert "GPS and radar disagree: cannot be known" in text
+    assert "Sudden GPS jump: cannot be known" in text
     no_drift = describe_metrics(
         {**WIND_DEMO, "wind": {**WIND_DEMO["wind"], "drift_vs_wind_deg": None}}, NOTE
     )
-    assert "La deriva va a favor del viento: no (el dron no se aleja de la ruta)" in no_drift
+    assert "The drift goes with the wind: no (the drone is not moving off the route)" in no_drift
     assert (
-        describe_metrics(None, NOTE)
-        == "El monitor todavía no ha consultado las métricas de la trayectoria."
+        describe_metrics(None, NOTE) == "The monitor has not yet looked up the trajectory metrics."
     )
 
 
@@ -94,10 +91,10 @@ def test_the_chat_uses_the_same_rules_as_the_guardrail_checks() -> None:
         assert facts["wind_with_drift"] == expected["wind_with_drift"] == drift
         assert facts["gps_radar_disagreed"] == expected["gps_radar_disagreed"] == disagreed
         text = describe_metrics(metrics, NOTE)
-        yes_no = lambda v: "sí" if v else "no"  # noqa: E731
-        assert f"El viento es notable: {yes_no(notable)} (" in text
-        assert f"La deriva va a favor del viento: {yes_no(drift)} (" in text
-        assert f"GPS y radar discrepan: {yes_no(disagreed)} (" in text
+        yes_no = lambda v: "yes" if v else "no"  # noqa: E731
+        assert f"The wind is notable: {yes_no(notable)} (" in text
+        assert f"The drift goes with the wind: {yes_no(drift)} (" in text
+        assert f"GPS and radar disagree: {yes_no(disagreed)} (" in text
 
 
 def test_the_system_of_both_chats_carries_the_interpreted_facts(tmp_path: Path) -> None:
@@ -109,9 +106,9 @@ def test_the_system_of_both_chats_carries_the_interpreted_facts(tmp_path: Path) 
         )
         run(chat.answer(operator_message(conversation.value, "¿por qué crees que es viento?")))
         system = llm.requests[0]["messages"][0]["content"]
-        assert "El viento es notable: sí (media 3,9 m/s, racha 9,7 m/s)" in system
-        assert "La deriva va a favor del viento: sí (el viento empuja en el mismo sentido" in system
-        assert "GPS y radar discrepan: no (distancia media de 6,6 m" in system
+        assert "The wind is notable: yes (mean 3.9 m/s, gust 9.7 m/s)" in system
+        assert "The drift goes with the wind: yes (the wind pushes in the same direction" in system
+        assert "GPS and radar disagree: no (mean distance of 6.6 m" in system
         assert "wind_to_deg" not in system and '"notable"' not in system  # sin el JSON de antes
 
 
@@ -139,15 +136,17 @@ LINK_HIJACKED = [
 def test_the_link_fact_carries_the_verdict_and_the_figures() -> None:
     from ai_module.chat_facts import describe_link
 
-    hijacked = describe_link(LINK_HIJACKED, "lo miró el monitor a T+05:42")
+    hijacked = describe_link(LINK_HIJACKED, "looked at by the monitor at T+05:42")
     assert (
-        "El enlace de mando es anómalo: sí (el controlador pasa de GCS-1 a UNK-4F2A desde T+05:35"
-        in hijacked
+        "The command link is anomalous: yes (the controller changes from GCS-1 to UNK-4F2A at "
+        "T+05:35" in hijacked
     )
-    assert "señal entre -79 y -62 dBm" in hijacked and "latencia entre 45 y 122 ms" in hijacked
-    assert "lo miró el monitor a T+05:42" in hijacked
-    calm = describe_link(LINK_OK, "lo miró el monitor a T+01:46")
-    assert "El enlace de mando es anómalo: no (un solo controlador, GCS-1" in calm
+    assert (
+        "signal between -79 and -62 dBm" in hijacked and "latency between 45 and 122 ms" in hijacked
+    )
+    assert "looked at by the monitor at T+05:42" in hijacked
+    calm = describe_link(LINK_OK, "looked at by the monitor at T+01:46")
+    assert "The command link is anomalous: no (a single controller, GCS-1" in calm
     assert describe_link(None, "") == "" and describe_link([], "") == ""
 
 
@@ -161,5 +160,5 @@ def test_alerts_for_the_chats_have_checks_and_evidence_but_not_the_prose_explana
     state.apply(alert("ai-0002", ["det-1"], cause="WIND"))
     full = state.describe_alerts_detail()
     chat = state.describe_alerts_detail(explanation=False)
-    assert "Explicación: x" in full and "Explicación" not in chat
-    assert "Recomendación: y" in chat and "Evidencias: gps-000001" in chat
+    assert "Explanation: x" in full and "Explanation" not in chat
+    assert "Recommendation: y" in chat and "Evidence: gps-000001" in chat

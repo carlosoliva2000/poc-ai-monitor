@@ -13,11 +13,11 @@ type Tab = 'monitor' | 'report'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'monitor', label: 'Monitor' },
-  { id: 'report', label: 'Informe' },
+  { id: 'report', label: 'Report' },
 ]
 
-const MONITOR_SUGGESTIONS = ['¿Qué está pasando ahora mismo?', '¿Por qué crees que es esa causa?', '¿Qué alertas hay abiertas?']
-const REPORT_SUGGESTIONS = ['¿Qué pasó en el vuelo?', '¿Cuál fue la anomalía más grave?', '¿Qué recomiendas?']
+const MONITOR_SUGGESTIONS = ['What is happening right now?', 'Why do you think that is the cause?', 'Which alerts are open?']
+const REPORT_SUGGESTIONS = ['What happened during the flight?', 'Which was the most serious anomaly?', 'What do you recommend?']
 
 type Props = {
   events: Envelope[]
@@ -35,16 +35,16 @@ export function AgentConsole({ events, data, chunks, activity, onSend }: Props) 
       <header className="flex flex-col gap-3 border-b border-border px-4 pt-3">
         <div className="flex items-center justify-between gap-3">
           <h2 id="agent-title" className="text-sm font-semibold text-foreground">
-            Consola del agente
+            Agent console
           </h2>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground" aria-label="Quién habla">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground" aria-label="Who is speaking">
             <Legend className="bg-muted-foreground" label="Detector" />
             <Legend className="bg-primary" label="Monitor" />
-            <Legend className="bg-[oklch(0.55_0.12_195)]" label="Informe" />
-            <Legend className="bg-accent" label="Operador" />
+            <Legend className="bg-[oklch(0.55_0.12_195)]" label="Report" />
+            <Legend className="bg-accent" label="Operator" />
           </div>
         </div>
-        <div role="tablist" aria-label="Agente" className="-mb-px flex gap-4">
+        <div role="tablist" aria-label="Agent" className="-mb-px flex gap-4">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -74,7 +74,7 @@ export function AgentConsole({ events, data, chunks, activity, onSend }: Props) 
             agentClass="text-primary"
             entries={chatEntries(events, 'monitor', chunks)}
             suggestions={MONITOR_SUGGESTIONS}
-            placeholder="Pregunta al monitor…"
+            placeholder="Ask the monitor…"
             onSend={(text) => onSend('monitor', text)}
           />
         </>
@@ -87,17 +87,17 @@ export function AgentConsole({ events, data, chunks, activity, onSend }: Props) 
               </div>
             ) : (
               <p className="m-auto max-w-64 pt-8 text-center text-sm leading-relaxed text-muted-foreground text-pretty">
-                El agente de informe escribe el informe cuando termina la simulación y el monitor ha respondido a todo.
+                The report agent writes the report when the simulation ends and the monitor has answered everything.
               </p>
             )}
           </div>
           <ChatPanel
-            title="informe"
-            agentLabel="INFORME"
+            title="report"
+            agentLabel="REPORT"
             agentClass="text-[oklch(0.45_0.12_195)]"
             entries={chatEntries(events, 'report', chunks)}
             suggestions={REPORT_SUGGESTIONS}
-            placeholder="Pregunta al agente de informe…"
+            placeholder="Ask the report agent…"
             onSend={(text) => onSend('report', text)}
           />
         </>
