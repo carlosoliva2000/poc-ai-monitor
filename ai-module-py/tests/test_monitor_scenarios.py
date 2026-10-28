@@ -48,7 +48,8 @@ def publisher(messages: list, tools: list, sampling: dict) -> Any:
     last_open = re.search(r"of alert (ai-\d+)", user)
     if last_open:
         return tool_response(call("close_alert", alert_id=last_open.group(1), reason="normalizada"))
-    if open_alert:
+    new_silence = "New detection" in user and '"rule":"SOURCE_SILENT"' in user
+    if open_alert and not new_silence:  # un silencio nuevo lleva alerta propia
         return tool_response(
             call(
                 "acknowledge_detection",

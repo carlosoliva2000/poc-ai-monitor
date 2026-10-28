@@ -34,6 +34,8 @@ AID_NAMES = {
     "coherence_guardrail": "coherence guardrail, including the exclusive GPS recovery",
     "computed_facts": "facts computed by the platform (notable wind, GPS–radar "
     "discrepancy, GPS jump)",
+    "source_silent_own_alert": "own alert for a silent source (no acknowledgement, no superseding "
+    "an alert of another cause)",
 }
 CLOSE_GAP_S = 5.0  # desfase entre el fin de la detección y el cierre a partir del cual se explica
 MISSING = "Not available: the agent did not write this section."

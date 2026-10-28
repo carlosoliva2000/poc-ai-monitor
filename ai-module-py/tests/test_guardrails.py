@@ -209,3 +209,79 @@ def test_event_index_only_keeps_air_env_ai_ops_domains() -> None:
     )
     assert index.get("plr-0001") is None  # el dominio `sim` no vale como evidencia
     assert index_with(gps_000001=3.0).get("gps-000001") == 3.0
+
+
+# --- Fuente callada (`source_silent_own_alert`) ---
+
+
+@pytest.fixture
+def silent_gps() -> MonitorState:
+    """Alerta `GPS_JAMMING` abierta (ai-1) y un `SOURCE_SILENT` del GPS sin alerta (det-8)."""
+    s = MonitorState()
+    s.apply(detection_event("raised", "det-1", 5.0))
+    s.apply(alert("ai-1", ["det-1"], cause="GPS_JAMMING"))
+    s.apply(detection_event("raised", "det-8", 9.0, rule="SOURCE_SILENT", source="gps"))
+    return s
+
+
+def silent_check(raw, state, *, switch=True):
+    return check_publish_alert(
+        raw,
+        as_of=10.0,
+        state=state,
+        index=index_with(**GOOD),
+        seen_ids=set(),
+        source_silent_own_alert=switch,
+    )
+
+
+def test_source_silent_cannot_be_acknowledged_into_another_alert(silent_gps) -> None:
+    raw = {"detection_ids": ["det-8"], "alert_id": "ai-1", "reason": "r"}
+    kwargs = {"state": silent_gps, "unanswered": {"det-8"}, "pending": {"det-8"}}
+    verdict = check_acknowledge(raw, **kwargs, source_silent_own_alert=True)
+    assert any("own alert" in e and "SENSOR_FAULT" in e and "without supersedes" in e
+               for e in verdict.errors)  # fmt: skip
+    assert check_acknowledge(raw, **kwargs).ok  # interruptor apagado
+
+
+def test_source_silent_cannot_supersede_an_alert_of_another_cause(silent_gps) -> None:
+    raw = alert_args(["det-8"], cause="GPS_JAMMING", severity="medium", supersedes="ai-1")
+    errors = silent_check(raw, silent_gps).errors
+    assert any("different fault from ai-1 (GPS_JAMMING)" in e and "without supersedes" in e
+               for e in errors)  # fmt: skip
+    assert silent_check(raw, silent_gps, switch=False).ok
+
+
+def test_source_silent_with_its_own_alert_is_accepted(silent_gps) -> None:
+    own = alert_args(["det-8"], cause="SENSOR_FAULT")
+    assert silent_check(own, silent_gps).ok
+
+
+def test_silent_radar_without_other_alert_is_unchanged() -> None:
+    """F1: radar mudo sin ninguna alerta abierta; publica `SENSOR_FAULT` y no se toca."""
+    s = MonitorState()
+    s.apply(detection_event("raised", "det-2", 5.0, rule="SOURCE_SILENT", source="radar"))
+    assert silent_check(alert_args(["det-2"], cause="SENSOR_FAULT"), s).ok
+    assert silent_check(alert_args(["det-2"], cause="SENSOR_FAULT", severity="high"), s).ok
+
+
+def test_source_silent_already_in_its_own_alert_can_be_acknowledged(silent_gps) -> None:
+    """Un `DetectionUpdated` de un silencio que ya tiene alerta propia se reconoce como siempre."""
+    silent_gps.apply(alert("ai-2", ["det-8"], cause="SENSOR_FAULT", severity="medium"))
+    silent_gps.apply(detection_event("updated", "det-8", 12.0, rule="SOURCE_SILENT", source="gps"))
+    verdict = check_acknowledge(
+        {"detection_ids": ["det-8"], "alert_id": "ai-2", "reason": "r"},
+        state=silent_gps, unanswered={"det-8"}, pending={"det-8"},
+        source_silent_own_alert=True,
+    )  # fmt: skip
+    assert verdict.ok
+
+
+def test_other_rules_are_not_affected(silent_gps) -> None:
+    silent_gps.apply(detection_event("raised", "det-9", 9.5, rule="SOURCE_DISCREPANCY"))
+    verdict = check_acknowledge(
+        {"detection_ids": ["det-9"], "alert_id": "ai-1", "reason": "r"},
+        state=silent_gps, unanswered={"det-9"}, pending={"det-9"},
+        source_silent_own_alert=True,
+    )  # fmt: skip
+    assert verdict.ok

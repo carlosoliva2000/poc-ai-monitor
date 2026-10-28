@@ -24,7 +24,7 @@ Estado al cerrar la Fase 5 (23/10/2026; **todo en inglés, comportamiento del mo
 | **Spoofing** (discrepancia) | Detector (`SOURCE_DISCREPANCY`) | **Modelo** | La skill le pide mirar la calidad del fix del GPS y la geometría. El guardrail comprueba que sus `checks` cuadren con los datos, pero **no tiene veto de causa** sobre una discrepancia: elegir `GPS_SPOOFING` es del modelo. |
 | **Recuperación tras spoofing o pérdida de GPS** | Detector (`ROUTE_DEVIATION`) | **Código (guardrail)** | Si hay una alerta del GPS reciente (abierta o cerrada hace 60 s o menos) y los hechos dicen «salto de 30 m o más» o «discrepancia», **solo vale la causa de esa alerta, con `supersedes` si sigue abierta y severidad `medium`** (las tres cosas se comprueban). El modelo suele proponer otra cosa (a veces la severidad de la alerta anterior): el rechazo le dice qué publicar y él solo redacta. |
 | **Secuestro** | Detector (`ROUTE_DEVIATION`) | **Modelo** | Una sola alerta: si la detección sube de severidad y el modelo no cambia ni la causa ni la severidad, el guardrail rechaza el `supersedes` y obliga a reconocerla. Tiene que mirar el enlace: el guardrail exige haberlo mirado (`link_checked`) y que declare bien `link_anomalous`, cuyo valor esperado calcula el módulo (si se equivoca, el rechazo le dice el correcto). **No exige que sea anómalo para publicar `HIJACK`**: decidirlo es del modelo. |
-| **Fuente callada** | Detector (`SOURCE_SILENT`) | **Modelo** | `SENSOR_FAULT`; sin veto de causa. Bien con el radar; con el GPS durante una pérdida de GPS falla (pendiente F3). |
+| **Fuente callada** | Detector (`SOURCE_SILENT`) | **Modelo** la causa (`SENSOR_FAULT`, sin veto); **código (guardrail)** que sea alerta propia | Un `SOURCE_SILENT` nuevo (sin alerta) **no se puede reconocer** ni **sustituir a una alerta de causa distinta de `SENSOR_FAULT`**: el rechazo dice «publica alerta propia con causa `SENSOR_FAULT` y sin `supersedes`». Lo que el modelo no hacía (F3: GPS callado dentro de una pérdida de GPS, que reconocía o sustituía por `GPS_JAMMING`) lo decide ahora esa regla; la causa que escriba tras el rechazo sigue siendo suya. El radar mudo (F1) no cambia: no hay alerta abierta con la que confundirlo. |
 | **Pérdida de GPS** | Detector (`GPS_DEGRADED`) | **Modelo** | `GPS_JAMMING`; sin veto de causa. Las detecciones que siguen a veces abren otra cadena (pendiente F2). |
 | **Cierre** | Detector (`DetectionCleared`) | **Código** si a la alerta le quedan detecciones abiertas (o no tenía alerta o ya estaba cerrada); **modelo** si era la última (cierra o la mantiene). | El guardrail no deja cerrar con detecciones abiertas. El modelo a veces la mantiene abierta queriendo cerrar (pendiente). Si no concluye, el módulo la cierra. Con «esperar al agente», el cierre sale a la hora en que termina la detección. |
 
@@ -38,6 +38,7 @@ De la más a la menos intrusiva. Todas con interruptor en `agents.yaml` (`monito
 |---|---|---|
 | Guardrail de coherencia (incluida la recuperación excluyente) | Equivocarse de causa sin que nadie lo pare; en la recuperación, la decisión | `monitor.coherence_guardrail` |
 | `checks` obligatorios antes de la causa | Saltarse comprobaciones del árbol | `monitor.require_checks` |
+| Alerta propia para la fuente callada | Distinguir un silencio de un fallo ya alertado (la regla general del prompt gana al paso 5 de la skill) | `monitor.source_silent_own_alert` |
 | Hechos calculados en `get_track_metrics` | Comparar números y ángulos | `monitor.computed_facts` |
 | Última iteración solo con las tres respuestas | Encadenar tools de datos sin decidir | `monitor.final_iteration_response_tools_only` |
 | `tool_choice: required` | El formato de la llamada | `monitor.tool_choice` |
@@ -47,6 +48,7 @@ De la más a la menos intrusiva. Todas con interruptor en `agents.yaml` (`monito
 | Informe: hechos escritos por el código | Copiar bien horas, severidades, estados y evidencias | (sin interruptor; en git) |
 | Ids que rellena el módulo | Copiar ids | (sin interruptor; contrato v0.8) |
 | Prompts y skills reescritos para este modelo | Interpretar instrucciones largas | (sin interruptor; originales en git) |
+| Excepción en `monitor_objective.md` (fase 7.2): «a `SOURCE_SILENT` detection is always a different fault and gets its own alert» | Resolver el choque entre la regla general de `acknowledge_detection` y el paso 5 de la skill. **Medido: con 1 repetición el modelo no cambia de conducta** (la frase no basta; ver `fase7_2.md`) | (sin interruptor; en git) |
 
 **No son ayudas** y se quedan con cualquier modelo: la respuesta garantizada a cada aviso y los fallbacks, los cierres deterministas, el corte temporal, que el modelo nunca vea la verdad, los mensajes de rechazo accionables, `repetition_penalty` y `top_k` explícitos, las trazas y la evaluación contra etiquetas.
 
@@ -71,4 +73,4 @@ El resumen, la explicación y la recomendación de una alerta los escribe el mod
 - **Texto fiable del monitor** (`docs/mejoras_futuras.md`): explicación estructurada con plantillas, verificar el texto contra los `checks` antes de publicarlo, o un modelo mejor.
 - **Liberar al agente** (`docs/mejoras_futuras.md`): con un modelo más moderno (Qwen3 instruct, por ejemplo), apagar las ayudas del §3 de arriba abajo y comparar los `eval.md`.
 - **Probar el monitor con modelos de Claude** (`docs/mejoras_futuras.md`, dentro de «Liberar al agente»): `claude-haiku-5-5`, luego `claude-sonnet-5-5` y, solo como techo y avisando, `claude-opus-5-5`, con todas las ayudas apagadas. Exige una excepción explícita a la regla 1 («nada en la nube»), que decide Carlos.
-- **`faults`**: F3, las dos cadenas de F2 y las alertas que quedan abiertas: decisiones mecánicas candidatas a regla.
+- **`faults`**: F3 ya está resuelto por la regla `source_silent_own_alert` (fase 7.2); quedan las dos cadenas de F2 (solo con `actual`) y las alertas que quedan abiertas: decisiones mecánicas candidatas a regla.

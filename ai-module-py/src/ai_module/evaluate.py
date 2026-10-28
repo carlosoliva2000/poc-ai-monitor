@@ -706,6 +706,7 @@ AID_NAMES = {
     "require_checks": "checks obligatorios",
     "coherence_guardrail": "guardrail de coherencia",
     "computed_facts": "hechos calculados",
+    "source_silent_own_alert": "alerta propia para la fuente callada",
 }
 
 

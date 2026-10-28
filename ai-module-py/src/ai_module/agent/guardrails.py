@@ -21,6 +21,7 @@ LINK_LATENCY_RATIO = 2.5  # o si la latencia máxima supera esta vez la mínima
 RECOVERY_STEP_M = 30.0  # la recuperación del GPS salta al menos esto de golpe
 RECOVERY_CAUSES = ("GPS_SPOOFING", "GPS_JAMMING", "SENSOR_FAULT")
 RECOVERY_SEVERITY = "medium"  # severidad que el guardrail impone a la alerta de recuperación
+SILENT_CAUSE = "SENSOR_FAULT"  # causa de la alerta propia de una fuente callada
 
 
 class EventIndex:
@@ -99,6 +100,16 @@ def expected_checks(facts: InvocationFacts, state: MonitorState, as_of: float) -
         "link_checked": checked,
         "link_anomalous": link_is_anomalous(facts.link_events or []) if checked else None,
     }
+
+
+def is_new_source_silent(detection_ids: list[str], state: MonitorState) -> bool:
+    """Alguna de esas detecciones es un `SOURCE_SILENT` que aún no está en ninguna alerta."""
+    return any(
+        (d := state.detections.get(i)) is not None
+        and d.rule == "SOURCE_SILENT"
+        and state.alert_of(i) is None
+        for i in detection_ids
+    )
 
 
 def _json(value: bool | None) -> str:
@@ -287,6 +298,7 @@ def check_publish_alert(
     require_checks: bool = True,
     pending: set[str] | None = None,
     unanswered: set[str] | None = None,
+    source_silent_own_alert: bool = False,
 ) -> Verdict:
     args, errors = _parse(PublishAlertArgs, raw)
     if args is None:
@@ -324,6 +336,16 @@ def check_publish_alert(
         target = state.alerts.get(args.supersedes)
         if target is None or target.status != AlertStatus.OPEN:
             errors.append(f"supersedes: {args.supersedes!r} is not an open alert")
+        elif (
+            source_silent_own_alert
+            and target.cause != SILENT_CAUSE
+            and is_new_source_silent(args.detection_ids, state)
+        ):
+            errors.append(
+                f"a SOURCE_SILENT warning is a different fault from {target.alert_id} "
+                f"({target.cause}) and gets its own alert: publish_alert with cause "
+                f"{SILENT_CAUSE} and without supersedes"
+            )
         elif args.cause.value == target.cause and args.severity.value == target.severity:
             # una alerta que sustituye a otra tiene que cambiar algo; si no, es un reconocimiento.
             # Se comprueba al final: en la recuperación del GPS la regla específica (publicar con
@@ -356,7 +378,12 @@ def _missing_detection_ids(pending: set[str] | None) -> str:
 
 
 def check_acknowledge(
-    raw: dict[str, Any], *, state: MonitorState, unanswered: set[str], pending: set[str]
+    raw: dict[str, Any],
+    *,
+    state: MonitorState,
+    unanswered: set[str],
+    pending: set[str],
+    source_silent_own_alert: bool = False,
 ) -> Verdict:
     """`unanswered`: detecciones del lote que aún no tienen respuesta; `pending`: todas las del
     lote."""
@@ -377,6 +404,11 @@ def check_acknowledge(
             )
         elif detection_id not in unanswered:
             errors.append(f"detection {detection_id!r} already has a response")
+    if not errors and source_silent_own_alert and is_new_source_silent(args.detection_ids, state):
+        errors.append(
+            "a SOURCE_SILENT warning is always a different fault and gets its own alert: "
+            f"publish_alert with cause {SILENT_CAUSE} and without supersedes"
+        )
     return Verdict(args=args, errors=errors)
 
 

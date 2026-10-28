@@ -469,6 +469,7 @@ class Monitor:
             require_checks=self.config.require_checks,
             pending={p.detection_id for p in inv.pending},
             unanswered={p.detection_id for p in inv.unanswered()},
+            source_silent_own_alert=self.config.source_silent_own_alert,
         )
         if not verdict.ok:
             return self._reject(inv, "publish_alert", raw, verdict)
@@ -510,7 +511,11 @@ class Monitor:
         unanswered = {p.detection_id for p in inv.unanswered()}
         pending = {p.detection_id for p in inv.pending}
         verdict = check_acknowledge(
-            raw, state=self.rt.state, unanswered=unanswered, pending=pending
+            raw,
+            state=self.rt.state,
+            unanswered=unanswered,
+            pending=pending,
+            source_silent_own_alert=self.config.source_silent_own_alert,
         )
         if not verdict.ok:
             return self._reject(inv, "acknowledge_detection", raw, verdict)

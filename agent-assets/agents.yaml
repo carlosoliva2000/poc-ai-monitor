@@ -56,6 +56,7 @@ agents:
     require_checks: true        # `checks` obligatorio en publish_alert (si no, opcional en el esquema)
     coherence_guardrail: true   # los checks deben coincidir con las tools y la causa ser coherente
     computed_facts: true        # get_track_metrics entrega notable, with_drift, disagreed, etc.
+    source_silent_own_alert: true   # un SOURCE_SILENT nuevo lleva alerta propia (SENSOR_FAULT, sin supersedes)
     guided_mode: false      # true = el módulo precarga la skill que corresponde a la regla
     guided_skill_by_rule:
       ROUTE_DEVIATION: route-deviation

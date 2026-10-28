@@ -17,7 +17,7 @@ El **módulo de IA**: la extensión del worker. Proceso aparte que se conecta a 
 - Los esquemas de las tools se envían **tal cual** están en `agent-assets/tools.json` (filtrados por la lista del agente). No los regeneres desde funciones Python: en el spike 1 cambiar la forma de definir las herramientas cambió el comportamiento del modelo.
 - Los argumentos de las tool calls llegan como texto JSON: si no se pueden parsear, devuelve el error al modelo como resultado de la tool (cuenta como iteración).
 - Devuelve al modelo los resultados de las tools como JSON compacto (una skill, como texto tal cual); recorta resultados enormes (máximo ~4000 caracteres) avisando de que se ha recortado.
-- **Ayudas al modelo con interruptor** (`monitor.*` en `agents.yaml`, todas activadas): `tool_choice`, `final_iteration_response_tools_only`, `require_checks`, `coherence_guardrail`, `computed_facts`. Cada traza del monitor guarda las que estaban activas (`aids`) y `eval.md` las anota en la cabecera.
+- **Ayudas al modelo con interruptor** (`monitor.*` en `agents.yaml`, todas activadas): `tool_choice`, `final_iteration_response_tools_only`, `require_checks`, `coherence_guardrail`, `computed_facts`, `source_silent_own_alert`. Cada traza del monitor guarda las que estaban activas (`aids`) y `eval.md` las anota en la cabecera.
 - Los parámetros no estándar (`top_k`, `repetition_penalty` 1,05) van en `extra_body`, explícitos aunque coincidan con los del modelo. `tool_choice`: `auto` por defecto y `required` para el monitor (su respuesta es siempre una tool call); en la última iteración solo se ofrecen sus `final_tools`; un intento solo de texto seguido de un recordatorio no se guarda en los `messages` (sí en la traza).
 
 ## Perfiles de modelo y razonamiento (Fase 6)

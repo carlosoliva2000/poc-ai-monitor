@@ -68,6 +68,9 @@ class AgentConfig:
     """Interruptor del monitor: guardrail de coherencia de `publish_alert`."""
     computed_facts: bool = True
     """Interruptor del monitor: `get_track_metrics` entrega los campos calculados al modelo."""
+    source_silent_own_alert: bool = True
+    """Interruptor del monitor: un aviso `SOURCE_SILENT` nuevo lleva alerta propia (ni se
+    reconoce ni sustituye a una alerta de otra causa)."""
     guided_mode: bool = False
     guided_skill_by_rule: dict[str, str] = field(default_factory=dict)
     last_decisions_in_state: int = 3
@@ -96,6 +99,7 @@ class AgentConfig:
             "require_checks": self.require_checks,
             "coherence_guardrail": self.coherence_guardrail,
             "computed_facts": self.computed_facts,
+            "source_silent_own_alert": self.source_silent_own_alert,
         }
 
     def sampling(self) -> dict[str, Any]:
@@ -290,6 +294,7 @@ class Assets:
             require_checks=bool(spec.get("require_checks", True)),
             coherence_guardrail=bool(spec.get("coherence_guardrail", True)),
             computed_facts=bool(spec.get("computed_facts", True)),
+            source_silent_own_alert=bool(spec.get("source_silent_own_alert", True)),
             max_iterations=int(spec["max_iterations"]),
             max_invocation_s=float(spec.get("max_invocation_s", 60)),
             llm_timeout_s=float(spec.get("llm_timeout_s", 40)),
