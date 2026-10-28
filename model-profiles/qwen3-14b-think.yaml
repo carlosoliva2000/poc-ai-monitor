@@ -2,8 +2,8 @@
 # temperature 0.6, top_p 0.95, top_k 20, min_p 0, presence_penalty 1.5 en cuantizados, y no usar
 # decodificación voraz. Ficha (sección Best Practices, consultada el 23/10/2026):
 # https://huggingface.co/Qwen/Qwen3-14B-AWQ
-# max_tokens incluye el razonamiento. LOS TIEMPOS SON PROVISIONALES: se fijarán con lo medido en la
-# primera ejecución con razonamiento. Condición: max_invocation_s del monitor + 15 < espera.
+# max_tokens incluye el razonamiento. Tiempos medidos con demo x1 (experiments/e3-medida): llm_timeout_s = máx. de una
+# llamada x 1,5; max_invocation_s = p95 de la invocación x 1,5. Condición: max_invocation_s del monitor + 15 < espera.
 description: Qwen/Qwen3-14B-AWQ, con razonamiento, muestreo de Qwen
 server:
   model: Qwen/Qwen3-14B-AWQ
@@ -21,17 +21,17 @@ sampling:
   reasoning: true
 agents:
   monitor:
-    max_invocation_s: 300
-    llm_timeout_s: 90
+    max_invocation_s: 99
+    llm_timeout_s: 37
   chat_monitor:
-    max_invocation_s: 240
-    llm_timeout_s: 120
+    max_invocation_s: 11
+    llm_timeout_s: 11
   chat_report:
-    max_invocation_s: 240
-    llm_timeout_s: 120
+    max_invocation_s: 14
+    llm_timeout_s: 14
   report:
     max_tokens: 6000
-    max_invocation_s: 300
-    llm_timeout_s: 240
+    max_invocation_s: 24
+    llm_timeout_s: 24
 platform:
   wait_agent_timeout_s: 330
