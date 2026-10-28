@@ -1,6 +1,6 @@
 # poc-ai-monitor · Quién decide qué
 
-Estado al cerrar la Fase 5 (23/10/2026; **todo en inglés, comportamiento del modelo en inglés sin evaluar**: ver `docs/fases/fase5.md`) sobre el de la Fase 4.3 (22/10/2026): el monitor, con la configuración de la ronda R9 y el prompt de salida original (el de las fases 3, 3.1 y 4; el castellano llano de la 4.1 se revirtió), y los chats a temperatura 0 con hechos interpretados por el código (huella `cd2925fe198331cc` en la 4.3; en la Fase 5, por la traducción, `e28d071e856efb09`) y el modelo `Qwen/Qwen2.5-14B-Instruct-AWQ` en vLLM (sin cambios), y el informe rehecho (los hechos los escribe el código). Sirve para explicar la demo sin vender de más y para saber qué hay que quitar cuando se pruebe un modelo mejor. Detalle y trazas en `docs/fases/fase3.md` (§9 ayudas, §10 conclusiones, §14 pendientes) y en `docs/fases/fase3_1.md` (informe). **Se mantiene al día al cerrar cada fase.**
+Estado al cierre de la Fase 7.2 (28/10/2026): el monitor, con el prompt y las skills en inglés (huella de `agent-assets/` en la Fase 8: ver `docs/fases/fase8_datos.md`), el guardrail de coherencia y la alerta propia para la fuente callada, los chats a temperatura 0 con hechos interpretados por el código, el informe con los hechos escritos por el código, y el modelo `Qwen/Qwen3-14B-AWQ` sin razonamiento en vLLM (perfil `qwen3-14b-t0`, determinista). Detalle y trazas en `docs/fases/fase3.md` (§9 ayudas, §10 conclusiones, §14 pendientes), `docs/fases/fase3_1.md` (informe) y `docs/fases/fase7_2.md`. **Se mantiene al día al cerrar cada fase.**
 
 ## 1. Las piezas y qué decide cada una
 
@@ -48,7 +48,7 @@ De la más a la menos intrusiva. Todas con interruptor en `agents.yaml` (`monito
 | Informe: hechos escritos por el código | Copiar bien horas, severidades, estados y evidencias | (sin interruptor; en git) |
 | Ids que rellena el módulo | Copiar ids | (sin interruptor; contrato v0.8) |
 | Prompts y skills reescritos para este modelo | Interpretar instrucciones largas | (sin interruptor; originales en git) |
-| Excepción en `monitor_objective.md` (fase 7.2): «a `SOURCE_SILENT` detection is always a different fault and gets its own alert» | Resolver el choque entre la regla general de `acknowledge_detection` y el paso 5 de la skill. **Medido: con 1 repetición el modelo no cambia de conducta** (la frase no basta; ver `fase7_2.md`) | (sin interruptor; en git) |
+| (Retirada en la Fase 8) Excepción en `monitor_objective.md` (fase 7.2) para `SOURCE_SILENT` | Medido en la 7.2: con 1 repetición el modelo no cambió de conducta; se quitó del prompt y la regla se queda en el guardrail (`source_silent_own_alert`) | (sin interruptor; en git) |
 
 **No son ayudas** y se quedan con cualquier modelo: la respuesta garantizada a cada aviso y los fallbacks, los cierres deterministas, el corte temporal, que el modelo nunca vea la verdad, los mensajes de rechazo accionables, `repetition_penalty` y `top_k` explícitos, las trazas y la evaluación contra etiquetas.
 

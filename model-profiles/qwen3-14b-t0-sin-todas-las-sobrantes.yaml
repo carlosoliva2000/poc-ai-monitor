@@ -1,0 +1,20 @@
+# Idéntico a qwen3-14b-t0 con apagadas a la vez las ayudas cuyo apagado individual no cambió nada frente a la base:
+# coherence_guardrail, final_iteration_response_tools_only y tool_choice.
+# Qwen3 sin razonamiento y con el muestreo de la PoC: temperatura 0 en monitor y chats, informe a
+# 0,7 / 0,8. repetition_penalty 1,05 explícito, como el perfil actual (el generation_config.json de
+# Qwen3 no lo trae). Ficha: https://huggingface.co/Qwen/Qwen3-14B-AWQ
+description: Qwen/Qwen3-14B-AWQ, sin razonamiento, muestreo de la PoC
+server:
+  model: Qwen/Qwen3-14B-AWQ
+  tool_call_parser: hermes
+  reasoning_parser: qwen3    # el razonamiento queda activado en el servidor; cada petición lo enciende o apaga
+  max_model_len: 32768
+  extra_args: []
+sampling:
+  repetition_penalty: 1.05
+  reasoning: false
+agents:
+  monitor:
+    coherence_guardrail: false
+    final_iteration_response_tools_only: false
+    tool_choice: auto

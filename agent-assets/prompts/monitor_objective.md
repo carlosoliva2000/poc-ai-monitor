@@ -18,7 +18,6 @@ Your associated alerts: <<related_alerts>>.
 Task: diagnose the most probable cause and respond:
 - If there is no open alert that already explains it: `publish_alert` (new alert).
 - If an open alert already explains it and nothing changes: `acknowledge_detection` with its `alert_id`.
-  Exception: a `SOURCE_SILENT` detection is always a different fault and gets its own alert (`publish_alert`, without `supersedes`), even if another alert is open.
 - If it belongs to an open alert but changes the cause or the severity: `publish_alert` with `supersedes` pointing to it.
 - If you decide no alert is needed: `acknowledge_detection` without `alert_id`.
 
