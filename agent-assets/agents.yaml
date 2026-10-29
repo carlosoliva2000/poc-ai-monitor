@@ -5,7 +5,7 @@
 llm:
   base_url: http://127.0.0.1:8000/v1
   api_key: EMPTY            # vLLM local no la comprueba
-  model: Qwen/Qwen2.5-14B-Instruct-AWQ
+  model: Qwen/Qwen3-14B-AWQ   # el que sirve `serve.sh` sin perfil; el módulo comprueba al arrancar que vLLM lo sirve
   # Muestreo por defecto; cada agente lo puede sobrescribir. Se envía SIEMPRE explícito:
   # si no, vLLM aplica el generation_config.json del modelo (temperature 0.7, top_p 0.8,
   # top_k 20, repetition_penalty 1.05).
@@ -18,6 +18,9 @@ llm:
   # (decodificación voraz) degeneró en bucles de repetición; 1.05 es el valor del modelo.
   top_k: 20
   repetition_penalty: 1.05
+  # Qwen3 sin razonamiento: se envía `enable_thinking: false` en cada petición (el servidor arranca con
+  # el parser de razonamiento activo). Con un modelo que no razona (Qwen2.5), `reasoning: null`.
+  reasoning: false
   # "auto" por defecto; "required" para un agente cuya respuesta es siempre una tool call (el
   # monitor). Nunca por nombre (vLLM devuelve finish_reason "stop" aunque haya llamada).
   tool_choice: auto
@@ -47,7 +50,7 @@ agents:
     top_k: -1               # sin límite: con temperature 0 no influye
     # --- Ayudas al modelo (todas activadas). Cada una se puede apagar para probar otro modelo
     # (de la más a la menos intrusiva: coherence_guardrail, require_checks, computed_facts,
-    # final_iteration_response_tools_only, tool_choice). Apagarlas no cambia nada más.
+    # final_iteration_response_tools_only, tool_choice, source_silent_own_alert, no_duplicate_cause). Apagarlas no cambia nada más.
     tool_choice: required   # "required" | "auto". El monitor siempre responde con una tool call
     # En la última iteración permitida solo se ofrecen las tools de `final_tools` (sin forzar
     # ninguna por nombre), para que el agente no se quede encadenando tools de datos.
@@ -57,6 +60,7 @@ agents:
     coherence_guardrail: true   # los checks deben coincidir con las tools y la causa ser coherente
     computed_facts: true        # get_track_metrics entrega notable, with_drift, disagreed, etc.
     source_silent_own_alert: true   # un SOURCE_SILENT nuevo lleva alerta propia (SENSOR_FAULT, sin supersedes)
+    no_duplicate_cause: true    # no se abre una alerta con la causa de otra abierta sin `supersedes`
     guided_mode: false      # true = el módulo precarga la skill que corresponde a la regla
     guided_skill_by_rule:
       ROUTE_DEVIATION: route-deviation

@@ -32,6 +32,7 @@ from .agent.guardrails import (
     check_acknowledge,
     check_close_alert,
     check_publish_alert,
+    expected_checks,
 )
 from .agent.llm import Messages
 from .agent.tools import Toolbox, strip_computed_facts
@@ -471,15 +472,18 @@ class Monitor:
             pending={p.detection_id for p in inv.pending},
             unanswered={p.detection_id for p in inv.unanswered()},
             source_silent_own_alert=self.config.source_silent_own_alert,
+            no_duplicate_cause=self.config.no_duplicate_cause,
         )
         if not verdict.ok:
             return self._reject(inv, "publish_alert", raw, verdict)
         args = verdict.args
         inv.trace.unseen_evidence += len(verdict.unseen_evidence)
         covered = inv.take(args.detection_ids)
+        expected = expected_checks(inv.facts, rt.state, inv.as_of)  # antes de emitir: estado previo
         alert_id = await self._emit_alert(
             inv, args.model_dump(mode="json"), covered[0].event_id if covered else None
         )
+        inv.trace.expected_checks[alert_id] = expected
         inv.alerts[alert_id] = list(args.detection_ids)
         for index, pending in enumerate(covered):
             pending.answered = True

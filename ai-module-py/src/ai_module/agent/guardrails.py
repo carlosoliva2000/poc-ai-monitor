@@ -299,6 +299,7 @@ def check_publish_alert(
     pending: set[str] | None = None,
     unanswered: set[str] | None = None,
     source_silent_own_alert: bool = False,
+    no_duplicate_cause: bool = False,
 ) -> Verdict:
     args, errors = _parse(PublishAlertArgs, raw)
     if args is None:
@@ -362,6 +363,19 @@ def check_publish_alert(
                     f"detection {detection_id} is already in the open alert {alert.alert_id}: "
                     "use acknowledge_detection if nothing changes, or publish_alert with "
                     f"supersedes={alert.alert_id!r} if the cause or the severity changes"
+                )
+        if (
+            no_duplicate_cause
+            and not errors
+            and not is_new_source_silent(args.detection_ids, state)
+        ):
+            # solo cuentan las abiertas (la cabeza de cada cadena); un SOURCE_SILENT nuevo queda
+            # exento: la regla `source_silent_own_alert` le exige una alerta propia
+            same = next((a for a in state.open_alerts() if a.cause == args.cause.value), None)
+            if same is not None:
+                errors.append(
+                    f"{same.alert_id} ({same.cause}) is open: use supersedes {same.alert_id} if "
+                    "the cause or severity changes, or acknowledge_detection"
                 )
     if coherence and not errors:
         errors += check_coherence(

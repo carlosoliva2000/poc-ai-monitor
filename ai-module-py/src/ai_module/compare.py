@@ -1,10 +1,13 @@
-"""Comparativa de un experimento: `experiments/<id>/compare.md`.
+"""Comparativa de un experimento (`experiments/<id>/compare.md`) o de varios juntos.
 
     uv run --project ai-module-py python -m ai_module.compare experiments/<id>
+    uv run --project ai-module-py python -m ai_module.compare experiments/<a> experiments/<b> \\
+        --out experiments/<a>-vs-<b>.md
 
 Lee `manifest.json` y, de cada ejecución copiada en `runs/<perfil>/<escenario>/r<k>/`, su
 `eval.json` y su `llm_trace.jsonl`. Por perfil y escenario resume los aciertos por etiqueta
-(k/N), cadenas, fallbacks, alertas abiertas, frases que contradicen, caracteres no latinos,
+(k/N), cadenas, fallbacks, alertas abiertas, frases que contradicen, `checks` que no cuadran con
+las tools, caracteres no latinos,
 rechazos de guardrails, respuestas cortadas por longitud, latencia, tokens y estabilidad (si las N
 repeticiones dan las mismas causas, cadenas y cierres). Es puro: no ejecuta nada.
 """
@@ -104,6 +107,34 @@ def total(runs: list[RunRecord], getter: Any) -> int:
     return sum(getter(r.eval) for r in runs if r.status == "ok")
 
 
+def checks_cell(runs: list[RunRecord]) -> str:
+    """Checks que no cuadran con las tools (suma); `n/d` en las ejecuciones sin la medida."""
+    ok = [r for r in runs if r.status == "ok"]
+    measured = [r.eval["checks_mismatches"] for r in ok if r.eval.get("checks_mismatches")]
+    if not measured:
+        return "n/d"
+    text = str(sum(len(m["mismatches"]) for m in measured))
+    return text + (f" (n/d en {len(ok) - len(measured)})" if len(measured) < len(ok) else "")
+
+
+def checks_by_field(records: list[RunRecord], profiles: list[str]) -> list[str]:
+    """Tabla perfil × campo con los checks que no cuadran (vacía si no hay ninguno)."""
+    counts: dict[str, Counter[str]] = {p: Counter() for p in profiles}
+    for r in records:
+        measured = r.eval.get("checks_mismatches") if r.status == "ok" else None
+        if measured:
+            counts[r.profile].update(measured["by_field"])
+    fields = sorted({f for c in counts.values() for f in c})
+    if not fields:
+        return []
+    lines = ["", "## Checks que no cuadran con las tools, por campo", ""]
+    lines += ["| Perfil | " + " | ".join(fields) + " |", "|---|" + "---|" * len(fields)]
+    for profile in profiles:
+        cells = [str(counts[profile][f]) for f in fields]
+        lines.append(f"| `{profile}` | " + " | ".join(cells) + " |")
+    return lines
+
+
 def hits_by_label(runs: list[RunRecord], planned: int) -> str:
     verdicts: dict[str, list[str]] = {}
     for r in runs:
@@ -187,7 +218,8 @@ def latency(runs: list[RunRecord]) -> str:
 
 HEADERS = [
     "Perfil", "Aciertos (✅ por etiqueta)", "1 cadena", "Falsas alarmas", "Fallbacks",
-    "Alertas abiertas", "Frases que contradicen", "No latinos (monitor / informe / chats)",
+    "Alertas abiertas", "Frases que contradicen", "Checks≠tools",
+    "No latinos (monitor / informe / chats)",
     "Rechazos guardrails",
     "Cortes por longitud (monitor / informe / chats)", "Latencia monitor p50 / p95",
     "Tokens por ejecución (prompt / respuesta / razonamiento)", "Estabilidad",
@@ -205,6 +237,7 @@ def row(profile: str, runs: list[RunRecord], planned: int) -> list[str]:
         str(total(runs, lambda e: e["fallbacks"])),
         str(total(runs, lambda e: len(e["open_alerts"]))),
         str(total(runs, lambda e: len(e["contradictions"]))),
+        checks_cell(runs),
         non_latin(runs),
         str(sum(agent_total(runs, a, "rejections") for a in NON_LATIN_AGENTS)),
         length_cuts(runs),
@@ -243,11 +276,15 @@ def render(manifest: dict[str, Any], records: list[RunRecord]) -> str:
         ]
         for profile in profiles:
             runs = [r for r in records if r.profile == profile and r.scenario == scenario]
-            lines.append("| " + " | ".join(row(profile, runs, reps)) + " |")
+            if runs:  # con manifiestos unidos, un perfil puede no haber corrido este escenario
+                lines.append("| " + " | ".join(row(profile, runs, reps)) + " |")
+    lines += checks_by_field(records, profiles)
     lines += ["", "## Detalle de las repeticiones", ""]
     for scenario in scenarios:
         for profile in profiles:
             runs = [r for r in records if r.profile == profile and r.scenario == scenario]
+            if not runs:
+                continue
             lines.append(f"- **{scenario} · `{profile}`**")
             for r in runs:
                 if r.status != "ok":
@@ -257,6 +294,31 @@ def render(manifest: dict[str, Any], records: list[RunRecord]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def merge_experiments(folders: list[Path]) -> tuple[dict[str, Any], list[RunRecord]]:
+    """Junta los manifiestos de varios experimentos. Los perfiles pasan a llamarse
+    `<experimento>/<perfil>` (el mismo perfil puede estar en dos experimentos)."""
+    manifests, records = [], []
+    for folder in folders:
+        manifest, recs = load_runs(folder)
+        for r in recs:
+            r.profile = f"{manifest['id']}/{r.profile}"
+        manifests.append(manifest)
+        records += recs
+    scenarios = list(dict.fromkeys(s for m in manifests for s in m["scenarios"]))
+    merged = {
+        "id": " + ".join(m["id"] for m in manifests),
+        "profiles": {f"{m['id']}/{p}": v for m in manifests for p, v in m["profiles"].items()},
+        "scenarios": scenarios,
+        "reps": max(m["reps"] for m in manifests),
+        "assets_fingerprint": " · ".join(
+            f"{m['id']}: {m.get('assets_fingerprint', 'n/d')[:16]}" for m in manifests
+        ),
+        "vllm_version": " · ".join(f"{m['id']}: {m.get('vllm_version', 'n/d')}" for m in manifests),
+        "git": manifests[0].get("git", {}),
+    }
+    return merged, records
+
+
 def write_compare(folder: Path) -> Path:
     manifest, records = load_runs(folder)
     path = folder / "compare.md"
@@ -264,11 +326,23 @@ def write_compare(folder: Path) -> Path:
     return path
 
 
+def write_merged(folders: list[Path], out: Path) -> Path:
+    manifest, records = merge_experiments(folders)
+    out.write_text(render(manifest, records), encoding="utf-8")
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Genera compare.md de un experimento")
-    parser.add_argument("folder", type=Path, help="experiments/<id>")
+    parser = argparse.ArgumentParser(description="Genera compare.md de uno o varios experimentos")
+    parser.add_argument("folders", type=Path, nargs="+", help="experiments/<id> (uno o varios)")
+    parser.add_argument("--out", type=Path, help="fichero de salida (obligatorio con varios)")
     args = parser.parse_args(argv)
-    print(f"→ {write_compare(args.folder)}")
+    if len(args.folders) == 1 and args.out is None:
+        print(f"→ {write_compare(args.folders[0])}")
+    elif args.out is None:
+        parser.error("with several experiments, --out says where the joint comparison goes")
+    else:
+        print(f"→ {write_merged(args.folders, args.out)}")
     return 0
 
 

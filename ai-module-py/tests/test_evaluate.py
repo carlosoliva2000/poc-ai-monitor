@@ -763,3 +763,103 @@ def test_a_run_without_profile_json_uses_the_default_wait_cap(tmp_path: Path) ->
 
     ev = evaluate(demo_run(tmp_path).write())
     assert wait_cap(ev.data) == 89.0 and "Perfil: n/d" in render_markdown(ev)
+
+
+# --- Checks que no cuadran con las tools (Fase 10) ---
+
+EXPECTED_CHECKS = {
+    "gps_alert_recent": False,
+    "gps_radar_disagreed": False,
+    "wind_notable": True,
+    "wind_with_drift": True,
+    "link_checked": False,
+    "link_anomalous": None,
+}
+
+
+def checks_run(tmp_path: Path, declared: dict[str, Any] | None, *, measured: bool = True) -> Path:
+    """`demo` con una alerta del modelo (`ai-0041`) que declara `declared` y a la que las tools
+    daban `EXPECTED_CHECKS` (si `measured`, la traza lo guarda)."""
+    b = demo_run(tmp_path)
+    r = b.raised("det-0040", 400.0, "ROUTE_DEVIATION")
+    b.alert("ai-0041", 401.0, "WIND", r, ["det-0040"], checks=declared)
+    extra = {"expected_checks": {"ai-0041": EXPECTED_CHECKS}} if measured else {}
+    b.trace.append(trace_record(**extra))
+    return b.write()
+
+
+def test_checks_that_match_the_tools_count_zero(tmp_path: Path) -> None:
+    ev = evaluate(checks_run(tmp_path, dict(EXPECTED_CHECKS)))
+    assert ev.checks is not None and ev.checks.alerts == 1 and ev.checks.mismatches == []
+    assert "· 0 checks que no cuadran con las tools" in summary(ev)
+    assert "## Checks que no cuadran con las tools" in render_markdown(ev)
+
+
+def test_checks_that_do_not_match_are_counted_by_field_and_alert(tmp_path: Path) -> None:
+    declared = {**EXPECTED_CHECKS, "wind_notable": False, "gps_radar_disagreed": True}
+    ev = evaluate(checks_run(tmp_path, declared))
+    assert ev.checks is not None
+    assert [(m.alert_id, m.field, m.declared, m.expected) for m in ev.checks.mismatches] == [
+        ("ai-0041", "gps_radar_disagreed", True, False),
+        ("ai-0041", "wind_notable", False, True),
+    ]
+    assert ev.checks.by_field() == {"gps_radar_disagreed": 1, "wind_notable": 1}
+    assert "· 2 checks que no cuadran con las tools" in summary(ev)
+    md = render_markdown(ev)
+    assert "| ai-0041 | T+" in md and "| wind_notable | false | true |" in md
+    write_evaluation(ev.data.folder)
+    data = json.loads((ev.data.folder / "eval.json").read_text(encoding="utf-8"))
+    assert data["checks_mismatches"]["by_field"] == {"gps_radar_disagreed": 1, "wind_notable": 1}
+    assert len(data["checks_mismatches"]["mismatches"]) == 2
+
+
+def test_a_null_link_check_against_a_false_expectation_counts(tmp_path: Path) -> None:
+    expected = {**EXPECTED_CHECKS, "link_checked": True, "link_anomalous": False}
+    b = demo_run(tmp_path)
+    r = b.raised("det-0040", 400.0, "ROUTE_DEVIATION")
+    b.alert("ai-0041", 401.0, "WIND", r, ["det-0040"], checks={**expected, "link_anomalous": None})
+    b.trace.append(trace_record(expected_checks={"ai-0041": expected}))
+    ev = evaluate(b.write())
+    assert ev.checks is not None and ev.checks.by_field() == {"link_anomalous": 1}
+
+
+def test_an_alert_without_checks_is_listed_but_not_counted(tmp_path: Path) -> None:
+    ev = evaluate(checks_run(tmp_path, None))
+    assert ev.checks is not None
+    assert ev.checks.mismatches == [] and ev.checks.without_checks == ["ai-0041"]
+    assert "sin `checks`: ai-0041" in render_markdown(ev)
+
+
+def test_fallback_alerts_are_not_measured(tmp_path: Path) -> None:
+    """El monitor solo guarda los valores esperados de las alertas que publica el modelo."""
+    b = demo_run(tmp_path)
+    r = b.raised("det-0040", 400.0, "ROUTE_DEVIATION")
+    b.alert("ai-0041", 401.0, "UNKNOWN", r, ["det-0040"], fallback=True)
+    b.trace.append(trace_record(expected_checks={}))
+    ev = evaluate(b.write())
+    assert ev.checks is not None and ev.checks.alerts == 0 and ev.checks.mismatches == []
+
+
+def test_an_old_trace_without_the_measure_says_not_available(tmp_path: Path) -> None:
+    ev = evaluate(checks_run(tmp_path, dict(EXPECTED_CHECKS), measured=False))
+    assert ev.checks is None
+    assert "· n/d checks que no cuadran con las tools" in summary(ev)
+    assert "n/d: la traza no guarda" in render_markdown(ev)
+    write_evaluation(ev.data.folder)
+    data = json.loads((ev.data.folder / "eval.json").read_text(encoding="utf-8"))
+    assert data["checks_mismatches"] is None
+
+
+def test_the_severity_of_each_published_alert_is_listed_by_label(tmp_path: Path) -> None:
+    b = demo_run(tmp_path)
+    ev = evaluate(b.write())
+    md = render_markdown(ev)
+    assert "### Severidad de las alertas publicadas por etiqueta" in md
+    assert "- A1: ai-0002 WIND high T+01:47" in md
+    write_evaluation(b.folder)
+    data = json.loads((b.folder / "eval.json").read_text(encoding="utf-8"))
+    [first] = data["alert_severities"]["A1"][:1]
+    assert first == {
+        "alert_id": "ai-0002", "cause": "WIND", "severity": "high", "sim_time": 107.0,
+        "fallback": False,
+    }  # fmt: skip

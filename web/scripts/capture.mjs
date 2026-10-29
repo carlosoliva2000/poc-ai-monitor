@@ -19,6 +19,8 @@
 //   node scripts/capture.mjs followcheck <carpeta> «seguir» con pausa, reanudar, GPS callado, recuperación, reinicio y cambio de escenario: followcheck.json
 //   node scripts/capture.mjs fase9_2 <carpeta> <escenario> <velocidad> prueba completa con «esperar al agente» (módulo de IA y vLLM): resalte, telemetría, «seguir», fin
 //   node scripts/capture.mjs chattools <carpeta> chat del monitor con tools (módulo con el perfil qwen3-14b-t0-chat-tools)
+//   node scripts/capture.mjs fase10 <carpeta> demo a 4× con «esperar al agente» a 1920×1080: alerta de viento con sus checks, spoofing y su recuperación,
+//                                              secuestro, chat del monitor, informe y chat del informe (módulo de IA con la configuración por defecto)
 // Requiere plataforma (8100), módulo de IA y web (3000) en marcha. Una sola pestaña: los ids
 // `ops-` los calcula la web y con dos pestañas podrían repetirse.
 import { chromium } from 'playwright'
@@ -1091,6 +1093,72 @@ async function runFase9_2() {
   writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
 }
 
+/** Fase 10: la demo completa a 1920×1080 con la configuración por defecto (Qwen3-14B). Capturas con la alerta de cada
+ *  episodio desplegada (checks y evidencias), el chat del monitor, el informe y el chat del informe. */
+async function runFase10() {
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await setup('demo', { waitAgent: true, interactive: false, speed: 4 })
+  await shot('00_inicio')
+  await page.getByRole('button', { name: 'Start', exact: true }).click()
+  note('play')
+  const done = new Set()
+  const card = (text) => page.locator('[data-testid=alert-card]', { hasText: text })
+  const openAll = async () => {
+    await page.locator('[data-testid=alert-card] details').evaluateAll((ds) => ds.forEach((d) => (d.open = true)))
+    await sleep(300)
+  }
+  const showLast = async (loc) => {
+    await openAll()
+    await loc.last().scrollIntoViewIfNeeded()
+    await sleep(300)
+  }
+  const once = async (key, cond, action) => {
+    if (done.has(key)) return
+    if (await cond()) {
+      done.add(key)
+      await action()
+    }
+  }
+  const deadline = Date.now() + 20 * 60 * 1000
+  while (Date.now() < deadline) {
+    await once('espera', async () => (await count('[data-testid=waiting-agent]')) > 0, async () => shot('01_esperando_al_monitor'))
+    await once('viento', async () => (await card('Wind').count()) >= 1, async () => {
+      await shot('10_alerta_viento')
+      await showLast(card('Wind'))
+      await shot('11_alerta_viento_con_checks')
+    })
+    await once('chat', async () => done.has('viento') && (await simTime()) > 120, async () =>
+      ask('monitor', 'Why do you think it is wind?', '12_chat_monitor'))
+    await once('spoofing', async () => (await card('GPS spoofing').count()) >= 1, async () => {
+      await showLast(card('GPS spoofing'))
+      await shot('20_alerta_spoofing')
+    })
+    await once('recuperacion', async () => (await count('[data-testid=supersedes]')) >= 1, async () => {
+      await showLast(page.locator('[data-testid=supersedes]'))
+      await shot('21_spoofing_recuperacion')
+    })
+    await once('secuestro', async () => (await card('Hijacking').count()) >= 1, async () => {
+      await showLast(card('Hijacking'))
+      await shot('30_alerta_secuestro')
+    })
+    if ((await headerText()).includes('Finished')) break
+    await sleep(500)
+  }
+  note(`fin de la simulación; capturas hechas: ${[...done].join(', ')}`)
+  await page.getByRole('tab', { name: 'Report' }).click()
+  await page.waitForFunction(() => document.querySelector('[data-testid=report-view] h1') !== null, null, { timeout: 180000 })
+  note('informe recibido')
+  await sleep(500)
+  await shot('40_informe')
+  await ask('report', 'Which was the most serious anomaly and why?', '41_chat_informe')
+  await page.getByRole('tab', { name: 'Monitor' }).click()
+  await sleep(300)
+  await shot('50_final_monitor')
+  const cards = await page.locator('[data-testid=alert-card]').count()
+  note(`alertas en la consola: ${cards}; cadenas (supersedes): ${await count('[data-testid=supersedes]')}`)
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, done: [...done], wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
 try {
   if (mode === 'demo') await runDemo()
   else if (mode === 'radar') await runRadar()
@@ -1106,6 +1174,7 @@ try {
   else if (mode === 'chattools') await runChatTools()
   else if (mode === 'smooth') await runSmooth()
   else if (mode === 'fase9_2') await runFase9_2()
+  else if (mode === 'fase10') await runFase10()
   else if (mode === 'followcheck') await runFollowCheck()
   else if (mode === 'telemetry') await runTelemetry()
   else if (mode === 'highlight') await runHighlight()

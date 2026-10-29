@@ -11,13 +11,45 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from openai import AsyncOpenAI
+from openai import APIError, AsyncOpenAI
 
 # Nombre con el que se devuelve el razonamiento al modelo en el mensaje del asistente. vLLM lo
 # entrega como `reasoning`; la plantilla de Qwen3 lee `reasoning_content` (ver `llm_check`).
 REASONING_INPUT_FIELD = "reasoning_content"
 
 Messages = list[dict[str, Any]]
+
+
+class ModelMismatchError(Exception):
+    """vLLM no sirve el modelo de la configuración, o no responde (mensaje en inglés)."""
+
+
+async def check_served_model(
+    base_url: str, api_key: str, expected: str, profile: str | None, *, timeout_s: float = 5.0
+) -> list[str]:
+    """Comprueba con `GET {base_url}/models` (SDK `openai`) que el servidor sirve `expected`.
+    Devuelve los modelos servidos; si no coincide o el servidor no responde, lanza
+    `ModelMismatchError` con los dos nombres y el perfil usado."""
+    used = f"profile {profile}" if profile else "no profile (agents.yaml)"
+    client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=timeout_s, max_retries=0)
+    try:
+        served = [m.id async for m in client.models.list()]
+    except APIError as exc:
+        raise ModelMismatchError(
+            f"the LLM server at {base_url} does not answer GET /models ({exc!r}): start it with "
+            f"tools/vllm/serve.sh (expected model {expected}, {used})"
+        ) from exc
+    finally:
+        await client.close()
+    if expected not in served:
+        raise ModelMismatchError(
+            f"the LLM server at {base_url} serves {', '.join(served) or 'no model'} but the "
+            f"configuration expects {expected} ({used}): start the matching profile with "
+            "tools/vllm/serve.sh or pass --profile"
+        )
+    return served
+
+
 DeltaCallback = Callable[[str], Awaitable[None]]
 
 

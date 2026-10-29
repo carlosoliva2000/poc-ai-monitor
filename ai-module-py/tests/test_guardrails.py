@@ -285,3 +285,72 @@ def test_other_rules_are_not_affected(silent_gps) -> None:
         source_silent_own_alert=True,
     )  # fmt: skip
     assert verdict.ok
+
+
+# --- Causa duplicada (`no_duplicate_cause`) ---
+
+
+@pytest.fixture
+def two_detections(state: MonitorState) -> MonitorState:
+    """Alerta `WIND` abierta (ai-1) sobre det-1 y una detección nueva sin alerta (det-2)."""
+    state.apply(alert("ai-1", ["det-1"], cause="WIND"))
+    state.apply(detection_event("raised", "det-2", 8.0))
+    return state
+
+
+def dup_check(raw, state, *, switch=True, own_alert=False):
+    return check_publish_alert(
+        raw,
+        as_of=10.0,
+        state=state,
+        index=index_with(**GOOD),
+        seen_ids=set(),
+        no_duplicate_cause=switch,
+        source_silent_own_alert=own_alert,
+    )
+
+
+def test_a_new_alert_with_the_cause_of_an_open_one_is_rejected(two_detections) -> None:
+    verdict = dup_check(alert_args(["det-2"], cause="WIND"), two_detections)
+    assert verdict.errors == [
+        "ai-1 (WIND) is open: use supersedes ai-1 if the cause or severity changes, "
+        "or acknowledge_detection"
+    ]
+
+
+def test_the_same_cause_with_supersedes_is_accepted(two_detections) -> None:
+    raw = alert_args(["det-2"], cause="WIND", severity="low", supersedes="ai-1")
+    assert dup_check(raw, two_detections).ok
+
+
+def test_a_different_cause_is_accepted(two_detections) -> None:
+    assert dup_check(alert_args(["det-2"], cause="HIJACK"), two_detections).ok
+
+
+def test_a_closed_alert_of_the_same_cause_does_not_count(two_detections) -> None:
+    two_detections.apply(closed("ai-1"))
+    assert dup_check(alert_args(["det-2"], cause="WIND"), two_detections).ok
+
+
+def test_a_superseded_alert_does_not_count_only_the_head_of_the_chain(two_detections) -> None:
+    """WIND ai-1 sustituida por SENSOR_FAULT (ai-2): una WIND nueva sin supersedes vale."""
+    two_detections.apply(alert("ai-2", ["det-2"], cause="SENSOR_FAULT", supersedes="ai-1"))
+    two_detections.apply(detection_event("raised", "det-3", 9.0))
+    assert dup_check(alert_args(["det-3"], cause="WIND"), two_detections).ok
+    # pero sí cuenta la cabeza de la cadena
+    again = dup_check(alert_args(["det-3"], cause="SENSOR_FAULT"), two_detections)
+    assert any(e.startswith("ai-2 (SENSOR_FAULT) is open") for e in again.errors)
+
+
+def test_a_new_source_silent_is_exempt_even_with_a_sensor_fault_open() -> None:
+    """Un silencio nuevo lleva alerta propia aunque haya otra SENSOR_FAULT abierta (otra fuente)."""
+    s = MonitorState()
+    s.apply(detection_event("raised", "det-2", 5.0, rule="SOURCE_SILENT", source="radar"))
+    s.apply(alert("ai-1", ["det-2"], cause="SENSOR_FAULT"))
+    s.apply(detection_event("raised", "det-8", 9.0, rule="SOURCE_SILENT", source="gps"))
+    own = alert_args(["det-8"], cause="SENSOR_FAULT")
+    assert dup_check(own, s, own_alert=True).ok
+
+
+def test_the_switch_off_keeps_the_previous_behaviour(two_detections) -> None:
+    assert dup_check(alert_args(["det-2"], cause="WIND"), two_detections, switch=False).ok

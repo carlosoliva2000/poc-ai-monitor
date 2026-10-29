@@ -218,6 +218,68 @@ def contradictions(alerts: list[Event]) -> list[Contradiction]:
     return found
 
 
+CHECK_FIELDS = (
+    "gps_alert_recent",
+    "gps_radar_disagreed",
+    "wind_notable",
+    "wind_with_drift",
+    "link_checked",
+    "link_anomalous",
+)
+"""Los seis `checks` de `publish_alert` (los mismos que contrasta el guardrail de coherencia)."""
+
+
+@dataclass
+class ChecksMismatch:
+    """Un `check` de una alerta publicada que no cuadra con lo que devolvieron las tools."""
+
+    alert_id: str
+    sim_time: float
+    field: str
+    declared: Any
+    expected: Any
+
+
+@dataclass
+class ChecksReport:
+    alerts: int
+    """Alertas publicadas por el modelo con sus valores esperados guardados en la traza."""
+    without_checks: list[str]
+    mismatches: list[ChecksMismatch]
+
+    def by_field(self) -> dict[str, int]:
+        counts = Counter(m.field for m in self.mismatches)
+        return {name: counts[name] for name in CHECK_FIELDS if counts[name]}
+
+
+def checks_report(alerts: dict[str, Event], trace: list[dict[str, Any]]) -> ChecksReport | None:
+    """Compara los `checks` declarados en las alertas publicadas con los valores esperados que el
+    monitor guardó en la traza (`expected_checks`). `None` si la traza es de antes de la medida."""
+    if not any("expected_checks" in t for t in trace):
+        return None
+    expected: dict[str, dict[str, Any]] = {}
+    for record in trace:
+        expected.update(record.get("expected_checks") or {})
+    report = ChecksReport(0, [], [])
+    for alert_id, want in expected.items():
+        alert = alerts.get(alert_id)
+        if alert is None:
+            continue
+        report.alerts += 1
+        declared = alert["payload"].get("checks")
+        if declared is None:
+            report.without_checks.append(alert_id)
+            continue
+        for name in CHECK_FIELDS:
+            if declared.get(name) != want.get(name):
+                report.mismatches.append(
+                    ChecksMismatch(
+                        alert_id, alert["sim_time"], name, declared.get(name), want.get(name)
+                    )
+                )
+    return report
+
+
 # --- Modelo de la ejecución --------------------------------------------------------------------
 
 
@@ -659,6 +721,8 @@ class Evaluation:
     open_alerts: list[Event]
     contradictions: list[Contradiction]
     non_latin: dict[str, dict[str, Any]]
+    checks: ChecksReport | None
+    """`None`: la traza no guarda los valores esperados (ejecución anterior a la Fase 10)."""
 
 
 def evaluate(folder: Path) -> Evaluation:
@@ -685,6 +749,7 @@ def evaluate(folder: Path) -> Evaluation:
         data.open_alerts_at_end(),
         contradictions(list(data.alerts.values())),
         non_latin_stats(data),
+        checks_report(data.alerts, data.trace),
     )
 
 
@@ -696,8 +761,13 @@ def summary_line(ev: Evaluation) -> str:
         f"{false} falsas alarmas · {ev.fallbacks} fallbacks · {ev.timeouts} esperas agotadas · "
         f"{len(ev.unanswered)} detecciones sin respuesta · "
         f"{len(ev.open_alerts)} alertas abiertas al final · "
-        f"{len(ev.contradictions)} frases que contradicen los checks"
+        f"{len(ev.contradictions)} frases que contradicen los checks · "
+        f"{checks_count_text(ev)} checks que no cuadran con las tools"
     )
+
+
+def checks_count_text(ev: Evaluation) -> str:
+    return "n/d" if ev.checks is None else str(len(ev.checks.mismatches))
 
 
 AID_NAMES = {
@@ -707,6 +777,7 @@ AID_NAMES = {
     "coherence_guardrail": "guardrail de coherencia",
     "computed_facts": "hechos calculados",
     "source_silent_own_alert": "alerta propia para la fuente callada",
+    "no_duplicate_cause": "sin causa duplicada",
 }
 
 
@@ -842,6 +913,75 @@ def labels_section(ev: Evaluation) -> list[str]:
             )
     if not ev.results:
         lines.append("| — | sin anomalías ni fallos | | | | | | | |")
+    return lines
+
+
+def label_alerts(data: RunData, label: Label) -> list[Event]:
+    """Las alertas que responden a las detecciones de la etiqueta, con las que sustituyeron."""
+    ids = {r.alert_id for i in data_items_of(data, label) for r in i.responses if r.alert_id}
+    found: dict[str, Event] = {}
+    pending = list(ids)
+    while pending:
+        alert_id = pending.pop()
+        alert = data.alerts.get(alert_id)
+        if alert is None or alert_id in found:
+            continue
+        found[alert_id] = alert
+        if alert["payload"]["supersedes"]:
+            pending.append(alert["payload"]["supersedes"])
+    return sorted(found.values(), key=lambda e: e["sim_time"])
+
+
+def alert_severity_text(alert: Event) -> str:
+    p = alert["payload"]
+    fallback = " (fallback)" if p["fallback"] else ""
+    return f"{p['alert_id']} {p['cause']} {p['severity']} {fmt_t(alert['sim_time'])}{fallback}"
+
+
+def severities_section(ev: Evaluation) -> list[str]:
+    lines = [
+        "",
+        "### Severidad de las alertas publicadas por etiqueta",
+        "",
+        "Informativo: la evaluación no juzga la severidad.",
+        "",
+    ]
+    for r in ev.results:
+        alerts = label_alerts(ev.data, r.label)
+        text = " → ".join(alert_severity_text(a) for a in alerts) or "sin alertas"
+        lines.append(f"- {r.label.id}: {text}")
+    if not ev.results:
+        lines.append("- sin etiquetas")
+    return lines
+
+
+def checks_section(ev: Evaluation) -> list[str]:
+    lines = ["", "## Checks que no cuadran con las tools", ""]
+    report = ev.checks
+    if report is None:
+        return lines + ["n/d: la traza no guarda los valores esperados (ejecución anterior)."]
+    lines.append(
+        "Los `checks` declarados en las alertas publicadas por el modelo, contrastados con lo que "
+        "devolvieron las tools y el estado (los mismos valores que usa el guardrail de coherencia, "
+        "esté o no activo)."
+    )
+    by_field = ", ".join(f"{k} {v}" for k, v in report.by_field().items()) or "ninguno"
+    lines += [
+        "",
+        f"{len(report.mismatches)} en {report.alerts} alertas · por campo: {by_field}"
+        + (f" · sin `checks`: {', '.join(report.without_checks)}" if report.without_checks else ""),
+    ]
+    if report.mismatches:
+        lines += [
+            "",
+            "| Alerta | Instante | Campo | Declarado | Esperado (tools) |",
+            "|---|---|---|---|---|",
+        ]
+        for m in report.mismatches:
+            lines.append(
+                f"| {m.alert_id} | {fmt_t(m.sim_time)} | {m.field} | {json.dumps(m.declared)} | "
+                f"{json.dumps(m.expected)} |"
+            )
     return lines
 
 
@@ -1006,9 +1146,11 @@ def render_markdown(ev: Evaluation) -> str:
     parts = [
         header(ev),
         labels_section(ev),
+        severities_section(ev),
         responses_section(ev),
         false_section(ev),
         contradictions_section(ev),
+        checks_section(ev),
         non_latin_section(ev),
         agents_section(ev),
         waits_section(ev),
@@ -1052,6 +1194,27 @@ def to_json(ev: Evaluation) -> dict[str, Any]:
         "unanswered": [i.detection_id for i in ev.unanswered],
         "open_alerts": [a["payload"]["alert_id"] for a in ev.open_alerts],
         "contradictions": [asdict(c) for c in ev.contradictions],
+        "checks_mismatches": None
+        if ev.checks is None
+        else {
+            "alerts": ev.checks.alerts,
+            "without_checks": ev.checks.without_checks,
+            "by_field": ev.checks.by_field(),
+            "mismatches": [asdict(m) for m in ev.checks.mismatches],
+        },
+        "alert_severities": {
+            r.label.id: [
+                {
+                    "alert_id": a["payload"]["alert_id"],
+                    "cause": a["payload"]["cause"],
+                    "severity": a["payload"]["severity"],
+                    "sim_time": a["sim_time"],
+                    "fallback": a["payload"]["fallback"],
+                }
+                for a in label_alerts(ev.data, r.label)
+            ]
+            for r in ev.results
+        },
         "non_latin": ev.non_latin,
         "profile": ev.data.profile or None,
         "agents": ev.agents,

@@ -197,3 +197,39 @@ def test_the_server_that_dies_while_starting_is_reported(env: Env, tmp_path: Pat
     result = env.serve("start", "qwen3-14b-t0")
     assert result.returncode == 5 and "CUDA out of memory" in result.stdout + result.stderr
     assert env.pid() is None
+
+
+def test_start_without_a_profile_uses_actual(env: Env) -> None:
+    result = env.serve("start", "--dry-run")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "profile: actual" in result.stdout and "Qwen/Qwen3-14B-AWQ" in result.stdout
+
+
+def test_the_idle_memory_is_measured_at_every_start(env: Env) -> None:
+    """La segunda pantalla se enchufa entre dos arranques: el reposo se vuelve a medir."""
+    env.gpu.write_text("0\n")
+    assert env.serve("start", "actual").returncode == 0
+    assert (env.state / "gpu_idle_mib").read_text().strip() == "0"
+    env.gpu.write_text("0\n")
+    assert env.serve("stop").returncode == 0
+    env.gpu.write_text("340\n")  # pantalla enchufada con vLLM parado
+    assert env.serve("start", "actual").returncode == 0
+    assert (env.state / "gpu_idle_mib").read_text().strip() == "340"
+    stopped = env.serve("stop")  # no espera 0 MiB: 340 es el reposo
+    assert stopped.returncode == 0 and "GPU free: 340 MiB" in stopped.stdout
+
+
+def test_stop_fails_while_a_vllm_process_survives(env: Env, tmp_path: Path) -> None:
+    """Aunque la memoria esté en el reposo, un proceso vivo del grupo de vLLM no es «libre»."""
+    vllm = tmp_path / "bin" / "vllm"
+    text = FAKE_VLLM.replace("exec python3", "(trap '' TERM; exec sleep 300) &\nexec python3", 1)
+    vllm.write_text(text)
+    assert env.serve("start", "actual").returncode == 0
+    pid = env.pid()
+    assert pid
+    try:
+        stopped = env.serve("stop")
+        assert stopped.returncode == 7 and "vLLM processes are still alive" in stopped.stderr
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(pid, signal.SIGKILL)

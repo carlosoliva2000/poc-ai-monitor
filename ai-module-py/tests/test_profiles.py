@@ -80,12 +80,29 @@ def test_monitor_invocation_must_fit_in_the_platform_wait(tmp_path: Path) -> Non
         Assets(profile=profile)  # 320 + 15 >= 330
 
 
-def test_actual_changes_nothing_and_sends_no_thinking_switch() -> None:
+def test_actual_changes_nothing_and_turns_the_reasoning_off_per_request() -> None:
+    """`actual` es «agents.yaml sin cambios»: Qwen3-14B sin razonamiento (desde la Fase 10)."""
     plain = Assets()
     actual = Assets(profile=load_profile("actual"))
     for name in AGENTS:
         assert actual.agent(name) == plain.agent(name)
-    assert "chat_template_kwargs" not in actual.agent("monitor").sampling()["extra_body"]
+    extra = actual.agent("monitor").sampling()["extra_body"]
+    assert extra["chat_template_kwargs"] == {"enable_thinking": False}
+    assert actual.llm.model == "Qwen/Qwen3-14B-AWQ"
+
+
+def test_actual_is_the_old_t0_profile_and_qwen25_is_the_old_reference() -> None:
+    """Antes de la Fase 10: `actual` = Qwen2.5 y `qwen3-14b-t0` = Qwen3 sin razonamiento."""
+    t0 = Assets(profile=load_profile("qwen3-14b-t0"))
+    actual = Assets(profile=load_profile("actual"))
+    for name in AGENTS:
+        assert actual.agent(name) == t0.agent(name)
+    assert (
+        load_profile("actual").server_signature() == load_profile("qwen3-14b-t0").server_signature()
+    )
+    old = load_profile("qwen2.5-14b")
+    assert old.server_signature()["model"] == "Qwen/Qwen2.5-14B-Instruct-AWQ"
+    assert "--reasoning-parser" not in old.serve_args()
 
 
 @pytest.mark.parametrize("size", ["14b", "30b-a3b"])
@@ -163,7 +180,7 @@ def test_serve_args_keep_reasoning_on_in_the_server() -> None:
     assert args[args.index("--reasoning-parser") + 1] == "qwen3"
     assert "--default-chat-template-kwargs" not in args  # cada petición decide
     assert "--enable-auto-tool-choice" in args and "hermes" in args
-    assert "--reasoning-parser" not in load_profile("actual").serve_args()
+    assert "--reasoning-parser" not in load_profile("qwen2.5-14b").serve_args()
     assert load_profile("qwen3-14b-t0").server_signature() == (
         load_profile("qwen3-14b-think").server_signature()
     )  # los Qwen3 comparten servidor

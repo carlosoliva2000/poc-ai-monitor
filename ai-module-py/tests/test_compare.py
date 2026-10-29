@@ -123,3 +123,55 @@ def test_scenario_without_labels_says_so_and_reports_false_alarms(tmp_path: Path
     manifest, records = load_runs(folder)
     text = render(manifest, records)
     assert "sin etiquetas" in text and "| 2 |" in text
+
+
+# --- Checks que no cuadran con las tools y manifiestos unidos (Fase 10) ---
+
+
+def mismatches(*fields: str) -> dict[str, Any]:
+    return {
+        "alerts": 3,
+        "without_checks": [],
+        "by_field": dict.fromkeys(fields, 1),
+        "mismatches": [{"alert_id": "ai-1", "field": f} for f in fields],
+    }
+
+
+def test_the_checks_column_sums_the_repetitions_and_says_not_available(tmp_path: Path) -> None:
+    both = {
+        ("p", "faults", 1): eval_json([label("F1")], checks_mismatches=mismatches("wind_notable")),
+        ("p", "faults", 2): eval_json(
+            [label("F1")], checks_mismatches=mismatches("wind_notable", "link_anomalous")
+        ),
+        ("old", "faults", 1): eval_json([label("F1")]),
+    }
+    text = write_compare(make_experiment(tmp_path, both)).read_text()
+    assert "Checks≠tools" in text
+    assert "| `p` |" in text and "| 3 |" in text  # 1 + 2
+    assert "| `old` |" in text and "| n/d |" in text
+    assert "## Checks que no cuadran con las tools, por campo" in text
+    assert "| link_anomalous | wind_notable |" in text
+    assert "| `p` | 1 | 2 |" in text
+
+
+def test_without_mismatches_there_is_no_by_field_table(tmp_path: Path) -> None:
+    ok = eval_json([label("F1")], checks_mismatches=mismatches())
+    text = write_compare(make_experiment(tmp_path, {("p", "faults", 1): ok})).read_text()
+    assert "por campo" not in text and "| 0 |" in text
+
+
+def test_two_experiments_are_joined_with_their_ids_in_the_profile_names(tmp_path: Path) -> None:
+    from ai_module.compare import merge_experiments, write_merged
+
+    folders = []
+    for exp_id in ("e10", "e8-base"):
+        folder = make_experiment(tmp_path / exp_id, {("t0", "faults", 1): eval_json([label("F1")])})
+        manifest = json.loads((folder / "manifest.json").read_text())
+        (folder / "manifest.json").write_text(json.dumps({**manifest, "id": exp_id}))
+        folders.append(folder)
+    manifest, records = merge_experiments(folders)
+    assert manifest["id"] == "e10 + e8-base"
+    assert sorted(manifest["profiles"]) == ["e10/t0", "e8-base/t0"]
+    assert sorted(r.profile for r in records) == ["e10/t0", "e8-base/t0"]
+    text = write_merged(folders, tmp_path / "joint.md").read_text()
+    assert "`e10/t0`" in text and "`e8-base/t0`" in text

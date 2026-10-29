@@ -1,9 +1,10 @@
-"""Servidor falso compatible con la API Chat Completions de OpenAI (solo la biblioteca estándar).
+"""Servidor falso compatible con la API Chat Completions de OpenAI (servidor HTTP estándar).
 
 Sirve para probar el módulo de IA de extremo a extremo sin vLLM: `FakeLlmServer(policy)` escucha
 en un puerto libre de `127.0.0.1` y contesta cada petición con lo que decida `policy(body)`, que
 devuelve `{"content": str, "tool_calls": [(nombre, argumentos)]}`. Soporta `stream: true` (SSE) con
-`stream_options.include_usage`, `/health` y `/version`, y, si la petición enciende el razonamiento
+`stream_options.include_usage`, `/health`, `/version` y `/v1/models` (con el modelo de
+`agents.yaml` o el que se pida), y, si la petición enciende el razonamiento
 (`chat_template_kwargs.enable_thinking`), devuelve un `reasoning` falso y sus tokens.
 
 También se puede lanzar como servidor aparte (lo usa `run_matrix --fake`):
@@ -18,6 +19,10 @@ import threading
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+
+import yaml
+
+from ..agent.assets import DEFAULT_ASSETS
 
 FAKE_REASONING = "Fake reasoning of the step."
 FAKE_REASONING_TOKENS = 5
@@ -46,6 +51,7 @@ USAGE = {"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": 110}
 class Handler(BaseHTTPRequestHandler):
     policy: Policy
     requests: list[dict[str, Any]]
+    model: str
 
     def log_message(self, *args: Any) -> None:  # silencio
         pass
@@ -79,8 +85,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path == "/version":
             self._send(200, b'{"version":"fake"}', "application/json")
-        else:  # /health y /v1/models
-            self._send(200, b'{"object":"list","data":[{"id":"fake-model"}]}', "application/json")
+        elif self.path.endswith("/models"):
+            data = {"object": "list", "data": [{"id": type(self).model}]}
+            self._send(200, json.dumps(data).encode(), "application/json")
+        else:  # /health
+            self._send(200, b"{}", "application/json")
 
     def _send(self, status: int, data: bytes, content_type: str) -> None:
         self.send_response(status)
@@ -131,9 +140,20 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, out, "text/event-stream")
 
 
+def default_model() -> str:
+    """El modelo de `agents.yaml`, para que el módulo de IA pase su comprobación al arrancar."""
+    raw = yaml.safe_load((DEFAULT_ASSETS / "agents.yaml").read_text(encoding="utf-8"))
+    return str(raw["llm"]["model"])
+
+
 class FakeLlmServer:
-    def __init__(self, policy: Policy, port: int = 0) -> None:
-        handler = type("BoundHandler", (Handler,), {"policy": staticmethod(policy), "requests": []})
+    def __init__(self, policy: Policy, port: int = 0, model: str | None = None) -> None:
+        """`model`: lo que contesta `/v1/models` (por defecto, el modelo de `agents.yaml`)."""
+        handler = type(
+            "BoundHandler",
+            (Handler,),
+            {"policy": staticmethod(policy), "requests": [], "model": model or default_model()},
+        )
         self.httpd = ThreadingHTTPServer(("127.0.0.1", port), handler)
         self.requests: list[dict[str, Any]] = handler.requests
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
@@ -182,8 +202,9 @@ def demo_policy(body: dict[str, Any]) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Fake LLM server with the e2e demo policy")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--model", help="model name that /v1/models reports (default: agents.yaml)")
     args = parser.parse_args()
-    server = FakeLlmServer(demo_policy, args.port)
+    server = FakeLlmServer(demo_policy, args.port, args.model)
     server.thread.start()
     print(f"fake LLM at {server.url}", flush=True)
     server.thread.join()

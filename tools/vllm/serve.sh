@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Arranca y para el servidor vLLM de un perfil de model-profiles/. Un servidor cada vez.
 #
-#   tools/vllm/serve.sh start <perfil> [--dry-run] [--timeout S]
+#   tools/vllm/serve.sh start [perfil] [--dry-run] [--timeout S]   # sin perfil: «actual» (Qwen3-14B)
 #   tools/vllm/serve.sh stop [--gpu-timeout S]
 #   tools/vllm/serve.sh status
 #   tools/vllm/serve.sh gpu-idle        # mide y guarda la memoria de GPU en reposo
+#
+# La GPU en reposo no está a 0 MiB si hay una segunda pantalla enchufada a la RTX (100–340 MiB):
+# `start` mide la memoria justo antes de arrancar y `stop` da la GPU por libre cuando vuelve a
+# esa cifra más un margen y no queda ningún proceso del grupo de vLLM.
 #
 # Solo toca el proceso que ha lanzado él (su PID está en runs/_servers/vllm.pid): si el puerto
 # está ocupado por otro servidor, avisa y sale sin matar nada. Salidas: 0 bien · 2 perfil o
@@ -22,6 +26,7 @@ VLLM_BIN="${VLLM_BIN:-$HOME/vllm/bin/vllm}"
 HF_CACHE="${HF_CACHE:-$HOME/.cache/huggingface/hub}"
 NVIDIA_SMI="${NVIDIA_SMI:-nvidia-smi}"
 GPU_MARGIN_MIB="${GPU_MARGIN_MIB:-512}"
+DEFAULT_PROFILE="${DEFAULT_PROFILE:-actual}"
 GPU_TIMEOUT_S="${GPU_TIMEOUT_S:-120}"
 START_TIMEOUT_S="${START_TIMEOUT_S:-900}"
 STALL_S="${STALL_S:-300}"
@@ -58,29 +63,40 @@ measure_idle() {
   log "GPU idle memory: ${used} MiB (saved in $IDLEFILE)"
 }
 
-# Espera a que memory.used vuelva al reposo medido más un margen. En WSL, --query-compute-apps
-# puede salir vacío aunque haya procesos en la GPU: solo se anota.
+# Procesos que quedan en el grupo de vLLM (pgid = PID del servidor, que arranca con setsid).
+vllm_left() {
+  local pgid="$1"
+  pgrep -g "$pgid" 2>/dev/null | tr '\n' ' '
+}
+
+# Espera a que no quede ningún proceso del grupo de vLLM y a que memory.used vuelva al reposo
+# medido antes de arrancar más un margen (sin referencia, solo el margen: no se espera 0 MiB).
+# En WSL, --query-compute-apps puede salir vacío aunque haya procesos en la GPU: solo se anota.
 wait_gpu_free() {
-  local timeout="$1"
-  [ -f "$IDLEFILE" ] || { log "no GPU idle reference: not waiting for the GPU"; return 0; }
-  local limit=$(( $(cat "$IDLEFILE") + GPU_MARGIN_MIB )) waited=0 used
+  local timeout="$1" pgid="${2:-}"
+  local idle=0
+  [ -f "$IDLEFILE" ] && idle="$(cat "$IDLEFILE")"
+  local limit=$(( ${idle%.*} + GPU_MARGIN_MIB )) waited=0 used left=""
   while :; do
     used="$(gpu_used)"
-    if [ -n "$used" ] && [ "${used%.*}" -le "$limit" ]; then
-      log "GPU free: ${used} MiB <= ${limit} MiB"
+    left=""
+    [ -n "$pgid" ] && left="$(vllm_left "$pgid")"
+    if [ -z "$left" ] && [ -n "$used" ] && [ "${used%.*}" -le "$limit" ]; then
+      log "GPU free: ${used} MiB <= ${limit} MiB (idle ${idle} MiB + margin), no vLLM process left"
       return 0
     fi
     [ "$waited" -ge "$timeout" ] && break
     sleep 2; waited=$(( waited + 2 ))
   done
   log "compute apps: $("$NVIDIA_SMI" --query-compute-apps=pid,used_memory --format=csv,noheader 2>&1 | tr '\n' ';')"
+  [ -n "$left" ] && die 7 "vLLM processes are still alive after ${timeout} s: ${left}"
   die 7 "the GPU is not free after ${timeout} s (${used:-?} MiB used, limit ${limit} MiB)"
 }
 
 cmd_start() {
-  local profile="${1:-}"; shift || true
+  local profile="${1:-}"
+  case "$profile" in ""|--*) profile="$DEFAULT_PROFILE";; *) shift;; esac
   local dry=0 timeout="$START_TIMEOUT_S"
-  [ -n "$profile" ] || die 8 "usage: serve.sh start <profile> [--dry-run] [--timeout S]"
   while [ $# -gt 0 ]; do
     case "$1" in
       --dry-run) dry=1; shift;;
@@ -127,7 +143,7 @@ cmd_start() {
   [ "$dry" = 1 ] && { log "(dry-run: nothing is started)"; exit 0; }
 
   mkdir -p "$STATE"
-  [ -f "$IDLEFILE" ] || measure_idle
+  measure_idle   # el reposo cambia (segunda pantalla): se mide en cada arranque, con el servidor parado
   local stamp logfile; stamp="$(date +%Y%m%d-%H%M%S)"; logfile="$STATE/${stamp}_${profile}.log"
   export HF_HUB_OFFLINE=1 VLLM_USE_FLASHINFER_SAMPLER=0
   local t0; t0="$(date +%s)"
@@ -180,6 +196,8 @@ cmd_stop() {
     return 0
   fi
   local pgid; pgid="$(ps -o pgid= -p "$pid" | tr -d ' ')"
+  local group="$pid"
+  [ "$pgid" = "$pid" ] || group=""   # sin grupo propio solo se vigila el PID
   log "stopping PID $pid"
   if [ "$pgid" = "$pid" ]; then kill -TERM -- "-$pid" 2>/dev/null; else kill -TERM "$pid" 2>/dev/null; fi
   local waited=0
@@ -191,7 +209,7 @@ cmd_stop() {
   fi
   rm -f "$PIDFILE" "$PROFILEFILE"
   log "server stopped"
-  [ "$skip_gpu" = 1 ] || wait_gpu_free "$gpu_timeout"
+  [ "$skip_gpu" = 1 ] || wait_gpu_free "$gpu_timeout" "$group"
 }
 
 cmd_status() {
@@ -211,5 +229,5 @@ case "${1:-}" in
   stop) shift; cmd_stop "$@";;
   status) cmd_status;;
   gpu-idle) pid=""; if our_pid >/dev/null || port_busy; then die 3 "a server is running: the idle memory cannot be measured"; fi; measure_idle;;
-  *) die 8 "usage: serve.sh start <profile> | stop | status | gpu-idle";;
+  *) die 8 "usage: serve.sh start [profile] | stop | status | gpu-idle";;
 esac

@@ -1,0 +1,17 @@
+# Idéntico a qwen3-14b-t0 salvo dos interruptores del monitor: computed_facts: false y
+# coherence_guardrail: false (la combinación que la Fase 8 no midió). Sirve para comprobar que la
+# métrica «checks que no cuadran con las tools» detecta algo.
+description: Qwen/Qwen3-14B-AWQ, sin razonamiento, sin hechos calculados ni guardrail de coherencia
+server:
+  model: Qwen/Qwen3-14B-AWQ
+  tool_call_parser: hermes
+  reasoning_parser: qwen3
+  max_model_len: 32768
+  extra_args: []
+sampling:
+  repetition_penalty: 1.05
+  reasoning: false
+agents:
+  monitor:
+    computed_facts: false
+    coherence_guardrail: false

@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 
 from .agent.assets import DEFAULT_ASSETS, Assets
-from .agent.llm import OpenAiLlm
+from .agent.llm import ModelMismatchError, OpenAiLlm, check_served_model
 from .agent.profiles import DEFAULT_PROFILES, load_profile
 from .bus_client import DEFAULT_PLATFORM, BusClient, fetch_mission_plan
 from .detector import Detector
@@ -36,7 +36,16 @@ async def run(
 ) -> None:
     chosen = load_profile(profile, DEFAULT_PROFILES) if profile else None
     assets = Assets(assets_dir, chosen)
-    llm = OpenAiLlm(llm_url or assets.llm.base_url, assets.llm.api_key, assets.llm.model)
+    url = llm_url or assets.llm.base_url
+    if not detector_only:
+        # en una prueba manual vLLM servía Qwen3 y el módulo arrancó con la configuración de
+        # Qwen2.5 sin avisar: la primera alerta salió como fallback
+        try:
+            await check_served_model(url, assets.llm.api_key, assets.llm.model, profile)
+        except ModelMismatchError as exc:
+            raise SystemExit(f"error: {exc}") from exc
+        log.info("LLM server checked: serves %s", assets.llm.model)
+    llm = OpenAiLlm(url, assets.llm.api_key, assets.llm.model)
     detector = Detector()
 
     async def bootstrap_plan() -> None:

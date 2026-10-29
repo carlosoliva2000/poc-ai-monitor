@@ -5,7 +5,7 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
-from agent_helpers import FakeLlm, Script, call, run, text_response, tool_response
+from agent_helpers import THINKING_OFF, FakeLlm, Script, call, run, text_response, tool_response
 
 from ai_module.agent.assets import Assets
 from ai_module.agent.engine import MAX_RESULT_CHARS, AgentEngine, ToolError, limit_result
@@ -38,7 +38,8 @@ def test_every_request_carries_explicit_sampling_and_the_tools_as_they_are() -> 
     request = llm.requests[0]
     assert request["sampling"] == {
         "temperature": 0.0, "top_p": 1.0, "presence_penalty": 0.0, "max_tokens": 800,
-        "tool_choice": "required", "extra_body": {"top_k": -1, "repetition_penalty": 1.05},
+        "tool_choice": "required",
+        "extra_body": {"top_k": -1, "repetition_penalty": 1.05, **THINKING_OFF},
     }  # fmt: skip
     offered = [t["function"]["name"] for t in request["tools"]]
     assert offered == [t["function"]["name"] for t in ASSETS.tool_schemas(CONFIG.active_tools)]
@@ -212,10 +213,14 @@ def test_other_agents_use_their_own_sampling(name: str) -> None:
     sampling = llm.requests[0]["sampling"]
     if name == "report":
         assert sampling["temperature"] == 0.7 and sampling["top_p"] == 0.8
-        assert sampling["extra_body"] == {"top_k": 20, "repetition_penalty": 1.05}
+        assert sampling["extra_body"] == {
+            "top_k": 20, "repetition_penalty": 1.05, **THINKING_OFF,
+        }  # fmt: skip
     else:  # los chats responden sobre hechos
         assert sampling["temperature"] == 0 and sampling["top_p"] == 1.0
-        assert sampling["extra_body"] == {"top_k": -1, "repetition_penalty": 1.05}
+        assert sampling["extra_body"] == {
+            "top_k": -1, "repetition_penalty": 1.05, **THINKING_OFF,
+        }  # fmt: skip
     assert sampling["tool_choice"] == "auto"
 
 

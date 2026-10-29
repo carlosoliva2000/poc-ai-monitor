@@ -415,6 +415,7 @@ def test_default_switches_are_all_on_and_recorded_in_the_trace(tmp_path: Path) -
         "coherence_guardrail": True,
         "computed_facts": True,
         "source_silent_own_alert": True,
+        "no_duplicate_cause": True,
     }
 
 
@@ -611,3 +612,21 @@ def test_a_wrong_cause_on_a_recovery_with_a_closed_gps_alert_says_there_is_no_su
         "This is the recovery from the GPS_JAMMING of ai-1: publish cause GPS_JAMMING, "
         "severity medium and no supersedes (ai-1 is already closed)"
     ) in check(wrong, state, facts).errors
+
+
+def test_the_trace_keeps_the_expected_checks_even_with_the_guardrail_off(tmp_path: Path) -> None:
+    """Con el guardrail apagado el modelo puede declarar cualquier cosa; la traza guarda lo que
+    decían las tools para que la evaluación cuente las discrepancias."""
+    wrong = checks(wind_notable=False, wind_with_drift=True)
+    script = wind_script(checks=wrong)
+    rt, published, monitor, _ = monitor_with(tmp_path, script, coherence_guardrail=False)
+    run(monitor.handle_batch([detection_event("raised", "det-0001", 20.0)]))
+    [alert_event] = responses(published)
+    assert alert_event.payload["checks"] == wrong  # nadie lo vetó
+    alert_id = alert_event.payload["alert_id"]
+    expected = rt.trace.records[0]["expected_checks"][alert_id]
+    assert expected["wind_notable"] is True and expected["wind_with_drift"] is True
+    assert set(expected) == {
+        "gps_alert_recent", "gps_radar_disagreed", "wind_notable", "wind_with_drift",
+        "link_checked", "link_anomalous",
+    }  # fmt: skip

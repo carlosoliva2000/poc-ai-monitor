@@ -21,6 +21,7 @@ import argparse
 import importlib.metadata
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -31,7 +32,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from ai_module.agent.assets import DEFAULT_ASSETS
+from ai_module.agent.assets import DEFAULT_ASSETS, Assets
 from ai_module.agent.profiles import Profile, assets_fingerprint, load_profile
 from ai_module.compare import write_compare
 
@@ -138,7 +139,8 @@ class FakeBackend:
 
     def start(self, profile: Profile) -> None:
         self.proc = subprocess.Popen(
-            [sys.executable, "-m", "ai_module.testing.fake_llm", "--port", str(self.port)],
+            [sys.executable, "-m", "ai_module.testing.fake_llm", "--port", str(self.port),
+             "--model", str(profile.model)],
             cwd=REPO, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )  # fmt: skip
         deadline = time.monotonic() + 20
@@ -387,7 +389,13 @@ def main(argv: list[str] | None = None) -> int:
         for spec in plan(args.profile_list, args.scenario_list, args.reps):
             signature = profiles[spec.profile].server_signature()
             if signature != server:
-                print(f"server: start {profiles[spec.profile].server['model']}")
+                profile = profiles[spec.profile]
+                print(f"server: start {profile.server['model']}")
+                print(f"  vllm {shlex.join(profile.serve_args())}")
+                info = Assets(DEFAULT_ASSETS, profile).profile_info()
+                print(f"  llm model: {info['model']} · wait {info['wait_agent_timeout_s']:g} s")
+                for agent, effective in info["agents"].items():
+                    print(f"  {agent}: {json.dumps(effective, sort_keys=True)}")
                 server = signature
             print(f"  run {spec.profile} {spec.scenario} r{spec.rep}")
         return 0

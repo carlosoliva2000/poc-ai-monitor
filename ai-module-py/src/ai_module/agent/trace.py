@@ -74,6 +74,10 @@ class InvocationTrace:
     fallback_close: bool = False
     published: list[dict[str, str]] = field(default_factory=list)
     """Eventos publicados: `{"event_id", "type", "causation_id"}`."""
+    expected_checks: dict[str, dict[str, Any]] = field(default_factory=dict)
+    """Por alerta publicada por el modelo, los valores que debían tener sus `checks` según las
+    tools de la invocación y el estado (los del guardrail de coherencia, esté o no activo). La
+    evaluación los compara con los que declaró."""
     conversation_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:

@@ -34,6 +34,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -178,10 +179,12 @@ def start_ai_module(
         bufsize=1,
     )  # fmt: skip
     ready = threading.Event()
+    tail: deque[str] = deque(maxlen=5)
 
     def pump() -> None:
         assert proc.stdout is not None
         for line in proc.stdout:  # sigue leyendo para que el proceso no se bloquee
+            tail.append(line.rstrip())
             if AI_READY_MARKER in line.lower():
                 ready.set()
             log.debug("ai-module: %s", line.rstrip())
@@ -189,8 +192,16 @@ def start_ai_module(
                 print(f"   [módulo] {line.rstrip()}", flush=True)
 
     threading.Thread(target=pump, daemon=True).start()
-    if not ready.wait(AI_READY_TIMEOUT_S):
-        log.warning("the AI module did not report being connected in %.0f s", AI_READY_TIMEOUT_S)
+    deadline = time.monotonic() + AI_READY_TIMEOUT_S
+    while not ready.wait(0.2):
+        if proc.poll() is not None:  # p. ej. vLLM sirve otro modelo: el módulo para con un error
+            time.sleep(0.3)  # deja que el hilo recoja las últimas líneas
+            raise SystemExit("the AI module stopped at startup:\n" + "\n".join(tail))
+        if time.monotonic() > deadline:
+            log.warning(
+                "the AI module did not report being connected in %.0f s", AI_READY_TIMEOUT_S
+            )
+            break
     return proc
 
 

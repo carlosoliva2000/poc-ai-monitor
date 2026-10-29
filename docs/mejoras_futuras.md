@@ -69,6 +69,8 @@ Con `Qwen2.5-14B-Instruct-AWQ` el monitor necesita varias **ayudas** (lista y mo
 6. skills originales (las anteriores a la reescritura para este modelo; están en el historial de git de `agent-assets/skills/`)
 Se para en el primer paso en que algún escenario empeora y se deja esa ayuda puesta. Las que no son ayudas (cierre determinista, solo `detection_id`, `repetition_penalty`) no se tocan.
 
+**Hecho en la Fase 10** (`docs/fases/fase10.md`): `Qwen/Qwen3-14B-AWQ` sin razonamiento y a temperatura 0 es ya el modelo por defecto (`agents.yaml`; el perfil `actual` es «`agents.yaml` sin cambios» y `qwen2.5-14b` la referencia antigua), con las siete ayudas del monitor encendidas; el módulo de IA comprueba al arrancar que vLLM sirve ese modelo; la evaluación cuenta los `checks` de las alertas que no cuadran con las tools (condición de la Fase 8 antes de apagar el guardrail de coherencia); y la regla de causa duplicada (`monitor.no_duplicate_cause`) cierra el hueco de las dos cadenas de F2. **Sigue pendiente:** E4 (elegir modelo) con esta configuración, con 3 repeticiones para el Qwen3-30B-A3B-Instruct-2507, y apagar el guardrail de coherencia si se decide (la métrica ya existe).
+
 ### Probar el monitor con modelos de Claude
 Para ver hasta dónde llega un modelo potente con **todas las ayudas apagadas** (el techo de lo que el diseño pide al modelo). **Exige una excepción explícita a la regla 1 («solo `localhost`»), que decide Carlos**: los datos del vuelo saldrían de la máquina hacia la API de Anthropic; hay que decidir antes qué datos y con qué condiciones.
 

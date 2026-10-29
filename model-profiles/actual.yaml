@@ -1,8 +1,11 @@
-# Perfil de referencia: el modelo y la configuración de agent-assets/agents.yaml, sin cambios.
-description: Qwen2.5-14B-Instruct-AWQ como hasta ahora (sin razonamiento)
+# Perfil por defecto: «agents.yaml sin cambios». Desde la Fase 10 es Qwen3-14B-AWQ sin razonamiento
+# (lo que antes era qwen3-14b-t0); lo que fija es el servidor, el muestreo y el razonamiento salen de
+# agents.yaml. La referencia antigua (Qwen2.5) es el perfil qwen2.5-14b.
+# Ficha: https://huggingface.co/Qwen/Qwen3-14B-AWQ
+description: Qwen/Qwen3-14B-AWQ, sin razonamiento, la configuración por defecto de agents.yaml
 server:
-  model: Qwen/Qwen2.5-14B-Instruct-AWQ
+  model: Qwen/Qwen3-14B-AWQ
   tool_call_parser: hermes
-  reasoning_parser: null
+  reasoning_parser: qwen3    # el razonamiento queda activado en el servidor; cada petición lo apaga
   max_model_len: 32768
   extra_args: []

@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from agent_helpers import (
+    THINKING_OFF,
     FakeLlm,
     FakePlatform,
     Script,
@@ -67,7 +68,9 @@ def test_a_new_alert_answers_its_detection(tmp_path: Path) -> None:
     assert len(llm.requests) == 1  # el bucle termina al responder: ni una llamada de más
     # el monitor responde siempre con una tool call: `required`, y el muestreo va explícito
     assert llm.requests[0]["sampling"]["tool_choice"] == "required"
-    assert llm.requests[0]["sampling"]["extra_body"] == {"top_k": -1, "repetition_penalty": 1.05}
+    assert llm.requests[0]["sampling"]["extra_body"] == {
+        "top_k": -1, "repetition_penalty": 1.05, **THINKING_OFF,
+    }  # fmt: skip
     assert activity(published) == ["started", "finished"]
     assert [a.alert_id for a in rt.state.open_alerts()] == [alert_event.event_id]
     [trace] = rt.trace.records

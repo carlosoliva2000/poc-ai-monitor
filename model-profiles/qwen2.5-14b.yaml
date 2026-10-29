@@ -1,0 +1,12 @@
+# Referencia antigua (hasta la Fase 9): Qwen2.5-14B-Instruct-AWQ, que no razona (`reasoning: null`:
+# no se envía `enable_thinking`). Servidor y muestreo de entonces, con los agent-assets y las ayudas
+# de hoy (incluidas source_silent_own_alert y no_duplicate_cause): no repite e0e1 exactamente.
+description: Qwen2.5-14B-Instruct-AWQ como hasta la Fase 9 (sin razonamiento)
+server:
+  model: Qwen/Qwen2.5-14B-Instruct-AWQ
+  tool_call_parser: hermes
+  reasoning_parser: null
+  max_model_len: 32768
+  extra_args: []
+sampling:
+  reasoning: null

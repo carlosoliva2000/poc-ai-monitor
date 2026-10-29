@@ -43,6 +43,7 @@ AID_KEYS = (
     "coherence_guardrail",
     "computed_facts",
     "source_silent_own_alert",
+    "no_duplicate_cause",
 )
 AGENT_KEYS = (*SAMPLING_KEYS, "reasoning", *LIMIT_KEYS, *AID_KEYS)
 ALLOWED = {

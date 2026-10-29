@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from ai_module.agent.assets import MARKER_RE, AssetError, Assets, render, sections
+from ai_module.agent.assets import DEFAULT_ASSETS, MARKER_RE, AssetError, Assets, render, sections
+from ai_module.agent.profiles import load_profile
 
 ASSETS = Assets()
 
@@ -90,17 +91,39 @@ def test_sampling_is_explicit_for_every_agent() -> None:
         "presence_penalty": 0.0,
         "max_tokens": 800,
         "tool_choice": "required",  # su respuesta es siempre una tool call
-        "extra_body": {"top_k": -1, "repetition_penalty": 1.05},
+        # Qwen3 sin razonamiento (por defecto desde la Fase 10): se apaga en cada petición
+        "extra_body": {
+            "top_k": -1,
+            "repetition_penalty": 1.05,
+            "chat_template_kwargs": {"enable_thinking": False},
+        },
     }
     report = ASSETS.agent("report").sampling()
     assert report["temperature"] == 0.7 and report["top_p"] == 0.8
-    assert report["extra_body"] == {"top_k": 20, "repetition_penalty": 1.05}
+    assert report["extra_body"] == {
+        "top_k": 20,
+        "repetition_penalty": 1.05,
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
     assert report["tool_choice"] == "auto"  # nunca por nombre
     for name in ("chat_monitor", "chat_report"):  # los chats responden sobre hechos
         sampling = ASSETS.agent(name).sampling()
         assert sampling["temperature"] == 0.0 and sampling["top_p"] == 1.0
-        assert sampling["extra_body"] == {"top_k": -1, "repetition_penalty": 1.05}
+        assert sampling["extra_body"] == {
+            "top_k": -1,
+            "repetition_penalty": 1.05,
+            "chat_template_kwargs": {"enable_thinking": False},
+        }
         assert sampling["tool_choice"] == "auto"
+
+
+def test_the_qwen25_profile_sends_no_reasoning_flag() -> None:
+    """La referencia antigua no razona: no se envía `enable_thinking`."""
+    assets = Assets(DEFAULT_ASSETS, load_profile("qwen2.5-14b"))
+    assert assets.llm.model == "Qwen/Qwen2.5-14B-Instruct-AWQ"
+    for name in ("monitor", "chat_monitor", "report", "chat_report"):
+        extra = assets.agent(name).sampling()["extra_body"]
+        assert "chat_template_kwargs" not in extra
 
 
 def test_final_tools_of_the_monitor_are_the_three_responses() -> None:

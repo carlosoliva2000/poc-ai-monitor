@@ -214,6 +214,10 @@ NO_CHECKS: dict[str, Any] = {
 }
 
 
+THINKING_OFF = {"chat_template_kwargs": {"enable_thinking": False}}
+"""`extra_body` de las peticiones con la configuración por defecto (Qwen3 sin razonamiento)."""
+
+
 def alert_args(detection_ids: list[str], **overrides: Any) -> dict[str, Any]:
     """Argumentos válidos de `publish_alert` sin haber llamado a ninguna tool de datos: causa
     `UNKNOWN` y todos los `checks` en falso (que es lo que esperan el estado y las tools)."""
