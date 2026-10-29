@@ -306,13 +306,72 @@
       ],
       "title": "StateMessage",
       "type": "object"
+    },
+    "TruthMessage": {
+      "additionalProperties": false,
+      "description": "Última muestra real (posición, rumbo del morro y rumbo sobre el suelo). Fuera del bus: solo\na clientes `web` con `truth_feed` activo, nunca al módulo de IA.",
+      "properties": {
+        "op": {
+          "const": "truth",
+          "default": "truth",
+          "title": "Op",
+          "type": "string"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Run Id"
+        },
+        "t": {
+          "title": "T",
+          "type": "number"
+        },
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "heading_deg": {
+          "title": "Heading Deg",
+          "type": "number"
+        },
+        "course_deg": {
+          "title": "Course Deg",
+          "type": "number"
+        },
+        "speed_mps": {
+          "title": "Speed Mps",
+          "type": "number"
+        }
+      },
+      "required": [
+        "run_id",
+        "t",
+        "x",
+        "y",
+        "heading_deg",
+        "course_deg",
+        "speed_mps"
+      ],
+      "title": "TruthMessage",
+      "type": "object"
     }
   },
   "discriminator": {
     "mapping": {
       "error": "#/$defs/ErrorMessage",
       "event": "#/$defs/EventMessage",
-      "state": "#/$defs/StateMessage"
+      "state": "#/$defs/StateMessage",
+      "truth": "#/$defs/TruthMessage"
     },
     "propertyName": "op"
   },
@@ -322,6 +381,9 @@
     },
     {
       "$ref": "#/$defs/StateMessage"
+    },
+    {
+      "$ref": "#/$defs/TruthMessage"
     },
     {
       "$ref": "#/$defs/ErrorMessage"

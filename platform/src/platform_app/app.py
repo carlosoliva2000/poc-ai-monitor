@@ -57,6 +57,8 @@ from poc_contracts.ws import (
     Publish,
     StateMessage,
     Subscribe,
+    TruthFeed,
+    TruthMessage,
 )
 
 from .bus import Bus
@@ -71,6 +73,7 @@ log = logging.getLogger(__name__)
 HOST = "127.0.0.1"
 PORT = 8100
 STATE_PERIOD_S = 0.5
+TRUTH_PERIOD_S = 0.1  # la posición real va a la web 10 veces por segundo de reloj
 WEB_ORIGINS = ["http://127.0.0.1:3000", "http://localhost:3000"]
 _MESSAGE = TypeAdapter(ClientMessage)
 
@@ -82,6 +85,7 @@ class Client:
         self.loop = loop
         self.kind: ClientKind | None = None
         self.patterns: list[str] = []
+        self.truth_feed = False  # solo los clientes `web` pueden activarlo
         self.queue: asyncio.Queue[str] = asyncio.Queue()
 
     def send(self, message: BaseModel) -> None:
@@ -112,6 +116,26 @@ class Hub:
             return
         message = self.state_message()
         for client in list(self.clients):
+            client.send(message)
+        self.broadcast_truth()
+
+    def truth_message(self) -> TruthMessage | None:
+        sample = self.player.truth_now()
+        if sample is None:
+            return None
+        return TruthMessage(run_id=self.player.run_id, **sample.model_dump())
+
+    def broadcast_truth(self, only: Client | None = None) -> None:
+        """Envía la última muestra real a los clientes `web` con `truth_feed` (nunca a otros).
+        Va fuera del bus: el módulo de IA no puede recibirla."""
+        targets = [only] if only else [c for c in self.clients if c.truth_feed]
+        targets = [c for c in targets if c.truth_feed and c.kind == ClientKind.WEB]
+        if not targets:
+            return
+        message = self.truth_message()
+        if message is None:
+            return
+        for client in targets:
             client.send(message)
 
 
@@ -177,6 +201,14 @@ def _handle_message(app: FastAPI, client: Client, text: str) -> None:
     if client.kind is None:
         client.send(ErrorMessage(message="the first message must be hello"))
         return
+    if isinstance(message, TruthFeed):
+        if client.kind != ClientKind.WEB:
+            client.send(ErrorMessage(message="only clients of type web can receive the truth"))
+            return
+        client.truth_feed = message.active
+        if message.active:
+            app.state.hub.broadcast_truth(only=client)
+        return
     if isinstance(message, Subscribe):
         client.patterns += [p for p in message.patterns if p not in client.patterns]
         return
@@ -222,6 +254,18 @@ async def _state_ticker(hub: Hub) -> None:
             hub.broadcast_state()
 
 
+async def _truth_ticker(hub: Hub) -> None:
+    last: tuple[str | None, float] | None = None
+    while True:
+        await asyncio.sleep(TRUTH_PERIOD_S)
+        if hub.player.status != PlayerStatus.RUNNING:
+            continue
+        key = (hub.player.run_id, hub.player.sim_time)
+        if key != last:  # solo si el instante ha cambiado
+            last = key
+            hub.broadcast_truth()
+
+
 def create_app(
     *,
     runs_dir: Path = RUNS_DIR,
@@ -245,6 +289,7 @@ def create_app(
             tasks = [
                 asyncio.create_task(player.run_clock()),
                 asyncio.create_task(_state_ticker(hub)),
+                asyncio.create_task(_truth_ticker(hub)),
             ]
         yield
         for task in tasks:

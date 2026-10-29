@@ -66,6 +66,13 @@ class FaultControl(_Message):
         return self
 
 
+class TruthFeed(_Message):
+    """Pide (`active: true`) o deja de pedir la posición real en directo. Solo clientes `web`."""
+
+    op: Literal["truth_feed"] = "truth_feed"
+    active: StrictBool
+
+
 class ControlLoad(_Message):
     op: Literal["control"] = "control"
     action: Literal["load"] = "load"
@@ -133,7 +140,9 @@ Control = Annotated[
     Field(discriminator="action"),
 ]
 
-ClientMessage = Annotated[Hello | Subscribe | Publish | Control, Field(discriminator="op")]
+ClientMessage = Annotated[
+    Hello | Subscribe | Publish | TruthFeed | Control, Field(discriminator="op")
+]
 
 
 # --- Plataforma -> cliente -------------------------------------------------------------------
@@ -175,9 +184,25 @@ class StateMessage(PlayerState):
     op: Literal["state"] = "state"
 
 
+class TruthMessage(_Message):
+    """Última muestra real (posición, rumbo del morro y rumbo sobre el suelo). Fuera del bus: solo
+    a clientes `web` con `truth_feed` activo, nunca al módulo de IA."""
+
+    op: Literal["truth"] = "truth"
+    run_id: str | None
+    t: float
+    x: float
+    y: float
+    heading_deg: float
+    course_deg: float
+    speed_mps: float
+
+
 class ErrorMessage(_Message):
     op: Literal["error"] = "error"
     message: str
 
 
-ServerMessage = Annotated[EventMessage | StateMessage | ErrorMessage, Field(discriminator="op")]
+ServerMessage = Annotated[
+    EventMessage | StateMessage | TruthMessage | ErrorMessage, Field(discriminator="op")
+]

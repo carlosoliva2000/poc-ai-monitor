@@ -4,27 +4,45 @@ import { memo, useDeferredValue, useMemo, useState } from 'react'
 import { useStoredState } from '@/hooks/use-stored-state'
 import type { Envelope } from '@/lib/contracts'
 import { eventTone, formatT, GROUPS, groupOf, payloadSummary, toneClasses, type Group } from '@/lib/format'
-import { countBy, filterEvents, topicOf } from '@/lib/timeline-filter'
+import {
+  countBy,
+  DEFAULT_HIDDEN_GROUPS,
+  filterEvents,
+  hideAllGroups,
+  hideNoGroups,
+  keyVisible,
+  toggleKey,
+  topicOf,
+  visibleKeyCount,
+} from '@/lib/timeline-filter'
 import { cn } from '@/lib/utils'
 
 const MAX_ROWS = 250
 
-type Saved = { hiddenGroups: Group[]; hiddenTypes: string[]; hiddenTopics: string[]; showTopic: boolean }
-const DEFAULTS: Saved = { hiddenGroups: ['gps', 'radar'], hiddenTypes: [], hiddenTopics: [], showTopic: false }
+type SavedKeys = { only: boolean; keys: string[] }
+type Saved = { hiddenGroups: Group[]; types: SavedKeys; topics: SavedKeys; showTopic: boolean }
+const DEFAULTS: Saved = { hiddenGroups: DEFAULT_HIDDEN_GROUPS, types: { only: false, keys: [] }, topics: { only: false, keys: [] }, showTopic: false }
 
-/** Lo guardado puede venir incompleto o de una versión anterior: se completa con los valores por defecto. */
+const list = (v: unknown, d: string[]) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : d)
+
+/** Lo guardado puede venir incompleto o de la Fase 9 (`hiddenTypes`/`hiddenTopics`): se completa. */
 function revive(raw: unknown): Saved {
-  const r = (raw ?? {}) as Partial<Saved>
-  const list = (v: unknown, d: string[]) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : d)
+  const r = (raw ?? {}) as Record<string, unknown>
+  const keys = (current: unknown, legacy: unknown): SavedKeys => {
+    const c = (current ?? {}) as Partial<SavedKeys>
+    if (c && typeof c.only === 'boolean') return { only: c.only, keys: list(c.keys, []) }
+    return { only: false, keys: list(legacy, []) }
+  }
   return {
-    hiddenGroups: list(r.hiddenGroups, DEFAULTS.hiddenGroups) as Group[],
-    hiddenTypes: list(r.hiddenTypes, []),
-    hiddenTopics: list(r.hiddenTopics, []),
+    hiddenGroups: list(r.hiddenGroups, DEFAULT_HIDDEN_GROUPS) as Group[],
+    types: keys(r.types, r.hiddenTypes),
+    topics: keys(r.topics, r.hiddenTopics),
     showTopic: typeof r.showTopic === 'boolean' ? r.showTopic : false,
   }
 }
 
 const toggled = (list: string[], key: string) => (list.includes(key) ? list.filter((k) => k !== key) : [...list, key])
+const toFilter = (k: SavedKeys) => ({ only: k.only, keys: new Set(k.keys) })
 
 export const EventTimeline = memo(function EventTimeline({ events, cursor, total }: { events: Envelope[]; cursor: number; total: number }) {
   const [saved, setSaved] = useStoredState<Saved>('poc-timeline-v1', DEFAULTS, revive)
@@ -32,7 +50,7 @@ export const EventTimeline = memo(function EventTimeline({ events, cursor, total
   const deferredQuery = useDeferredValue(query)
 
   const filter = useMemo(
-    () => ({ hiddenGroups: new Set(saved.hiddenGroups), hiddenTypes: new Set(saved.hiddenTypes), hiddenTopics: new Set(saved.hiddenTopics), query: deferredQuery }),
+    () => ({ hiddenGroups: new Set(saved.hiddenGroups), types: toFilter(saved.types), topics: toFilter(saved.topics), query: deferredQuery }),
     [saved, deferredQuery],
   )
   const visible = useMemo(() => filterEvents(events, filter), [events, filter])
@@ -54,6 +72,7 @@ export const EventTimeline = memo(function EventTimeline({ events, cursor, total
             {events.length} events · simulation {cursor}/{total}
           </span>
         </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-label="Filter by source">
           {GROUPS.map((g) => (
             <li key={g.id}>
@@ -69,6 +88,14 @@ export const EventTimeline = memo(function EventTimeline({ events, cursor, total
             </li>
           ))}
         </ul>
+          <div className="flex items-center gap-1" role="group" aria-label="Source presets">
+            <MiniButton onClick={() => set({ hiddenGroups: hideNoGroups() })}>All</MiniButton>
+            <MiniButton onClick={() => set({ hiddenGroups: hideAllGroups() })}>None</MiniButton>
+            <MiniButton onClick={() => set({ hiddenGroups: DEFAULT_HIDDEN_GROUPS })} title="Everything except GPS and radar">
+              Default
+            </MiniButton>
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <input
             type="search"
@@ -78,8 +105,8 @@ export const EventTimeline = memo(function EventTimeline({ events, cursor, total
             aria-label="Search events"
             className="h-7 min-w-48 flex-1 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-ring"
           />
-          <FilterMenu label="Type" items={types} hidden={saved.hiddenTypes} onToggle={(k) => set({ hiddenTypes: toggled(saved.hiddenTypes, k) })} onAll={() => set({ hiddenTypes: [] })} />
-          <FilterMenu label="Topic" items={topics} hidden={saved.hiddenTopics} onToggle={(k) => set({ hiddenTopics: toggled(saved.hiddenTopics, k) })} onAll={() => set({ hiddenTopics: [] })} />
+          <FilterMenu label="Type" items={types} filter={saved.types} onChange={(types) => set({ types })} />
+          <FilterMenu label="Topic" items={topics} filter={saved.topics} onChange={(topics) => set({ topics })} />
           <label className="flex cursor-pointer items-center gap-1.5 text-muted-foreground">
             <input type="checkbox" role="switch" checked={saved.showTopic} onChange={(e) => set({ showTopic: e.target.checked })} className="size-3 accent-primary" />
             Show topic and source
@@ -119,22 +146,38 @@ export const EventTimeline = memo(function EventTimeline({ events, cursor, total
   )
 })
 
-function FilterMenu({ label, items, hidden, onToggle, onAll }: { label: string; items: [string, number][]; hidden: string[]; onToggle: (key: string) => void; onAll: () => void }) {
+function MiniButton({ onClick, children, title }: { onClick: () => void; children: React.ReactNode; title?: string }) {
+  return (
+    <button type="button" onClick={onClick} title={title} className="h-5 rounded border border-border bg-background px-1.5 text-[10px] font-medium text-foreground hover:bg-muted">
+      {children}
+    </button>
+  )
+}
+
+function FilterMenu({ label, items, filter, onChange }: { label: string; items: [string, number][]; filter: SavedKeys; onChange: (f: SavedKeys) => void }) {
+  const known = items.map(([k]) => k)
+  const shown = visibleKeyCount({ only: filter.only, keys: new Set(filter.keys) }, known)
+  const restricted = filter.only || filter.keys.length > 0
   return (
     <details className="relative">
       <summary className="flex h-7 cursor-pointer list-none items-center gap-1 rounded-md border border-border bg-background px-2 text-xs text-foreground hover:bg-muted [&::-webkit-details-marker]:hidden">
         {label}
-        {hidden.length > 0 && <span className="font-mono text-[10px] text-accent">−{hidden.length}</span>}
+        {restricted && (
+          <span className="font-mono text-[10px] text-accent" data-testid={`filter-count-${label.toLowerCase()}`}>
+            {filter.only ? `${shown}/${known.length}` : `−${known.length - shown}`}
+          </span>
+        )}
         <span aria-hidden="true">▾</span>
       </summary>
       <div className="absolute left-0 z-30 mt-1 flex max-h-64 w-64 flex-col gap-0.5 overflow-auto rounded-md border border-border bg-card p-2 shadow-md" role="group" aria-label={`Filter by ${label.toLowerCase()}`}>
-        <button type="button" onClick={onAll} disabled={hidden.length === 0} className="mb-1 self-start text-[11px] font-medium text-primary disabled:text-muted-foreground">
-          Show all
-        </button>
+        <div className="mb-1 flex gap-1">
+          <MiniButton onClick={() => onChange({ only: false, keys: [] })}>All</MiniButton>
+          <MiniButton onClick={() => onChange({ only: true, keys: [] })}>None</MiniButton>
+        </div>
         {items.length === 0 && <span className="text-[11px] text-muted-foreground">Nothing yet.</span>}
         {items.map(([key, n]) => (
           <label key={key} className="flex cursor-pointer items-center gap-1.5 text-[11px] text-foreground">
-            <input type="checkbox" checked={!hidden.includes(key)} onChange={() => onToggle(key)} className="size-3 accent-primary" />
+            <input type="checkbox" checked={keyVisible({ only: filter.only, keys: new Set(filter.keys) }, key)} onChange={() => onChange(toggleKey(filter, key))} className="size-3 accent-primary" />
             <span className="min-w-0 flex-1 truncate font-mono">{key}</span>
             <span className="font-mono text-muted-foreground">{n}</span>
           </label>

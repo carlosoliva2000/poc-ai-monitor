@@ -434,3 +434,68 @@ def test_clock_runs_the_player_in_real_time(runs_dir: Path) -> None:
         assert sim_time >= 8.0
         pushed = [m for m in drain(ws) if m["op"] == "state"]
         assert pushed and pushed[-1]["status"] == "running"
+
+
+def truths(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [m for m in messages if m["op"] == "truth"]
+
+
+def test_the_ai_module_never_receives_the_truth(client: TestClient) -> None:
+    """`truth_feed` es solo para `web`: el módulo de IA recibe un error y ningún `truth`, aunque
+    esté suscrito a todo el bus."""
+    with client.websocket_connect("/ws") as ai, client.websocket_connect("/ws") as web:
+        ai.receive_json()
+        web.receive_json()
+        hello(ai, "ai-module", "citadel.>")
+        hello(web, "web")
+        control(web, "load", "nominal")
+        ai.send_json({"op": "truth_feed", "active": True})
+        received = drain(ai)
+        assert [m for m in received if m["op"] == "error"] == [
+            {"op": "error", "message": "only clients of type web can receive the truth"}
+        ]
+        assert truths(received) == []
+        web.send_json({"op": "truth_feed", "active": True})
+        control(web, "play")
+        player(client).advance(5.0)
+        client.app.state.hub.broadcast_state()  # type: ignore[attr-defined]
+        assert truths(drain(ai)) == []
+        assert truths(drain(web))
+
+
+def test_the_web_gets_the_truth_only_when_it_asks_and_never_past_sim_time(
+    client: TestClient,
+) -> None:
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        hello(ws, "web")
+        control(ws, "load", "nominal")
+        control(ws, "play")
+        player(client).advance(12.0)
+        client.app.state.hub.broadcast_state()  # type: ignore[attr-defined]
+        assert truths(drain(ws)) == []  # sin pedirla no llega
+
+        ws.send_json({"op": "truth_feed", "active": True})
+        received = truths(drain(ws))
+        assert len(received) == 1
+        message = received[0]
+        assert message["run_id"] == player(client).run_id
+        assert 0 < message["t"] <= player(client).sim_time
+        assert {"x", "y", "heading_deg", "course_deg", "speed_mps"} <= message.keys()
+
+        ws.send_json({"op": "truth_feed", "active": False})
+        player(client).advance(2.0)
+        client.app.state.hub.broadcast_state()  # type: ignore[attr-defined]
+        assert truths(drain(ws)) == []
+
+
+def test_truth_feed_needs_hello_and_load_pushes_the_truth(client: TestClient) -> None:
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        ws.send_json({"op": "truth_feed", "active": True})
+        assert ws.receive_json() == {"op": "error", "message": "the first message must be hello"}
+        hello(ws, "web")
+        ws.send_json({"op": "truth_feed", "active": True})
+        assert truths(drain(ws)) == []  # sin escenario cargado no hay muestra
+        messages = control(ws, "load", "nominal")
+        assert [m["t"] for m in truths(messages)] == [0.0]

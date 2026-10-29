@@ -1,6 +1,23 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { clampZoom, fixAge, HOME, MAX_ZOOM, niceStep, panBy, segmentTrail, visibleRect, zoomAt, type Rect } from './map-view.ts'
+import {
+  clampConsoleWidth,
+  clampZoom,
+  fixAge,
+  frameCamera,
+  gridStep,
+  HOME,
+  MAX_ZOOM,
+  panBy,
+  rectOf,
+  scaleBar,
+  scaledPx,
+  segmentTrail,
+  SIZES,
+  visibleRect,
+  zoomAt,
+  type Rect,
+} from './map-view.ts'
 
 const base: Rect = { x: 0, y: -1000, w: 2000, h: 1000 }
 
@@ -51,9 +68,52 @@ test('sin huecos ni cambios hay un solo tramo y sin puntos, ninguno', () => {
   assert.equal(segmentTrail([], 3).length, 0)
 })
 
-test('antigüedad del último fix y paso de rejilla', () => {
+
+test('el paso de la rejilla da 100/250/500/1000 m a zoom normal y baja al acercar', () => {
+  assert.equal(gridStep(800), 100)
+  assert.equal(gridStep(2000), 250)
+  assert.equal(gridStep(4000), 500)
+  assert.equal(gridStep(8000), 1000)
+  assert.equal(gridStep(30), 10)
+  assert.equal(gridStep(1e6), 5000)
+})
+
+test('los tamaños escalan con la raíz del zoom, con mínimo y máximo', () => {
+  const u = SIZES.unit
+  assert.equal(scaledPx(u, 1), 4.5)
+  assert.equal(scaledPx(u, 0.5), 3.5) // 4,5·√0,5 = 3,18 → mínimo
+  assert.equal(scaledPx(u, 4), 8) // 9 → máximo
+  assert.equal(scaledPx(u, 40), 8)
+  assert.ok(scaledPx(u, 2) > scaledPx(u, 1) && scaledPx(u, 2) < scaledPx(u, 4))
+  assert.ok(scaledPx(SIZES.gpsTrail, 8) <= 3 && scaledPx(SIZES.gpsTrail, 0.5) >= 1.25)
+})
+
+test('la barra de escala elige 1, 2 o 5 × 10ⁿ m que quepa', () => {
+  assert.equal(scaleBar(0.5)?.meters, 200)
+  assert.equal(scaleBar(0.3)?.meters, 200)
+  assert.equal(scaleBar(2)?.meters, 50)
+  assert.equal(scaleBar(0), null)
+  const bar = scaleBar(0.137)!
+  assert.ok(bar.px <= 140 && bar.px > 40)
+})
+
+test('reset view encuadra un rectángulo respecto a la vista base', () => {
+  const target = rectOf([{ x: 0, y: 0 }, { x: 1000, y: 500 }], 50)
+  assert.deepEqual(target, { x: -50, y: -550, w: 1100, h: 600 })
+  const cam = frameCamera({ x: 0, y: -1000, w: 2000, h: 1000 }, target, 1000, 500)
+  assert.equal(cam.zoom, clampZoom(Math.min(1000 / 1100, 500 / 600) / Math.min(1000 / 2000, 500 / 1000)))
+  assert.deepEqual(cam.center, { x: 500, y: -250 })
+})
+
+test('el ancho de la consola respeta los mínimos de las dos columnas', () => {
+  assert.equal(clampConsoleWidth(100, 1920), 340)
+  assert.equal(clampConsoleWidth(420, 1920), 420)
+  assert.equal(clampConsoleWidth(5000, 1920), 1360)
+  assert.equal(clampConsoleWidth(600, 1280), 600)
+  assert.equal(clampConsoleWidth(900, 1280), 720)
+})
+
+test('antigüedad del último fix', () => {
   assert.equal(fixAge(100.4, 88), 12)
   assert.equal(fixAge(10, 12), 0)
-  assert.equal(niceStep(80), 10)
-  assert.equal(niceStep(3000), 500)
 })

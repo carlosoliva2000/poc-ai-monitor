@@ -36,7 +36,7 @@ from poc_contracts.enums import (
     SensorSource,
 )
 from poc_contracts.envelope import Envelope, EventDraft
-from poc_contracts.run_files import PlanFile, RunMeta, TruthFile
+from poc_contracts.run_files import PlanFile, RunMeta, TruthFile, TruthSample
 from poc_contracts.scenario import ScenarioConfig
 from poc_contracts.ws import SPEEDS, ActiveFault, PlayerState
 
@@ -146,6 +146,23 @@ class Player:
             trajectory=[s for s in full.trajectory if s.t <= limit],
             wind=[w for w in full.wind if w.t <= limit],
         )
+
+    def truth_now(self) -> TruthSample | None:
+        """Última muestra real con `t` ≤ instante actual (para el icono de la web en directo)."""
+        if self.sim is None:
+            return None
+        limit = self.sim_time + 1e-9
+        for s in reversed(self.sim.samples):
+            if s.t <= limit:
+                return TruthSample(
+                    t=s.t,
+                    x=round(s.x, 2),
+                    y=round(s.y, 2),
+                    speed_mps=round(s.speed_mps, 2),
+                    heading_deg=round(s.heading_deg, 2),
+                    course_deg=round(s.course_deg, 2),
+                )
+        return None
 
     def _notify(self) -> None:
         for listener in self.listeners:

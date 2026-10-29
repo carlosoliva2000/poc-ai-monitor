@@ -8,6 +8,11 @@
 //   node scripts/capture.mjs chatsize <carpeta> minimizar y redimensionar el chat del monitor (y que se recuerde)
 //   node scripts/capture.mjs layout <carpeta>  mide y captura el final de la página a varios tamaños de ventana
 //   node scripts/capture.mjs deadgps <carpeta> nominal a 4×, interactivo: GPS con pérdida y silencio a la vez, en los dos órdenes
+//   node scripts/capture.mjs fase9_1 <carpeta> demo a 4× con «esperar al agente», a 1920×1080 y luego a 1440×900 y 1280×720:
+//                                              leyenda, tamaños, rejilla, escala, Ctrl+rueda, secuestro con la misma vista,
+//                                              timeline al fondo, filtros, columnas redimensionadas
+//   node scripts/capture.mjs truthlag <carpeta> demo a 16× (y 4×): distancia en pantalla entre el icono conocido y el real
+//   node scripts/capture.mjs compare <carpeta9_1> <carpeta9> <salida>  junta capturas de las dos fases lado a lado
 //   node scripts/capture.mjs chattools <carpeta> chat del monitor con tools (módulo con el perfil qwen3-14b-t0-chat-tools)
 // Requiere plataforma (8100), módulo de IA y web (3000) en marcha. Una sola pestaña: los ids
 // `ops-` los calcula la web y con dos pestañas podrían repetirse.
@@ -143,7 +148,7 @@ async function runDemo() {
   await sleep(300)
   await shot('09_final_monitor')
   // la capa «verdad» (solo simulador): se enciende un momento para la captura y se vuelve a apagar
-  const truth = page.getByRole('checkbox', { name: /Show truth/ })
+  const truth = page.getByRole("checkbox", { name: /Truth trail/ })
   await truth.check()
   await sleep(1500)
   await shot('10_verdad')
@@ -267,7 +272,7 @@ async function runFase9() {
   await page.getByRole('checkbox', { name: 'GPS trail' }).check()
 
   // --- Dos iconos con la verdad (se espera a que el viento los separe)
-  const truth = page.getByRole('checkbox', { name: /Show truth/ })
+  const truth = page.getByRole("checkbox", { name: /Truth trail/ })
   note(`sin la capa de verdad, icono real presente: ${(await count('[data-testid=true-drone]')) > 0}`)
   await truth.check()
   while ((await simTime()) < 125) await sleep(500)
@@ -364,7 +369,8 @@ const SIZES = [
 async function runIcons() {
   // El engaño del GPS (demo, T+168–222) separa la posición conocida de la real.
   await setup('demo', { waitAgent: false, interactive: false, speed: 8 })
-  await page.getByRole('checkbox', { name: /Show truth/ }).check()
+  await page.getByRole("checkbox", { name: /Truth trail/ }).check()
+  await page.getByRole("checkbox", { name: /True position/ }).check()
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   while ((await simTime()) < 215) await sleep(300)
   await page.getByRole('button', { name: 'Pause' }).click()
@@ -461,7 +467,8 @@ const faultsText = () => page.locator('[data-testid=active-faults]').innerText()
 
 async function runDeadGps() {
   await setup('nominal', { waitAgent: false, interactive: true, speed: 4 })
-  await page.getByRole('checkbox', { name: /Show truth/ }).check()
+  await page.getByRole("checkbox", { name: /Truth trail/ }).check()
+  await page.getByRole("checkbox", { name: /True position/ }).check()
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   const loss = page.getByRole('switch', { name: 'GPS loss', exact: true })
   const mute = page.getByRole('switch', { name: 'Mute GPS' })
@@ -525,11 +532,264 @@ async function runChatTools() {
   writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
 }
 
+const zoomOf = async () => Number(await page.locator('[data-testid=drone-map]').getAttribute('data-zoom'))
+const viewOf = () => page.locator('[data-testid=drone-map]').getAttribute('data-view')
+const mapBtn = (name) => page.getByRole('button', { name, exact: true })
+const waitSim = async (t) => {
+  while ((await simTime()) < t) await sleep(400)
+}
+const pauseRun = async () => {
+  await mapBtn('Pause').click()
+  await sleep(500)
+}
+const resumeRun = async () => {
+  await mapBtn('Resume').click()
+  await sleep(300)
+}
+async function zoomClicks(name, n) {
+  for (let i = 0; i < n; i++) await mapBtn(name).click()
+  await sleep(300)
+}
+
+async function runFase9_1() {
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await setup('demo', { waitAgent: true, interactive: false, speed: 4 })
+  await shot('00_inicio_mapa_alto')
+  await page.getByRole('group', { name: 'Map layers' }).screenshot({ path: `${out}/01_leyenda_por_grupos.png` })
+  note('captura 01_leyenda_por_grupos.png')
+  const legend = await page.getByRole('group', { name: 'Map layers' }).evaluate((el) => ({
+    groups: [...el.querySelectorAll('legend')].map((l) => l.textContent),
+    rows: new Set([...el.querySelectorAll('fieldset')].map((f) => Math.round(f.getBoundingClientRect().top))).size,
+  }))
+  note(`leyenda: grupos ${legend.groups.join(' · ')}; filas ${legend.rows}`)
+  const mapBox = await page.locator('[data-testid=drone-map]').boundingBox()
+  note(`mapa: ${Math.round(mapBox.width)}×${Math.round(mapBox.height)} px (${Math.round((mapBox.height / 1080) * 100)} % del alto de la ventana)`)
+
+  await page.getByRole('checkbox', { name: /Truth trail/ }).check()
+  await page.getByRole('checkbox', { name: /True position/ }).check()
+  await page.getByRole('button', { name: 'Start', exact: true }).click()
+  note('play')
+
+  // --- Viento: los dos iconos y los tamaños
+  await waitSim(125)
+  await pauseRun()
+  const home = await viewOf()
+  note(`vista inicial (ruta planificada): ${home}, zoom ${await zoomOf()}`)
+  const titles = await page.evaluate(() => [...document.querySelectorAll('[data-testid=known-drone] title, [data-testid=true-drone] title')].map((t) => t.textContent))
+  note(`tooltips de los iconos: ${titles.join(' | ')}`)
+  const legendTitles = await page.evaluate(() => [...document.querySelectorAll('[aria-label="Map layers"] label[title]')].map((l) => l.title))
+  note(`tooltips de la leyenda: ${legendTitles.join(' | ')}`)
+  await shot('10_viento_dos_iconos_vista_inicial')
+  const sizeShot = async (name) => {
+    note(`${name}: zoom ${await zoomOf()}, unidad ${await page.locator('[data-testid=drone-map]').getAttribute('data-unit-px')} px`)
+    await shot(name)
+  }
+  await zoomClicks('Zoom out', 3)
+  await sizeShot('20_tamanos_zoom_minimo')
+  await mapBtn('Center on the drone').click()
+  await zoomClicks('Zoom in', 2)
+  await sizeShot('21_tamanos_zoom_1')
+  await zoomClicks('Zoom in', 1)
+  await sizeShot('22_tamanos_zoom_2_3')
+  await zoomClicks('Zoom in', 1)
+  await mapBtn('Center on the drone').click()
+  await sizeShot('23_tamanos_zoom_3_4')
+  await zoomClicks('Zoom in', 3)
+  await mapBtn('Center on the drone').click()
+  await sleep(300)
+  await sizeShot('24_tamanos_zoom_alto')
+  await zoomClicks('Zoom in', 4)
+  await sizeShot('25_tamanos_zoom_maximo_cerca')
+
+  // --- Rejilla sin recuadro, con y sin coordenadas, y la barra de escala
+  await mapBtn('Reset view').click()
+  await sleep(300)
+  note(`reset view: zoom ${await zoomOf()}, vista ${await viewOf()}`)
+  await shot('30_rejilla_sin_coordenadas')
+  await page.getByRole('checkbox', { name: /Coordinates/ }).check()
+  await sleep(300)
+  await shot('31_rejilla_con_coordenadas')
+  await page.getByRole('checkbox', { name: /Coordinates/ }).uncheck()
+  note(`barra de escala: ${await page.locator('[data-testid=scale-bar]').innerText()}`)
+
+  // --- Rueda sin Ctrl: avisa; con Ctrl: zoom
+  const box = await page.locator('[data-testid=drone-map]').boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  const z0 = await zoomOf()
+  await page.mouse.wheel(0, 120)
+  await sleep(250)
+  note(`rueda sin Ctrl: zoom ${z0} → ${await zoomOf()}, aviso visible ${(await count('[data-testid=wheel-hint]')) > 0}`)
+  await shot('32_aviso_rueda_sin_ctrl')
+  await sleep(1800)
+  note(`aviso tras 2 s: ${(await count('[data-testid=wheel-hint]')) > 0}`)
+  await page.mouse.wheel(0, 120)
+  await sleep(250)
+  note(`segunda vez, aviso visible ${(await count('[data-testid=wheel-hint]')) > 0} (solo la primera)`)
+  await page.keyboard.down('Control')
+  await page.mouse.wheel(0, -300)
+  await page.keyboard.up('Control')
+  await sleep(300)
+  note(`Ctrl + rueda: zoom ${z0} → ${await zoomOf()}`)
+  await mapBtn('Reset view').click()
+
+  // --- Secuestro: la vista no se recoloca sola. Se fija una vista y se compara a mitad y al final.
+  await resumeRun()
+  await waitSim(300)
+  await pauseRun()
+  await mapBtn('Reset view').click()
+  await sleep(300)
+  const fixed = await viewOf()
+  note(`vista fijada antes del secuestro: ${fixed}`)
+  await resumeRun()
+  await waitSim(400)
+  await pauseRun()
+  const mid = await viewOf()
+  await shot('40_secuestro_a_mitad')
+  await resumeRun()
+  const end = Date.now() + 8 * 60 * 1000
+  while (Date.now() < end && !(await headerText()).includes('Finished')) await sleep(1000)
+  await sleep(1500)
+  const fin = await viewOf()
+  await shot('41_secuestro_al_final')
+  note(`vista: antes ${fixed} · a mitad ${mid} · al final ${fin} · sin recolocarse: ${fixed === mid && mid === fin}`)
+
+  // --- Timeline al bajar del todo
+  await page.evaluate(() => document.querySelectorAll('main > div')[0].scrollTo(0, 1e6))
+  await sleep(400)
+  const tl = await page.locator('#timeline-title').evaluate((h) => {
+    const sec = h.closest('section')
+    const r = sec.getBoundingClientRect()
+    const col = document.querySelectorAll('main > div')[0].getBoundingClientRect()
+    return { sectionHeight: Math.round(r.height), columnHeight: Math.round(col.height), rows: sec.querySelectorAll('ol > li').length, visibleRows: [...sec.querySelectorAll('ol > li')].filter((li) => li.getBoundingClientRect().bottom <= window.innerHeight).length }
+  })
+  note(`timeline al fondo: alto ${tl.sectionHeight} px de ${tl.columnHeight} de la columna, ${tl.visibleRows} filas visibles`)
+  await shot('50_timeline_al_bajar')
+
+  // --- Filtros con All / None / Default
+  const sources = page.getByRole('group', { name: 'Source presets' })
+  await sources.getByRole('button', { name: 'None' }).click()
+  await sleep(300)
+  await shot('51_fuentes_none')
+  await sources.getByRole('button', { name: 'All' }).click()
+  await sleep(300)
+  await shot('52_fuentes_all')
+  await sources.getByRole('button', { name: 'Default' }).click()
+  await sleep(300)
+  note(`Default: ${await page.locator('[aria-label="Filter by source"] input:not(:checked)').evaluateAll((els) => els.map((e) => e.closest('label').textContent.trim()))} sin marcar`)
+  await shot('53_fuentes_default')
+  const typeMenu = page.locator('details', { has: page.locator('summary', { hasText: 'Type' }) })
+  await typeMenu.locator('summary').click()
+  await typeMenu.getByRole('button', { name: 'None' }).click()
+  note(`Type None: ${(await count('[data-testid=timeline-shown]')) ? await page.locator('[data-testid=timeline-shown]').innerText() : 'sin contador'}`)
+  await typeMenu.locator('label', { hasText: 'AnomalyDetected' }).locator('input').check()
+  await sleep(300)
+  await shot('54_tipo_none_y_una_marcada')
+  await typeMenu.getByRole('button', { name: 'All' }).click()
+  await typeMenu.locator('summary').click()
+
+  // --- Columnas redimensionables (se recuerda tras recargar)
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.evaluate(() => document.querySelectorAll('main > div')[0].scrollTo(0, 0))
+  const widthOf = () => page.evaluate(() => Math.round(document.querySelectorAll('main > div')[1].getBoundingClientRect().width))
+  const dragHandle = async (dx) => {
+    const h = await page.locator('[data-testid=console-handle]').boundingBox()
+    await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(h.x + h.width / 2 + dx, h.y + h.height / 2, { steps: 8 })
+    await page.mouse.up()
+    await sleep(300)
+  }
+  note(`consola: ${await widthOf()} px`)
+  await dragHandle(-260)
+  note(`consola ancha: ${await widthOf()} px`)
+  await shot('60_consola_ancha')
+  await dragHandle(900)
+  note(`consola al mínimo: ${await widthOf()} px`)
+  await shot('61_consola_estrecha')
+  await dragHandle(-150)
+  const w = await widthOf()
+  await page.reload()
+  await page.waitForFunction(() => document.querySelectorAll('main > div').length === 2)
+  await sleep(1500)
+  note(`tras recargar: ${await widthOf()} px (antes ${w})`)
+  await page.locator('[data-testid=console-handle]').dblclick()
+  await sleep(300)
+  note(`doble clic: ${await widthOf()} px`)
+
+  // --- Otros tamaños de ventana
+  for (const [vw, vh] of [[1440, 900], [1280, 720]]) {
+    await page.setViewportSize({ width: vw, height: vh })
+    await sleep(700)
+    await page.evaluate(() => document.querySelectorAll('main > div')[0].scrollTo(0, 0))
+    await shot(`70_${vw}x${vh}_arriba`)
+    await page.evaluate(() => document.querySelectorAll('main > div')[0].scrollTo(0, 1e6))
+    await sleep(300)
+    await shot(`71_${vw}x${vh}_timeline_al_fondo`)
+    const g = await page.getByRole('group', { name: 'Map layers' }).evaluate((el) => ({ rows: new Set([...el.querySelectorAll('fieldset')].map((f) => Math.round(f.getBoundingClientRect().top))).size, overflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth }))
+    note(`${vw}x${vh}: leyenda en ${g.rows} fila(s), scroll horizontal ${g.overflowX}`)
+  }
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
+async function runTruthLag() {
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  const report = {}
+  for (const speed of [16, 4]) {
+    await setup('demo', { waitAgent: false, interactive: false, speed })
+    await page.getByRole('checkbox', { name: /True position/ }).check()
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    await waitSim(60)
+    const samples = []
+    const until = Date.now() + 40000
+    // solo hasta T+160, antes del engaño del GPS (que separa los dos iconos a propósito)
+    while (Date.now() < until && (await simTime()) < 160) {
+      const d = await page.evaluate(() => {
+        const c = (id) => {
+          const el = document.querySelector(`[data-testid=${id}] polygon`)
+          if (!el) return null
+          const r = el.getBoundingClientRect()
+          return [r.x + r.width / 2, r.y + r.height / 2]
+        }
+        const a = c('known-drone')
+        const b = c('true-drone')
+        return a && b ? Math.hypot(a[0] - b[0], a[1] - b[1]) : null
+      })
+      if (d !== null) samples.push(d)
+      await sleep(150)
+    }
+    samples.sort((a, b) => a - b)
+    const q = (p) => samples[Math.min(samples.length - 1, Math.floor(samples.length * p))]
+    report[speed] = { n: samples.length, median_px: q(0.5), p90_px: q(0.9), max_px: samples[samples.length - 1], zoom: await zoomOf() }
+    note(`${speed}×: distancia en pantalla entre el icono conocido y el real: ${JSON.stringify(report[speed])}`)
+    await shot(`80_icono_real_${speed}x`)
+    await mapBtn('Pause').click().catch(() => {})
+  }
+  writeFileSync(`${out}/truthlag.json`, JSON.stringify(report, null, 2))
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
+/** Junta pares de capturas (izquierda: fase anterior, derecha: ésta) en una sola imagen.
+ *  Uso: node scripts/capture.mjs compare <salida> "<img izq>|<img der>|<nombre>" ... */
+async function runCompare() {
+  const { readFileSync } = await import('node:fs')
+  const pairs = process.argv.slice(4).map((a) => a.split('|'))
+  await page.setViewportSize({ width: 3840, height: 1100 })
+  for (const [left, right, name] of pairs) {
+    const img = (f) => `data:image/png;base64,${readFileSync(f).toString('base64')}`
+    await page.setContent(`<body style="margin:0;background:#fff;display:flex;gap:8px"><figure style="margin:0"><figcaption style="font:14px monospace;padding:4px">${left.split('/').slice(-2).join('/')}</figcaption><img src="${img(left)}" style="width:1900px"></figure><figure style="margin:0"><figcaption style="font:14px monospace;padding:4px">${right.split('/').slice(-2).join('/')}</figcaption><img src="${img(right)}" style="width:1900px"></figure></body>`)
+    await page.screenshot({ path: `${out}/${name}.png`, fullPage: true })
+    note(`captura ${name}.png`)
+  }
+}
+
 try {
   if (mode === 'demo') await runDemo()
   else if (mode === 'radar') await runRadar()
   else if (mode === 'gps') await runGps()
   else if (mode === 'fase9') await runFase9()
+  else if (mode === 'fase9_1') await runFase9_1()
+  else if (mode === 'truthlag') await runTruthLag()
+  else if (mode === 'compare') await runCompare()
   else if (mode === 'layout') await runLayout()
   else if (mode === 'icons') await runIcons()
   else if (mode === 'chatsize') await runChatSize()

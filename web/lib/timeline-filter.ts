@@ -1,13 +1,36 @@
 // Filtros y buscador del timeline de eventos. Puro y con pruebas.
 import type { Envelope } from './contracts'
-import { groupOf, type Group } from './format.ts'
+import { GROUPS, groupOf, type Group } from './format.ts'
+
+/**
+ * Filtro por tipo o por topic. `only: false`: se ven todos menos `keys`. `only: true`: se ven
+ * **solo** `keys` (así «None» también oculta lo que aparezca después).
+ */
+export type KeyFilter = { only: boolean; keys: ReadonlySet<string> }
+export const ALL_KEYS: KeyFilter = { only: false, keys: new Set() }
+export const NO_KEYS: KeyFilter = { only: true, keys: new Set() }
 
 export type TimelineFilter = {
   hiddenGroups: ReadonlySet<Group>
-  hiddenTypes: ReadonlySet<string>
-  hiddenTopics: ReadonlySet<string>
+  types: KeyFilter
+  topics: KeyFilter
   query: string
 }
+
+/** Fuentes ocultas por defecto: GPS y radar, muy verbosos. */
+export const DEFAULT_HIDDEN_GROUPS: Group[] = ['gps', 'radar']
+export const hideNoGroups = (): Group[] => []
+export const hideAllGroups = (): Group[] => GROUPS.map((g) => g.id)
+
+export const keyVisible = (f: KeyFilter, key: string) => (f.only ? f.keys.has(key) : !f.keys.has(key))
+
+/** Marca o desmarca una clave, en cualquiera de los dos modos. */
+export function toggleKey(f: { only: boolean; keys: string[] }, key: string): { only: boolean; keys: string[] } {
+  return { only: f.only, keys: f.keys.includes(key) ? f.keys.filter((k) => k !== key) : [...f.keys, key] }
+}
+
+/** Cuántas de las claves conocidas se ven con este filtro. */
+export const visibleKeyCount = (f: KeyFilter, known: string[]) => known.filter((k) => keyVisible(f, k)).length
 
 /** Topic de un evento sin el prefijo, el tipo y la versión: `air.d1`, `ai.monitor`, `sim.player`… */
 export function topicOf(e: Envelope): string {
@@ -28,7 +51,7 @@ export function searchText(e: Envelope): string {
 }
 
 export function matches(e: Envelope, f: TimelineFilter, terms: string[]): boolean {
-  if (f.hiddenGroups.has(groupOf(e)) || f.hiddenTypes.has(e.type) || f.hiddenTopics.has(topicOf(e))) return false
+  if (f.hiddenGroups.has(groupOf(e)) || !keyVisible(f.types, e.type) || !keyVisible(f.topics, topicOf(e))) return false
   if (terms.length === 0) return true
   const text = searchText(e)
   return terms.every((t) => text.includes(t))

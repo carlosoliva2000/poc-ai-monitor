@@ -16,6 +16,7 @@ import {
   type ScenarioInfo,
   type ServerMessage,
   type TruthFile,
+  type TruthMessage,
 } from '@/lib/contracts'
 
 export type Connection = 'connecting' | 'open' | 'closed'
@@ -45,6 +46,7 @@ export function usePlatform() {
   const [reportPhase, setReportPhase] = useState<ReportPhase>('none')
   const [scenarios, setScenarios] = useState<ScenarioInfo[]>([])
   const [plan, setPlan] = useState<PlanFile | null>(null)
+  const [liveTruth, setLiveTruth] = useState<TruthMessage | null>(null)
 
   const ws = useRef<WebSocket | null>(null)
   const eventsRef = useRef<Envelope[]>([])
@@ -54,6 +56,7 @@ export function usePlatform() {
   const toolCallsRef = useRef<Envelope<AgentToolCall>[]>([])
   const reportPhaseRef = useRef<ReportPhase>('none')
   const stateRef = useRef<PlayerState | null>(null)
+  const wantTruth = useRef(false)
   const dirty = useRef(false)
   const errorId = useRef(0)
 
@@ -145,6 +148,7 @@ export function usePlatform() {
       socket.onopen = () => {
         socket.send(JSON.stringify({ op: 'hello', client: 'web' }))
         socket.send(JSON.stringify({ op: 'subscribe', patterns: ['citadel.pub.evt.>'] }))
+        if (wantTruth.current) socket.send(JSON.stringify({ op: 'truth_feed', active: true }))
         setConnection('open')
         void backfill()
       }
@@ -154,7 +158,8 @@ export function usePlatform() {
         else if (data.op === 'state') {
           stateRef.current = data
           setState(data)
-        } else if (data.op === 'error') showError(data.message)
+        } else if (data.op === 'truth') setLiveTruth(data)
+        else if (data.op === 'error') showError(data.message)
       }
       socket.onclose = () => {
         setConnection('closed')
@@ -198,6 +203,14 @@ export function usePlatform() {
     socket.send(JSON.stringify({ op: 'control', ...message }))
   }, [])
 
+  /** Pide o deja de pedir la posición real en directo (mensaje `truth` del WebSocket, fuera del bus). */
+  const setTruthFeed = useCallback((active: boolean) => {
+    wantTruth.current = active
+    if (!active) setLiveTruth(null)
+    const socket = ws.current
+    if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ op: 'truth_feed', active }))
+  }, [])
+
   /** Publica un `OperatorMessage`. El id `ops-NNNN` lo calcula la web (máximo visto + 1): con dos
    *  pestañas abiertas pueden repetirse y la plataforma rechazaría el mensaje. */
   const sendOperatorMessage = useCallback((conversation: Conversation, text: string): boolean => {
@@ -230,7 +243,7 @@ export function usePlatform() {
     return true
   }, [showError])
 
-  return { connection, events, state, errors, chunks, activity, toolCalls, reportPhase, scenarios, plan, control, sendOperatorMessage }
+  return { connection, events, state, errors, chunks, activity, toolCalls, reportPhase, scenarios, plan, liveTruth, setTruthFeed, control, sendOperatorMessage }
 }
 
 /** La verdad de la simulación en curso (`GET /api/truth`). Solo se consulta con la capa activa. */

@@ -453,6 +453,27 @@
       ],
       "title": "Subscribe",
       "type": "object"
+    },
+    "TruthFeed": {
+      "additionalProperties": false,
+      "description": "Pide (`active: true`) o deja de pedir la posición real en directo. Solo clientes `web`.",
+      "properties": {
+        "op": {
+          "const": "truth_feed",
+          "default": "truth_feed",
+          "title": "Op",
+          "type": "string"
+        },
+        "active": {
+          "title": "Active",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "active"
+      ],
+      "title": "TruthFeed",
+      "type": "object"
     }
   },
   "discriminator": {
@@ -504,7 +525,8 @@
       },
       "hello": "#/$defs/Hello",
       "publish": "#/$defs/Publish",
-      "subscribe": "#/$defs/Subscribe"
+      "subscribe": "#/$defs/Subscribe",
+      "truth_feed": "#/$defs/TruthFeed"
     },
     "propertyName": "op"
   },
@@ -517,6 +539,9 @@
     },
     {
       "$ref": "#/$defs/Publish"
+    },
+    {
+      "$ref": "#/$defs/TruthFeed"
     },
     {
       "discriminator": {

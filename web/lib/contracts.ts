@@ -129,9 +129,23 @@ export type PlayerState = {
   total_events: number
 }
 
+/** Última posición real (fuera del bus; solo llega si se pide con `truth_feed`). `heading_deg` es el
+ *  rumbo del morro; `course_deg`, el rumbo sobre el suelo. */
+export type TruthMessage = {
+  op: 'truth'
+  run_id: string | null
+  t: number
+  x: number
+  y: number
+  heading_deg: number
+  course_deg: number
+  speed_mps: number
+}
+
 export type ServerMessage =
   | { op: 'event'; event: Envelope }
   | PlayerState
+  | TruthMessage
   | { op: 'error'; message: string }
 
 export type ControlMessage =
