@@ -53,7 +53,11 @@ def test_every_event_type_has_a_spec_and_topic() -> None:
 
 
 def test_ephemeral_and_client_domains() -> None:
-    assert {EventType.AGENT_REPLY_CHUNK, EventType.AGENT_ACTIVITY} == EPHEMERAL_TYPES
+    assert {
+        EventType.AGENT_REPLY_CHUNK,
+        EventType.AGENT_ACTIVITY,
+        EventType.AGENT_TOOL_CALL,
+    } == EPHEMERAL_TYPES
     assert client_can_publish(ClientKind.AI_MODULE, DETECTION)
     assert not client_can_publish(ClientKind.AI_MODULE, POSITION)
     assert client_can_publish(ClientKind.WEB, "citadel.pub.evt.ops.monitor.OperatorMessage.v1")

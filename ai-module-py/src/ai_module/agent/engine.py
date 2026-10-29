@@ -46,6 +46,28 @@ class AbortInvocation(Exception):
 ToolExecutor = Callable[[str, dict[str, Any]], Awaitable[Any]]
 
 
+@dataclass(frozen=True)
+class ToolCallRecord:
+    """Una llamada a tool ya resuelta, para quien quiera mostrarla (la web, para depurar).
+
+    No cambia nada de lo que ve el modelo ni de la traza: es una copia de lo ocurrido."""
+
+    index: int
+    """Orden de la llamada en la invocación (desde 1)."""
+    iteration: int
+    """Llamada al LLM que la pidió (desde 1)."""
+    name: str
+    arguments: str
+    status: str
+    """`ok` | `error` | `rejected` (la tool devolvió `ok: false`) | `aborted`."""
+    content: str | None
+    """Lo que recibió el modelo (tal cual; `None` si se abortó)."""
+    error: str | None
+
+
+ToolCallListener = Callable[[ToolCallRecord], Awaitable[None]]
+
+
 @dataclass
 class EngineResult:
     end_reason: str
@@ -104,8 +126,11 @@ class AgentEngine:
         is_done: Callable[[], bool] | None = None,
         reminder: Callable[[], str] | None = None,
         on_delta: DeltaCallback | None = None,
+        on_tool_call: ToolCallListener | None = None,
     ) -> EngineResult:
-        """Ejecuta el bucle sobre `messages` (que se va ampliando). Rellena `trace`."""
+        """Ejecuta el bucle sobre `messages` (que se va ampliando). Rellena `trace`.
+
+        `on_tool_call` recibe cada llamada a tool al resolverse (solo informativo)."""
         config = self.config
         trace.model = self.llm.model
         trace.sampling = config.sampling()
@@ -196,6 +221,17 @@ class AgentEngine:
                             "truncated": False,
                         }
                     )
+                    if on_tool_call is not None:
+                        record = ToolCallRecord(
+                            len(tool_names),
+                            index,
+                            call.name,
+                            call.arguments,
+                            "aborted",
+                            None,
+                            str(exc),
+                        )
+                        await _notify(on_tool_call, record)
                     return result("repeated_rejection")
                 shown = outcome["result"]
                 # un texto (una skill) se entrega tal cual; el resto, como JSON compacto
@@ -212,6 +248,12 @@ class AgentEngine:
                     }
                 )
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": content})
+                if on_tool_call is not None:
+                    status, error = _status_of(outcome)
+                    record = ToolCallRecord(
+                        len(tool_names), index, call.name, call.arguments, status, content, error
+                    )
+                    await _notify(on_tool_call, record)
             if is_done is not None and is_done():
                 return result("done")
         return result("max_iterations")
@@ -237,6 +279,25 @@ class AgentEngine:
         except Exception as exc:
             log.exception("tool %s failed", name)
             return _failure(f"internal tool error: {type(exc).__name__}: {exc}")
+
+
+async def _notify(listener: ToolCallListener, record: ToolCallRecord) -> None:
+    """Avisa a quien muestra las llamadas; un fallo suyo nunca rompe la invocación."""
+    try:
+        await listener(record)
+    except Exception:
+        log.exception("tool call listener failed")
+
+
+def _status_of(outcome: dict) -> tuple[str, str | None]:
+    """Estado de una llamada resuelta: error de la tool, rechazo (`ok: false`) o correcta."""
+    if outcome["error"] is not None:
+        return "error", outcome["error"]
+    shown = outcome["result"]
+    if isinstance(shown, dict) and shown.get("ok") is False:
+        errors = shown.get("errors") or [shown.get("error") or "rejected"]
+        return "rejected", "; ".join(str(e) for e in errors)
+    return "ok", None
 
 
 def _failure(message: str) -> dict:

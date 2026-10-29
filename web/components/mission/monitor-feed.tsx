@@ -11,11 +11,12 @@ import type {
   DetectionCleared,
   Envelope,
 } from '@/lib/contracts'
-import type { Derived } from '@/lib/derive'
+import { callsByCause, type Derived, type ToolCallEvent } from '@/lib/derive'
 import { stripFieldValues } from '@/lib/clean-text'
 import { CAUSE_LABEL, CHECK_LABEL, formatT, SEVERITY_LABEL, SOURCE_LABEL } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { TypingDots } from './chat-panel'
+import { ToolCallList } from './tool-calls'
 
 const SEVERITY_CLASS = {
   low: 'bg-primary/10 text-primary',
@@ -27,6 +28,8 @@ type Props = {
   events: Envelope[]
   data: Derived
   activity: Record<string, AgentActivity>
+  /** Llamadas a tool del monitor; vacío si el interruptor está apagado. */
+  toolCalls: ToolCallEvent[]
 }
 
 /** Quién habla: el detector (reglas), el monitor (LLM) o el módulo (cierre sin LLM). */
@@ -37,18 +40,19 @@ const Who = ({ label, className, t }: { label: string; className: string; t: num
   </div>
 )
 
-export function MonitorFeed({ events, data, activity }: Props) {
+export function MonitorFeed({ events, data, activity, toolCalls }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
   const feed = events.filter((e) => e.source === 'ai-detector' || e.source === 'ai-monitor')
   const pendingIds = new Set(data.pending.map((e) => e.event_id))
   const byId = new Map(feed.map((e) => [e.event_id, e]))
   const busy = Boolean(activity.monitor)
+  const callsByDetection = callsByCause(toolCalls, ['monitor'])
 
   useEffect(() => {
     const el = scrollRef.current
     if (el && stick.current) el.scrollTop = el.scrollHeight
-  }, [feed.length, data.pending.length])
+  }, [feed.length, data.pending.length, toolCalls.length])
 
   return (
     <div className="flex min-h-0 flex-[3] flex-col">
@@ -73,6 +77,7 @@ export function MonitorFeed({ events, data, activity }: Props) {
           <div key={e.event_id} className="flex flex-col gap-2">
             <FeedEntry event={e} data={data} byId={byId} />
             {pendingIds.has(e.event_id) && <Analyzing event={e} busy={busy} />}
+            <Invocation calls={callsByDetection.get(e.event_id)} />
           </div>
         ))}
       </div>
@@ -101,6 +106,17 @@ function Episodes({ data }: { data: Derived }) {
         )
       })}
     </ul>
+  )
+}
+
+/** Las llamadas a tool de la invocación del monitor que empezó con esta detección, en orden. */
+function Invocation({ calls }: { calls: ToolCallEvent[] | undefined }) {
+  if (!calls || calls.length === 0) return null
+  const ids = [...new Set(calls.map((c) => c.payload.invocation_id))].join(', ')
+  return (
+    <div className="pl-3" data-testid="monitor-invocation">
+      <ToolCallList calls={calls} title={`Monitor invocation ${ids} · ${calls.length} tool ${calls.length === 1 ? 'call' : 'calls'}`} />
+    </div>
   )
 }
 

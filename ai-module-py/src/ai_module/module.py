@@ -76,6 +76,8 @@ class AiModule:
 
     async def handle_event(self, event: Envelope) -> None:
         rt = self.rt
+        if event.type == EventType.AGENT_TOOL_CALL:
+            return  # solo para la web: ni el detector, ni los agentes, ni el índice lo ven
         if event.type in (EventType.SIMULATION_STARTED, EventType.SIMULATION_RESET):
             self._new_run()
             if event.type == EventType.SIMULATION_STARTED:

@@ -339,7 +339,8 @@
         "OperatorMessage",
         "AgentReply",
         "AgentReplyChunk",
-        "AgentActivity"
+        "AgentActivity",
+        "AgentToolCall"
       ],
       "title": "EventType",
       "type": "string"

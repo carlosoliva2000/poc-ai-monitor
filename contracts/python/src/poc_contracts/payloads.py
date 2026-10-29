@@ -18,6 +18,7 @@ from .enums import (
     Rule,
     SensorSource,
     Severity,
+    ToolCallStatus,
 )
 
 
@@ -295,6 +296,21 @@ class AgentActivity(Payload):
     causation_id: str | None
 
 
+class AgentToolCall(Payload):
+    """Una llamada a tool de un agente, solo para depurar en la web (recortada)."""
+
+    agent: AgentName
+    invocation_id: str
+    index: Annotated[int, Field(ge=1)]
+    iteration: Annotated[int, Field(ge=1)]
+    tool: str
+    arguments: str
+    status: ToolCallStatus
+    result: str | None
+    error: str | None
+    truncated: bool
+
+
 PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.MISSION_PLANNED: MissionPlanned,
     EventType.MISSION_STARTED: MissionStarted,
@@ -324,4 +340,5 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.AGENT_REPLY: AgentReply,
     EventType.AGENT_REPLY_CHUNK: AgentReplyChunk,
     EventType.AGENT_ACTIVITY: AgentActivity,
+    EventType.AGENT_TOOL_CALL: AgentToolCall,
 }

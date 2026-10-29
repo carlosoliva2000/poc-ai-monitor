@@ -160,6 +160,7 @@ def start_ai_module(
     detector_only: bool = False,
     llm_url: str | None = None,
     profile: str | None = None,
+    tool_call_events: bool = True,
 ) -> subprocess.Popen:
     """Arranca el módulo de IA (proceso aparte) y espera a que esté conectado y suscrito."""
     command = ["uv", "run", "--project", str(REPO_ROOT / "ai-module-py"), "python", "-m",
@@ -170,6 +171,8 @@ def start_ai_module(
         command += ["--llm-url", llm_url]
     if profile:
         command += ["--profile", profile]
+    if not tool_call_events:
+        command.append("--no-tool-call-events")
     proc = subprocess.Popen(
         command, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         bufsize=1,
@@ -524,6 +527,11 @@ def main() -> int:
     parser.add_argument(
         "--platform", help="URL de una plataforma ya en marcha (si no, arranca una)"
     )
+    parser.add_argument(
+        "--no-tool-call-events",
+        action="store_true",
+        help="el módulo de IA no publica AgentToolCall (lo que la web muestra para depurar)",
+    )
     parser.add_argument("--no-ai", action="store_true", help="no arrancar el módulo de IA")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument(
@@ -549,7 +557,11 @@ def main() -> int:
             platform_proc = start_platform(args.port, wait)
         if not args.no_ai:
             ai_proc = start_ai_module(
-                url, detector_only=args.detector_only, llm_url=args.llm_url, profile=args.profile
+                url,
+                detector_only=args.detector_only,
+                llm_url=args.llm_url,
+                profile=args.profile,
+                tool_call_events=not args.no_tool_call_events,
             )
         ws_url = url.replace("http", "ws", 1).rstrip("/") + "/ws"
         with connect(ws_url, open_timeout=5) as ws:

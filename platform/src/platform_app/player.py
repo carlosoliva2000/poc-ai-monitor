@@ -121,7 +121,7 @@ class Player:
         return self._queue[0].sim_time if self._queue else self.sim.t
 
     def state(self) -> PlayerState:
-        faults = self.sim.active_faults if self.sim else {}
+        faults = self.sim.active_faults if self.sim else []
         return PlayerState(
             status=self._status,
             scenario=self.scenario,
@@ -130,9 +130,7 @@ class Player:
             speed=self.speed,
             wait_agent=self.wait_agent,
             interactive=self.interactive,
-            active_faults=[
-                ActiveFault(source=s, mode=f.mode, origin=f.origin) for s, f in faults.items()
-            ],
+            active_faults=[ActiveFault(source=s, mode=f.mode, origin=f.origin) for s, f in faults],
             cursor=self._cursor,
             total_events=self.total_events,
         )

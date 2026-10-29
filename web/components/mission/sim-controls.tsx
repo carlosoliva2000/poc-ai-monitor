@@ -81,7 +81,6 @@ export function SimControls({ state, data, marks, duration, scenarios, waiting, 
         >
           <Hourglass className="size-4 shrink-0 animate-pulse text-accent" aria-hidden="true" />
           <span>{waiting ?? 'Waiting for the monitor…'}</span>
-          <span className="ml-auto text-xs text-muted-foreground">automatic pause, not a user pause</span>
         </div>
       )}
 

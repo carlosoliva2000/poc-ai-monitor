@@ -13,6 +13,9 @@ Fallos (`set_fault` y los programados del escenario):
   el viento, y el controlador sigue el plan con esa estimación (puede dar por alcanzado un
   waypoint que no ha alcanzado). Mientras dura, el GPS publica la posición estimada con
   `fix: none`, `sats: 0` y `hdop` alto; al recuperarse, la posición salta a la real.
+
+Una fuente solo tiene un fallo a la vez, salvo el GPS, que puede tener `loss` y `mute` a la vez
+(receptor muerto): navega a estima y no publica nada; al terminar uno sigue el otro.
 """
 
 import math
@@ -107,7 +110,7 @@ class Simulator:
         self.reached: list[tuple[int, int]] = []
         self.completed = False
         self.finished = False
-        self._faults: dict[SensorSource, ActiveFault] = {}
+        self._faults: dict[tuple[SensorSource, FaultMode], ActiveFault] = {}
         self._queued: list[tuple[SensorSource, ActiveFault, bool]] = []
 
     # --- Estado -------------------------------------------------------------------------------
@@ -118,10 +121,10 @@ class Simulator:
         return round(self.n * STEP_S, 6)
 
     @property
-    def active_faults(self) -> dict[SensorSource, ActiveFault]:
-        """Fallos en curso (los aceptados por `set_fault` ya cuentan, aunque aún no se hayan
-        publicado sus eventos)."""
-        return dict(self._faults)
+    def active_faults(self) -> list[tuple[SensorSource, ActiveFault]]:
+        """Fallos en curso, por orden de activación (los aceptados por `set_fault` ya cuentan,
+        aunque aún no se hayan publicado sus eventos)."""
+        return [(source, fault) for (source, _), fault in self._faults.items()]
 
     def flight(self) -> Flight:
         return Flight(self.samples, self.route_ids, self.route, self.reached, self.completed)
@@ -147,36 +150,44 @@ class Simulator:
     ) -> None:
         """Activa o termina un fallo a partir del instante actual (el siguiente `step()`).
 
-        Lanza `ValueError` si no es posible: `loss` fuera del GPS, fuente que ya tiene un fallo,
-        fallo que no está activo o programado por el escenario (ese solo lo termina el escenario).
+        Lanza `ValueError` si no es posible: `loss` fuera del GPS, fuente que ya tiene un fallo
+        (el GPS admite uno de cada modo), fallo que no está activo o programado por el escenario
+        (ese solo lo termina el escenario).
         """
-        current = self._faults.get(source)
+        current = self._faults.get((source, mode))
         if active:
             if mode == FaultMode.LOSS and source != SensorSource.GPS:
                 raise ValueError("`loss` only exists for the GPS")
-            if current is not None:
-                raise ValueError(
-                    f"{source.value} already has an active fault ({current.mode.value})"
-                )
+            blocking = self._blocking(source, mode)
+            if blocking is not None:
+                raise ValueError(f"{source.value} already has an active fault ({blocking.value})")
             self._start_fault(source, ActiveFault(mode, origin))
             self._queued.append((source, ActiveFault(mode, origin), True))
             return
-        if current is None or current.mode != mode:
+        if current is None:
             raise ValueError(f"{source.value} has no active {mode.value} fault")
         if current.origin != origin:
             raise ValueError(
                 f"the {source.value} fault was scheduled by the scenario: it ends by itself"
             )
-        self._end_fault(source)
+        self._end_fault(source, mode)
         self._queued.append((source, current, False))
 
+    def _blocking(self, source: SensorSource, mode: FaultMode) -> FaultMode | None:
+        """Modo del fallo en curso que impide activar `mode` en `source`, si lo hay: el mismo
+        modo o, fuera del GPS, cualquiera."""
+        for (src, active_mode), _ in self._faults.items():
+            if src == source and (source != SensorSource.GPS or active_mode == mode):
+                return active_mode
+        return None
+
     def _start_fault(self, source: SensorSource, fault: ActiveFault) -> None:
-        self._faults[source] = fault
+        self._faults[(source, fault.mode)] = fault
         if fault.mode == FaultMode.LOSS:
             self._est = self.samples[self.n].gps  # arranca la estima donde cree estar
 
-    def _end_fault(self, source: SensorSource) -> None:
-        fault = self._faults.pop(source)
+    def _end_fault(self, source: SensorSource, mode: FaultMode) -> None:
+        fault = self._faults.pop((source, mode))
         if fault.mode == FaultMode.LOSS:
             self._est = None  # el GPS vuelve: la posición salta a la real
 
@@ -194,10 +205,10 @@ class Simulator:
             state = self._scheduled_state[k]
             if state == "active" and t >= f.end_s:
                 self._scheduled_state[k] = "done"
-                out.append(self._fault_event(f.source, self._faults[f.source], False))
-                self._end_fault(f.source)
+                out.append(self._fault_event(f.source, self._faults[(f.source, f.mode)], False))
+                self._end_fault(f.source, f.mode)
             elif state == "pending" and f.start_s <= t < f.end_s:
-                if f.source in self._faults:  # ya hay un fallo manual: el programado se omite
+                if self._blocking(f.source, f.mode) is not None:  # ya hay un fallo manual: se omite
                     self._scheduled_state[k] = "skipped"
                     continue
                 self._scheduled_state[k] = "active"
@@ -269,9 +280,9 @@ class Simulator:
                 }
                 mission.append(self._mission_event(EventType.MISSION_COMPLETED, payload))
             # un fallo que acabaría después del fin de la misión se recorta a ese instante
-            for source in list(self._faults):
-                faults.append(self._fault_event(source, self._faults[source], False))
-                self._end_fault(source)
+            for source, mode in list(self._faults):
+                faults.append(self._fault_event(source, self._faults[(source, mode)], False))
+                self._end_fault(source, mode)
 
         readings = self._readings() if self._events else []
         if not self.finished:
@@ -287,8 +298,7 @@ class Simulator:
         out: list[EventDraft] = []
 
         def emit(name: str, et: EventType, source: SensorSource, payload: dict) -> None:
-            mode = self._faults[source].mode if source in self._faults else None
-            if mode != FaultMode.MUTE:
+            if (source, FaultMode.MUTE) not in self._faults:
                 out.append(make_event(cfg, et, t, n // self._periods[name], payload))
 
         if n % self._periods["gps"] == 0:

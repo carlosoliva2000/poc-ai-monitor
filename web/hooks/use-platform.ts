@@ -6,6 +6,7 @@ import {
   PLATFORM_WS,
   type AgentActivity,
   type AgentReplyChunk,
+  type AgentToolCall,
   type Conversation,
   type ControlMessage,
   type Envelope,
@@ -19,6 +20,10 @@ import {
 
 export type Connection = 'connecting' | 'open' | 'closed'
 export type PlatformError = { id: number; message: string }
+/** Estado del agente de informe según su `AgentActivity` (el informe en sí lo da `ReportGenerated`). */
+export type ReportPhase = 'none' | 'writing' | 'finished'
+
+const MAX_TOOL_CALLS = 800
 
 const FLUSH_MS = 100
 const RECONNECT_MS = 1000
@@ -36,6 +41,8 @@ export function usePlatform() {
   const [errors, setErrors] = useState<PlatformError[]>([])
   const [chunks, setChunks] = useState<Record<string, string>>({})
   const [activity, setActivity] = useState<Record<string, AgentActivity>>({})
+  const [toolCalls, setToolCalls] = useState<Envelope<AgentToolCall>[]>([])
+  const [reportPhase, setReportPhase] = useState<ReportPhase>('none')
   const [scenarios, setScenarios] = useState<ScenarioInfo[]>([])
   const [plan, setPlan] = useState<PlanFile | null>(null)
 
@@ -44,6 +51,8 @@ export function usePlatform() {
   const seen = useRef<Set<string>>(new Set())
   const chunksRef = useRef<Record<string, string>>({})
   const activityRef = useRef<Record<string, AgentActivity>>({})
+  const toolCallsRef = useRef<Envelope<AgentToolCall>[]>([])
+  const reportPhaseRef = useRef<ReportPhase>('none')
   const stateRef = useRef<PlayerState | null>(null)
   const dirty = useRef(false)
   const errorId = useRef(0)
@@ -53,6 +62,8 @@ export function usePlatform() {
     seen.current = new Set()
     chunksRef.current = {}
     activityRef.current = {}
+    toolCallsRef.current = []
+    reportPhaseRef.current = 'none'
     dirty.current = true
   }, [])
 
@@ -70,6 +81,10 @@ export function usePlatform() {
           if (p.state === 'started') next[p.agent] = p
           else delete next[p.agent]
           activityRef.current = next
+          if (p.agent === 'report') reportPhaseRef.current = p.state === 'started' ? 'writing' : 'finished'
+        } else if (event.type === 'AgentToolCall' && !seen.current.has(event.event_id)) {
+          seen.current.add(event.event_id)
+          toolCallsRef.current = [...toolCallsRef.current, event as unknown as Envelope<AgentToolCall>].slice(-MAX_TOOL_CALLS)
         }
         dirty.current = true
         return
@@ -101,6 +116,8 @@ export function usePlatform() {
       setEvents([...eventsRef.current].sort((a, b) => a.seq - b.seq))
       setChunks(chunksRef.current)
       setActivity(activityRef.current)
+      setToolCalls(toolCallsRef.current)
+      setReportPhase(reportPhaseRef.current)
     }, FLUSH_MS)
     return () => window.clearInterval(timer)
   }, [])
@@ -213,7 +230,7 @@ export function usePlatform() {
     return true
   }, [showError])
 
-  return { connection, events, state, errors, chunks, activity, scenarios, plan, control, sendOperatorMessage }
+  return { connection, events, state, errors, chunks, activity, toolCalls, reportPhase, scenarios, plan, control, sendOperatorMessage }
 }
 
 /** La verdad de la simulación en curso (`GET /api/truth`). Solo se consulta con la capa activa. */
@@ -234,7 +251,7 @@ export function useTruth(enabled: boolean, runId: string | null, running: boolea
         .catch(() => {})
     void load()
     if (!running) return () => void (cancelled = true)
-    const timer = window.setInterval(load, 1000)
+    const timer = window.setInterval(load, 500)
     return () => {
       cancelled = true
       window.clearInterval(timer)

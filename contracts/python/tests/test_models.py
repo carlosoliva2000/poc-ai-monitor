@@ -319,3 +319,22 @@ def test_timeline_response() -> None:
     )
     with pytest.raises(ValidationError):
         TimelineResponse.model_validate({"events": [position_draft()], "truncated": False})
+
+
+def test_tool_call_event_is_ephemeral_and_has_its_own_prefix() -> None:
+    call = {
+        "agent": "monitor",
+        "invocation_id": "inv-0007",
+        "index": 1,
+        "iteration": 1,
+        "tool": "get_events",
+        "arguments": "{}",
+        "status": "ok",
+        "result": "{}",
+        "error": None,
+        "truncated": False,
+    }
+    event = draft(EventType.AGENT_TOOL_CALL, call, "tcl-0001")
+    assert event["ephemeral"] and event["asset"] is None
+    assert event["source"] == "ai-module" and event["topic"].endswith("ai.agent.AgentToolCall.v1")
+    EventDraft.model_validate(event)

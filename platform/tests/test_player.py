@@ -382,6 +382,42 @@ def test_manual_gps_loss_changes_the_trajectory_and_publishes_fix_none(runs_dir:
     assert gap > 20.0
 
 
+def test_gps_loss_and_mute_together_show_up_in_the_state_and_the_timeline(runs_dir: Path) -> None:
+    player = make_player(runs_dir)
+    player.load("nominal")
+    player.set_interactive(True)
+    player.play()
+    player.advance(30)
+    player.fault(SensorSource.GPS, FaultMode.LOSS, True)
+    player.fault(SensorSource.GPS, FaultMode.MUTE, True)
+    assert [(f.source, f.mode.value) for f in player.state().active_faults] == [
+        (SensorSource.GPS, "loss"),
+        (SensorSource.GPS, "mute"),
+    ]
+    with pytest.raises(PlayerError, match="already has an active fault"):
+        player.fault(SensorSource.GPS, FaultMode.MUTE, True)
+    player.advance(20)
+    player.fault(SensorSource.GPS, FaultMode.MUTE, False)  # primero se quita el mute
+    assert [(f.source, f.mode.value) for f in player.state().active_faults] == [
+        (SensorSource.GPS, "loss")
+    ]
+    player.advance(20)
+    player.fault(SensorSource.GPS, FaultMode.LOSS, False)
+    player.run_to_end()
+
+    gps = list(of_type(player, EventType.POSITION_UPDATED))
+    assert not [e for e in gps if 30.0 <= e.sim_time < 50.0]  # los dos: nada
+    assert {e.payload["fix"] for e in gps if 50.0 <= e.sim_time < 70.0} == {"none"}
+    assert {e.payload["fix"] for e in gps if e.sim_time > 71.0} == {"3d"}
+    faults = [e for e in player.bus.timeline.all() if e.event_id.startswith("sim-")]
+    assert [(e.type.value, e.payload["mode"]) for e in faults] == [
+        ("FaultInjected", "loss"),
+        ("FaultInjected", "mute"),
+        ("FaultCleared", "mute"),
+        ("FaultCleared", "loss"),
+    ]
+
+
 def test_manual_fault_errors(runs_dir: Path) -> None:
     player = make_player(runs_dir)
     player.set_interactive(True)

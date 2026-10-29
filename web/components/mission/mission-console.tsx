@@ -13,7 +13,7 @@ import { progressMarks, SimControls } from './sim-controls'
 import { TelemetryStrip } from './telemetry-strip'
 
 export function MissionConsole() {
-  const { connection, events, state, errors, chunks, activity, scenarios, plan, control, sendOperatorMessage } = usePlatform()
+  const { connection, events, state, errors, chunks, activity, toolCalls, reportPhase, scenarios, plan, control, sendOperatorMessage } = usePlatform()
   const [layers, setLayers] = useLayers()
   const data = useMemo(() => derive(events), [events])
   const truth = useTruth(layers.truth, state?.run_id ?? null, state?.status === 'running')
@@ -36,7 +36,7 @@ export function MissionConsole() {
   const agentBusy = Object.keys(activity).length > 0
 
   return (
-    <div className="flex min-h-dvh flex-col lg:h-dvh">
+    <div className="flex min-h-dvh flex-col lg:h-dvh lg:overflow-hidden">
       <MissionHeader missionId={plan?.mission_id ?? '—'} state={state} connection={connection} waiting={waitingAgent} agentBusy={agentBusy} />
 
       {errors.length > 0 && (
@@ -54,17 +54,17 @@ export function MissionConsole() {
         </p>
       )}
 
-      <main className="grid flex-1 gap-px bg-border lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(380px,460px)]">
-        <div className="flex min-h-0 flex-col overflow-y-auto bg-card">
+      <main className="grid flex-1 gap-px bg-border lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(380px,460px)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
+        <div className="relative flex min-h-0 flex-col bg-card lg:h-full lg:overflow-y-auto">
           <section aria-labelledby="map-title" className="flex flex-col">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5">
               <h2 id="map-title" className="text-sm font-semibold text-foreground">
-                Top view · x,y plane (m) · y towards the north
+                Top view · x,y plane (m)
               </h2>
               <LayersPanel layers={layers} onChange={setLayers} />
             </div>
             <div className="aspect-[1060/652] w-full bg-background px-2 lg:aspect-auto lg:h-[min(46dvh,500px)]">
-              <DroneMap plan={plan} data={data} truth={truth} layers={layers} faults={state?.active_faults ?? []} running={state?.status === 'running'} speed={state?.speed ?? 1} />
+              <DroneMap plan={plan} data={data} truth={truth} layers={layers} faults={state?.active_faults ?? []} running={state?.status === 'running'} speed={state?.speed ?? 1} simTime={state?.sim_time ?? 0} />
             </div>
           </section>
 
@@ -77,8 +77,8 @@ export function MissionConsole() {
           </div>
         </div>
 
-        <div className="min-h-[80dvh] lg:min-h-0">
-          <AgentConsole events={events} data={data} chunks={chunks} activity={activity} onSend={sendOperatorMessage} />
+        <div className="relative min-h-[80dvh] bg-card lg:h-full lg:min-h-0 lg:overflow-hidden">
+          <AgentConsole events={events} data={data} chunks={chunks} activity={activity} toolCalls={toolCalls} reportPhase={reportPhase} finished={state?.status === 'finished'} onSend={sendOperatorMessage} />
         </div>
       </main>
     </div>

@@ -1,0 +1,97 @@
+{
+  "$defs": {
+    "AgentName": {
+      "enum": [
+        "monitor",
+        "report",
+        "chat-monitor",
+        "chat-report"
+      ],
+      "title": "AgentName",
+      "type": "string"
+    },
+    "ToolCallStatus": {
+      "description": "Resultado de una llamada a tool (`AgentToolCall`).",
+      "enum": [
+        "ok",
+        "error",
+        "rejected",
+        "aborted"
+      ],
+      "title": "ToolCallStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Una llamada a tool de un agente, solo para depurar en la web (recortada).",
+  "properties": {
+    "agent": {
+      "$ref": "#/$defs/AgentName"
+    },
+    "invocation_id": {
+      "title": "Invocation Id",
+      "type": "string"
+    },
+    "index": {
+      "minimum": 1,
+      "title": "Index",
+      "type": "integer"
+    },
+    "iteration": {
+      "minimum": 1,
+      "title": "Iteration",
+      "type": "integer"
+    },
+    "tool": {
+      "title": "Tool",
+      "type": "string"
+    },
+    "arguments": {
+      "title": "Arguments",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ToolCallStatus"
+    },
+    "result": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Result"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Error"
+    },
+    "truncated": {
+      "title": "Truncated",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "agent",
+    "invocation_id",
+    "index",
+    "iteration",
+    "tool",
+    "arguments",
+    "status",
+    "result",
+    "error",
+    "truncated"
+  ],
+  "title": "AgentToolCall",
+  "type": "object"
+}

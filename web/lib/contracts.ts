@@ -96,6 +96,20 @@ export type AgentActivity = {
   invocation_id: string
   causation_id: string | null
 }
+export type ToolCallStatus = 'ok' | 'error' | 'rejected' | 'aborted'
+/** Una llamada a tool de un agente (efímero, solo para depurar; `arguments` y `result` van recortados). */
+export type AgentToolCall = {
+  agent: AgentActivity['agent']
+  invocation_id: string
+  index: number
+  iteration: number
+  tool: string
+  arguments: string
+  status: ToolCallStatus
+  result: string | null
+  error: string | null
+  truncated: boolean
+}
 export type SimulationStarted = { scenario: string; run_id: string; duration_s: number; total_events: number }
 export type SimulationPaused = { reason: 'user' | 'waiting_agent' }
 export type FaultEvent = { source: SensorSource; mode: FaultMode; origin: 'manual' | 'scenario' }

@@ -58,6 +58,7 @@ EVENT_SPECS: dict[EventType, EventSpec] = {
     _T.AGENT_REPLY: EventSpec("ai", None, "ai", None),
     _T.AGENT_REPLY_CHUNK: EventSpec("ai", None, "chk", None, ephemeral=True),
     _T.AGENT_ACTIVITY: EventSpec("ai", "agent", "act", "ai-module", ephemeral=True),
+    _T.AGENT_TOOL_CALL: EventSpec("ai", "agent", "tcl", "ai-module", ephemeral=True),
 }
 
 EPHEMERAL_TYPES: frozenset[EventType] = frozenset(

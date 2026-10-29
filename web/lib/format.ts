@@ -1,4 +1,4 @@
-import { stripFieldValues } from './clean-text'
+import { stripFieldValues } from './clean-text.ts'
 import type { Cause, Envelope, Severity, SensorSource } from './contracts'
 
 export function formatT(seconds: number) {

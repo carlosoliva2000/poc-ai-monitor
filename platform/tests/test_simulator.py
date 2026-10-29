@@ -156,3 +156,127 @@ def test_faults_still_active_when_the_mission_ends_are_cleared() -> None:
     cleared = [e for e in events if e.type == EventType.FAULT_CLEARED]
     assert len(cleared) == 1
     assert cleared[0].sim_time == sim.samples[-1].t
+
+
+# --- GPS con `loss` y `mute` a la vez (receptor muerto) -----------------------------------------
+
+MUTE, LOSS = FaultMode.MUTE, FaultMode.LOSS
+
+
+def advance(sim: Simulator, until_s: float) -> list[EventDraft]:
+    """Pasos hasta el instante pedido (excluido); devuelve sus eventos."""
+    events: list[EventDraft] = []
+    while sim.t < until_s - 1e-9:
+        events += sim.step()
+    return events
+
+
+def gps_fixes(events: list[EventDraft]) -> list[str]:
+    return [e.payload["fix"] for e in events if e.type == EventType.POSITION_UPDATED]
+
+
+@pytest.mark.parametrize("inject", [(MUTE, LOSS), (LOSS, MUTE)])
+@pytest.mark.parametrize("clear_first", [MUTE, LOSS])
+def test_gps_dead_receiver_in_any_order(
+    inject: tuple[FaultMode, FaultMode], clear_first: FaultMode
+) -> None:
+    sim = Simulator(scenario_config("nominal"))
+    sim.start()
+    advance(sim, 20)
+    sim.set_fault(GPS, inject[0], True, MANUAL)
+    sim.set_fault(GPS, inject[1], True, MANUAL)
+    assert {(s, f.mode) for s, f in sim.active_faults} == {(GPS, MUTE), (GPS, LOSS)}
+
+    both = advance(sim, 40)
+    assert gps_fixes(both) == []  # mute: no se publica nada
+    assert [e.payload["mode"] for e in both if e.type == EventType.FAULT_INJECTED] == [
+        m.value for m in inject
+    ]
+
+    sim.set_fault(GPS, clear_first, False, MANUAL)
+    other = LOSS if clear_first == MUTE else MUTE
+    assert [(s, f.mode) for s, f in sim.active_faults] == [(GPS, other)]
+    one = advance(sim, 60)
+    if other == LOSS:  # se quitó el mute: vuelven las posiciones, sin fix
+        assert len(gps_fixes(one)) == 20 and set(gps_fixes(one)) == {"none"}
+    else:  # se quitó el loss: el GPS vuelve a la real pero sigue callado
+        assert gps_fixes(one) == []
+
+    sim.set_fault(GPS, other, False, MANUAL)
+    assert sim.active_faults == []
+    rest = advance(sim, 80)
+    assert set(gps_fixes(rest)) == {"3d"} and len(gps_fixes(rest)) >= 19
+    cleared = [e.payload["mode"] for e in one + rest if e.type == EventType.FAULT_CLEARED]
+    assert cleared == [clear_first.value, other.value]  # un FaultCleared por fallo, en su orden
+    ids = [e.event_id for e in both + one + rest if e.event_id.startswith("sim-")]
+    assert ids == ["sim-0001", "sim-0002", "sim-0003", "sim-0004"]
+
+
+def test_gps_dead_receiver_events_are_numbered_one_per_fault() -> None:
+    sim = Simulator(scenario_config("nominal"))
+    events = sim.start()
+    events += advance(sim, 10)
+    sim.set_fault(GPS, MUTE, True, MANUAL)
+    sim.set_fault(GPS, LOSS, True, MANUAL)
+    events += advance(sim, 20)
+    sim.set_fault(GPS, LOSS, False, MANUAL)
+    sim.set_fault(GPS, MUTE, False, MANUAL)
+    events += advance(sim, 25)
+    faults = [
+        (e.type.value, e.event_id, e.payload["mode"])
+        for e in events
+        if e.event_id.startswith("sim-")
+    ]
+    assert faults == [
+        ("FaultInjected", "sim-0001", "mute"),
+        ("FaultInjected", "sim-0002", "loss"),
+        ("FaultCleared", "sim-0003", "loss"),
+        ("FaultCleared", "sim-0004", "mute"),
+    ]
+
+
+def test_only_the_gps_accepts_two_faults_and_not_the_same_mode_twice() -> None:
+    sim = Simulator(scenario_config("nominal"))
+    sim.start()
+    sim.set_fault(GPS, LOSS, True, MANUAL)
+    with pytest.raises(ValueError, match="already has an active fault"):
+        sim.set_fault(GPS, LOSS, True, MANUAL)
+    sim.set_fault(GPS, MUTE, True, MANUAL)
+    with pytest.raises(ValueError, match="already has an active fault"):
+        sim.set_fault(GPS, MUTE, True, MANUAL)
+    sim.set_fault(RADAR, MUTE, True, MANUAL)
+    with pytest.raises(ValueError, match="already has an active fault"):
+        sim.set_fault(RADAR, MUTE, True, MANUAL)
+    with pytest.raises(ValueError, match="has no active"):
+        sim.set_fault(SensorSource.LINK, MUTE, False, MANUAL)
+
+
+def test_a_manual_mute_during_the_scheduled_gps_loss_combines_with_it() -> None:
+    sim = Simulator(scenario_config("faults"))  # loss programado del GPS en [245, 290)
+    sim.start()
+    advance(sim, 250)
+    sim.set_fault(GPS, MUTE, True, MANUAL)
+    assert {(s, f.mode, f.origin) for s, f in sim.active_faults} >= {
+        (GPS, LOSS, FaultOrigin.SCENARIO),
+        (GPS, MUTE, MANUAL),
+    }
+    muted = advance(sim, 270)
+    assert gps_fixes(muted) == []
+    with pytest.raises(ValueError, match="scenario"):
+        sim.set_fault(GPS, LOSS, False, MANUAL)
+    sim.set_fault(GPS, MUTE, False, MANUAL)
+    after = advance(sim, 285)
+    assert set(gps_fixes(after)) == {"none"}  # sigue la pérdida programada
+    done = advance(sim, 295)
+    assert "3d" in gps_fixes(done)
+
+
+def test_a_scheduled_fault_is_skipped_only_if_the_same_mode_is_already_active() -> None:
+    sim = Simulator(scenario_config("faults"))  # radar mute programado en [120, 180)
+    sim.start()
+    advance(sim, 100)
+    sim.set_fault(RADAR, MUTE, True, MANUAL)  # el programado se omite (mismo modo)
+    events = advance(sim, 130)
+    injected = [e.payload["origin"] for e in events if e.type == EventType.FAULT_INJECTED]
+    assert injected == ["manual"]  # solo el manual: el programado no llega a activarse
+    assert [(s, f.origin) for s, f in sim.active_faults] == [(RADAR, MANUAL)]

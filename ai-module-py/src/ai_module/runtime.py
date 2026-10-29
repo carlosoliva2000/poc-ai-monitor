@@ -13,6 +13,7 @@ from poc_contracts.enums import ActivityState, AgentName, ConversationId, EventT
 from poc_contracts.envelope import EventDraft
 
 from .agent.assets import Assets
+from .agent.engine import ToolCallListener, ToolCallRecord
 from .agent.guardrails import EventIndex
 from .agent.llm import LlmClient
 from .agent.tools import PlatformCall
@@ -26,6 +27,14 @@ from .outbox import EventFactory
 log = logging.getLogger(__name__)
 
 Publish = Callable[[EventDraft], Awaitable[None]]
+
+TOOL_CALL_ARGUMENTS_CHARS = 1000
+TOOL_CALL_RESULT_CHARS = 2000
+
+
+def _cut(text: str, limit: int) -> tuple[str, bool]:
+    """Recorta para la web; devuelve también si se recortó."""
+    return (text, False) if len(text) <= limit else (text[:limit], True)
 
 
 class Clock:
@@ -56,6 +65,8 @@ class Runtime:
     index: EventIndex = field(default_factory=EventIndex)
     trace: TraceWriter = field(default_factory=TraceWriter)
     platform_call: PlatformCall = call_platform_tool
+    tool_call_events: bool = True
+    """Publica `AgentToolCall` (solo para la web); se apaga con `--no-tool-call-events`."""
     scenario: str | None = None
     run_id: str | None = None
     last_metrics: dict[str, Any] | None = None
@@ -147,6 +158,57 @@ class Runtime:
         except Exception as exc:
             log.error("cannot publish %s %s: %s", event.type.value, event.event_id, exc)
         return event
+
+    def tool_call_listener(
+        self, agent: AgentName, invocation_id: str, causation: str | None
+    ) -> ToolCallListener | None:
+        """Escucha de las llamadas a tool de una invocación, o `None` si está apagado."""
+        if not self.tool_call_events:
+            return None
+
+        async def listener(record: ToolCallRecord) -> None:
+            await self.tool_call(agent, invocation_id, causation, record)
+
+        return listener
+
+    async def tool_call(
+        self,
+        agent: AgentName,
+        invocation_id: str,
+        causation: str | None,
+        record: ToolCallRecord,
+    ) -> None:
+        """Publica un `AgentToolCall` (recortado). **Solo se publica**: no pasa por `emit`, así
+        que no entra en el estado ni en el índice de eventos del módulo (no puede ser evidencia),
+        y `AiModule.handle_event` lo descarta al recibirlo de vuelta."""
+        arguments, cut_args = _cut(record.arguments, TOOL_CALL_ARGUMENTS_CHARS)
+        result, cut_result = (
+            (None, False)
+            if record.content is None
+            else _cut(record.content, TOOL_CALL_RESULT_CHARS)
+        )
+        payload = {
+            "agent": agent.value,
+            "invocation_id": invocation_id,
+            "index": record.index,
+            "iteration": record.iteration,
+            "tool": record.name,
+            "arguments": arguments,
+            "status": record.status,
+            "result": result,
+            "error": record.error,
+            "truncated": cut_args or cut_result,
+        }
+        try:
+            event = self.factory.make(
+                EventType.AGENT_TOOL_CALL,
+                payload,
+                sim_time=self.clock.now(),
+                causation_id=causation,
+            )
+            await self.publish(event)
+        except Exception as exc:
+            log.error("cannot publish AgentToolCall: %s", exc)
 
     async def activity(
         self, agent: AgentName, state: ActivityState, invocation_id: str, causation: str | None

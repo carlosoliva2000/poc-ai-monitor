@@ -58,6 +58,7 @@ class EventType(StrEnum):
     AGENT_REPLY = "AgentReply"
     AGENT_REPLY_CHUNK = "AgentReplyChunk"
     AGENT_ACTIVITY = "AgentActivity"
+    AGENT_TOOL_CALL = "AgentToolCall"
 
 
 class Rule(StrEnum):
@@ -141,6 +142,15 @@ class AgentName(StrEnum):
 class ActivityState(StrEnum):
     STARTED = "started"
     FINISHED = "finished"
+
+
+class ToolCallStatus(StrEnum):
+    """Resultado de una llamada a tool (`AgentToolCall`)."""
+
+    OK = "ok"
+    ERROR = "error"
+    REJECTED = "rejected"
+    ABORTED = "aborted"
 
 
 class LabelType(StrEnum):

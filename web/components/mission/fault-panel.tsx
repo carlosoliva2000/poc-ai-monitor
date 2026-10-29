@@ -12,12 +12,15 @@ type Props = {
 
 /**
  * Inyectar fallo. Con el modo interactivo apagado los controles están deshabilitados (la
- * plataforma rechazaría el `fault`). `mute` para cualquier fuente; `loss` solo para el GPS.
+ * plataforma rechazaría el `fault`). `mute` para cualquier fuente; `loss` solo para el GPS, que
+ * admite las dos a la vez (receptor muerto); el resto de fuentes, un fallo como máximo.
  */
 export function FaultPanel({ state, onControl }: Props) {
   const enabled = Boolean(state?.interactive) && state?.status !== 'finished' && Boolean(state?.scenario)
   const active = state?.active_faults ?? []
-  const find = (source: SensorSource) => active.find((f) => f.source === source)
+  const find = (source: SensorSource, mode: FaultMode) => active.find((f) => f.source === source && f.mode === mode)
+  const gpsLoss = find('gps', 'loss')
+  const deadReceiver = Boolean(gpsLoss && find('gps', 'mute'))
 
   const set = (source: SensorSource, mode: FaultMode, on: boolean) =>
     onControl({ action: 'fault', value: { source, mode, active: on } })
@@ -29,16 +32,12 @@ export function FaultPanel({ state, onControl }: Props) {
           <ZapOff className="size-4 text-muted-foreground" aria-hidden="true" />
           Inject fault
         </h2>
-        {!enabled && <span className="text-xs text-muted-foreground">Turn on "Interactive mode" (and load a scenario) to inject faults.</span>}
-        <span className="text-[11px] italic text-muted-foreground">the agent does not see these events, only their effects</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         {SOURCES.map((source) => {
-          const fault = find(source)
-          const muted = fault?.mode === 'mute'
-          // El fallo de una fuente es único: si tiene `loss`, no se puede silenciar a la vez.
-          const blocked = Boolean(fault) && !muted
+          const fault = find(source, 'mute')
+          const muted = Boolean(fault)
           return (
             <button
               key={source}
@@ -46,7 +45,7 @@ export function FaultPanel({ state, onControl }: Props) {
               role="switch"
               aria-checked={muted}
               aria-label={`Mute ${SOURCE_LABEL[source]}`}
-              disabled={!enabled || blocked || (muted && fault?.origin === 'scenario')}
+              disabled={!enabled || (muted && fault?.origin === 'scenario')}
               onClick={() => set(source, 'mute', !muted)}
               className={cn(
                 'rounded-md border px-2.5 py-1 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-45',
@@ -61,23 +60,23 @@ export function FaultPanel({ state, onControl }: Props) {
         <button
           type="button"
           role="switch"
-          aria-checked={find('gps')?.mode === 'loss'}
+          aria-checked={Boolean(gpsLoss)}
           aria-label="GPS loss"
-          disabled={!enabled || (Boolean(find('gps')) && find('gps')?.mode !== 'loss') || (find('gps')?.mode === 'loss' && find('gps')?.origin === 'scenario')}
-          onClick={() => set('gps', 'loss', find('gps')?.mode !== 'loss')}
+          disabled={!enabled || gpsLoss?.origin === 'scenario'}
+          onClick={() => set('gps', 'loss', !gpsLoss)}
           className={cn(
             'rounded-md border px-2.5 py-1 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-45',
-            find('gps')?.mode === 'loss' ? 'border-destructive bg-destructive/10 text-destructive' : 'border-border bg-background text-foreground hover:bg-muted',
+            gpsLoss ? 'border-destructive bg-destructive/10 text-destructive' : 'border-border bg-background text-foreground hover:bg-muted',
           )}
         >
-          {find('gps')?.mode === 'loss' ? 'GPS loss in progress' : 'GPS loss'}
+          {gpsLoss ? 'GPS loss in progress' : 'GPS loss'}
         </button>
       </div>
 
       <p className="text-xs text-muted-foreground" data-testid="active-faults">
         {active.length === 0
           ? 'No faults in progress.'
-          : `In progress: ${active.map((f) => `${SOURCE_LABEL[f.source]} · ${f.mode === 'mute' ? 'muted' : 'loss'} (${f.origin === 'manual' ? 'manual' : 'scheduled'})`).join(' · ')}`}
+          : `In progress: ${active.map((f) => `${SOURCE_LABEL[f.source]} · ${f.mode === 'mute' ? 'muted' : 'loss'} (${f.origin === 'manual' ? 'manual' : 'scheduled'})`).join(' · ')}${deadReceiver ? ' — GPS receiver dead: dead reckoning and no output' : ''}`}
       </p>
     </section>
   )

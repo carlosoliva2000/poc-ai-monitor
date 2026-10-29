@@ -131,7 +131,12 @@ class Chat:
 
         await rt.activity(self.agent_name, ActivityState.STARTED, invocation_id, event.event_id)
         try:
-            result = await engine.run(messages, trace, on_delta=chunk)
+            result = await engine.run(
+                messages,
+                trace,
+                on_delta=chunk,
+                on_tool_call=rt.tool_call_listener(self.agent_name, invocation_id, event.event_id),
+            )
             text = result.streamed_text.strip() or result.text.strip()
             if not text:
                 text = f"I could not answer ({result.end_reason}). Try asking the question again."

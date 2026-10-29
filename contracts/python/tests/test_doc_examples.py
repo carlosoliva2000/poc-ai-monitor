@@ -97,6 +97,7 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ),
     ('{ "conversation_id": "monitor", "reply_to": "ops-0004", "text"', payload_of(T.AGENT_REPLY)),
     ('{ "agent"', payload_of(T.AGENT_ACTIVITY)),
+    ('{ "agent": "monitor", "invocation_id": "inv-0007", "index"', payload_of(T.AGENT_TOOL_CALL)),
     ('{"source": "gps", "mode": "loss", "active"', model(FaultControl)),
     ('{"scenarios"', model(ScenariosResponse)),
     ('{"ok": true, "result"', SKIP),  # ilustrativo: `…` no es JSON; `result` depende de cada tool

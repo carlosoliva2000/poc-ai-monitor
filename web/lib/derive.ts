@@ -1,4 +1,5 @@
 import type {
+  AgentToolCall,
   Anomaly,
   AlertClosed,
   Battery,
@@ -208,32 +209,53 @@ export function isDetectionEvent(e: Envelope) {
   return DETECTION_EVENTS.has(e.type)
 }
 
+export type ToolCallEvent = Envelope<AgentToolCall>
+
 export type ChatEntry =
   | { kind: 'operator'; key: string; id: string; t: number; text: string }
-  | { kind: 'agent'; key: string; t: number; text: string; toolCalls: string[]; streaming: boolean }
+  | { kind: 'agent'; key: string; t: number; text: string; toolCalls: string[]; calls: ToolCallEvent[]; streaming: boolean }
+
+/** Llamadas a tool de un agente, por el evento que las provocó (`causation_id`), en orden. */
+export function callsByCause(toolCalls: ToolCallEvent[], agents: AgentToolCall['agent'][]): Map<string, ToolCallEvent[]> {
+  const out = new Map<string, ToolCallEvent[]>()
+  for (const c of toolCalls) {
+    if (!c.causation_id || !agents.includes(c.payload.agent)) continue
+    const list = out.get(c.causation_id) ?? []
+    list.push(c)
+    out.set(c.causation_id, list)
+  }
+  for (const list of out.values()) list.sort((a, b) => a.payload.index - b.payload.index || a.seq - b.seq)
+  return out
+}
 
 /** Mensajes de una conversación: pregunta del operador, respuesta completa o, mientras llega,
- *  los trozos acumulados (`chunks` por `reply_to`). */
-export function chatEntries(events: Envelope[], conversation: 'monitor' | 'report', chunks: Record<string, string>): ChatEntry[] {
+ *  los trozos acumulados (`chunks` por `reply_to`) y las llamadas a tool que lleva hasta ahora. */
+export function chatEntries(
+  events: Envelope[],
+  conversation: 'monitor' | 'report',
+  chunks: Record<string, string>,
+  toolCalls: ToolCallEvent[] = [],
+): ChatEntry[] {
   const out: ChatEntry[] = []
   const replied = new Set<string>()
+  const calls = callsByCause(toolCalls, [conversation === 'monitor' ? 'chat-monitor' : 'chat-report'])
   for (const e of events) {
     if (e.type === 'AgentReply') {
       const p = e.payload as { conversation_id: string; reply_to: string; text: string; tool_calls: string[] }
       if (p.conversation_id === conversation) {
         replied.add(p.reply_to)
-        out.push({ kind: 'agent', key: e.event_id, t: e.sim_time, text: p.text, toolCalls: p.tool_calls, streaming: false })
+        out.push({ kind: 'agent', key: e.event_id, t: e.sim_time, text: p.text, toolCalls: p.tool_calls, calls: calls.get(p.reply_to) ?? [], streaming: false })
       }
     } else if (e.type === 'OperatorMessage') {
       const p = e.payload as { conversation_id: string; text: string }
       if (p.conversation_id === conversation) out.push({ kind: 'operator', key: e.event_id, id: e.event_id, t: e.sim_time, text: p.text })
     }
   }
-  for (const [replyTo, text] of Object.entries(chunks)) {
+  for (const replyTo of new Set([...Object.keys(chunks), ...calls.keys()])) {
     const q = out.find((m) => m.kind === 'operator' && m.id === replyTo)
     if (q && !replied.has(replyTo)) {
       const i = out.indexOf(q)
-      out.splice(i + 1, 0, { kind: 'agent', key: `chunk-${replyTo}`, t: q.t, text, toolCalls: [], streaming: true })
+      out.splice(i + 1, 0, { kind: 'agent', key: `chunk-${replyTo}`, t: q.t, text: chunks[replyTo] ?? '', toolCalls: [], calls: calls.get(replyTo) ?? [], streaming: true })
     }
   }
   return out

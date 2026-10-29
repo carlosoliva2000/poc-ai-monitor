@@ -293,6 +293,7 @@ class Monitor:
                 trace,
                 is_done=lambda: inv.all_answered,
                 reminder=lambda: self._reminder(inv),
+                on_tool_call=rt.tool_call_listener(AgentName.MONITOR, inv.invocation_id, first),
             )
         except Exception as exc:  # el motor ya recoge los errores del LLM; esto es un seguro
             log.exception("engine failed")

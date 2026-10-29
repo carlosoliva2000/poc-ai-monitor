@@ -32,6 +32,7 @@ async def run(
     runs_dir: Path = DEFAULT_RUNS,
     llm_url: str | None = None,
     profile: str | None = None,
+    tool_call_events: bool = True,
 ) -> None:
     chosen = load_profile(profile, DEFAULT_PROFILES) if profile else None
     assets = Assets(assets_dir, chosen)
@@ -45,7 +46,9 @@ async def run(
             detector.set_plan(plan)
 
     async with BusClient(platform_url, on_connected=bootstrap_plan) as bus:
-        rt = Runtime(assets, llm, platform_url, bus.publish, runs_dir)
+        rt = Runtime(
+            assets, llm, platform_url, bus.publish, runs_dir, tool_call_events=tool_call_events
+        )
         module = AiModule(
             rt,
             detector,
@@ -72,6 +75,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--runs", type=Path, default=DEFAULT_RUNS, help="runs/ folder where traces are saved"
     )
+    parser.add_argument(
+        "--no-tool-call-events",
+        action="store_true",
+        help="no publica AgentToolCall (las llamadas a tool que muestra la web para depurar)",
+    )
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
     logging.basicConfig(
@@ -86,6 +94,7 @@ def main(argv: list[str] | None = None) -> None:
                 runs_dir=args.runs,
                 llm_url=args.llm_url,
                 profile=args.profile,
+                tool_call_events=not args.no_tool_call_events,
             )
         )
     log.info("stopped")
