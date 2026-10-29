@@ -23,9 +23,9 @@ import urllib.error
 import urllib.request
 from collections.abc import AsyncIterator, Awaitable, Callable
 from types import TracebackType
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import Field, TypeAdapter, ValidationError
 from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed
 
@@ -36,7 +36,6 @@ from poc_contracts.ws import (
     EventMessage,
     Hello,
     Publish,
-    ServerMessage,
     StateMessage,
     Subscribe,
 )
@@ -56,7 +55,21 @@ DEFAULT_PATTERNS = (
     "citadel.pub.evt.sim.player.SimulationReset.v1",
     "citadel.pub.evt.sim.player.SimulationFinished.v1",
 )
-_SERVER_MESSAGE = TypeAdapter(ServerMessage)
+# Lista blanca: el cliente solo entiende estos mensajes del servidor; cualquier otro `op` se
+# descarta sin validarlo (defensa en profundidad: lo que no se espera no entra en el módulo).
+_EXPECTED_OPS = frozenset({"event", "state", "error"})
+_SERVER_MESSAGE: TypeAdapter[EventMessage | StateMessage | ErrorMessage] = TypeAdapter(
+    Annotated[EventMessage | StateMessage | ErrorMessage, Field(discriminator="op")]
+)
+
+
+def _op_of(raw: str | bytes) -> object:
+    """El `op` del mensaje, o `None` si no es un objeto JSON con `op`."""
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return None
+    return data.get("op") if isinstance(data, dict) else None
 
 
 def default_backoff(attempt: int) -> float:
@@ -193,6 +206,10 @@ class BusClient:
             ws = await self._ensure_connected()
             try:
                 async for raw in ws:
+                    op = _op_of(raw)
+                    if op not in _EXPECTED_OPS:
+                        log.debug("unexpected server message dropped (op=%r)", op)
+                        continue
                     try:
                         message = _SERVER_MESSAGE.validate_json(raw)
                     except ValidationError as exc:

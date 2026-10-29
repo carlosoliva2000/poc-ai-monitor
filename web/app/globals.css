@@ -12,6 +12,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-highlight: var(--highlight);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -54,6 +55,8 @@
   --destructive: oklch(0.57 0.21 25);
   --destructive-foreground: oklch(0.99 0.003 240);
   --warning: oklch(0.68 0.18 48);
+  /* Resalte de detecciones en el mapa: magenta, lejos del naranja del GPS (48°), del verde azulado del radar (195°) y del azul de la ruta (262°). */
+  --highlight: oklch(0.58 0.25 328);
   --border: oklch(0.87 0.015 245);
   --input: oklch(0.87 0.015 245);
   --ring: oklch(0.46 0.17 262);

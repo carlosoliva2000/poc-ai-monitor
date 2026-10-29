@@ -111,6 +111,30 @@ def test_hello_subscribe_receive_and_publish() -> None:
     assert "seq" not in received[2]["event"] and "ingestion_time" not in received[2]["event"]
 
 
+def test_unknown_ops_are_dropped_without_errors() -> None:
+    maker = Maker()
+
+    async def handler(ws: ServerConnection) -> None:
+        await ws.send(json.dumps({"op": "surprise", "x": 1}))
+        await ws.send(json.dumps({"x": 1}))  # sin `op`
+        await ws.send(json.dumps([1, 2]))  # JSON válido, pero no un objeto
+        await ws.send(event_json(maker, 1.0, 7))
+        await ws.wait_closed()
+
+    async def scenario() -> tuple[list[str], int]:
+        async with serve(handler, "127.0.0.1", 0) as server:
+            url = f"http://127.0.0.1:{port_of(server)}"
+            async with BusClient(url) as bus:
+                seen: list[str] = []
+                async for message in bus.messages():
+                    seen.append(message.op)
+                    break
+                return seen, bus.connections
+
+    seen, connections = asyncio.run(scenario())
+    assert seen == ["event"] and connections == 1
+
+
 def test_reconnects_after_the_server_closes_the_connection() -> None:
     connections: list[list[dict]] = []
     maker = Maker()

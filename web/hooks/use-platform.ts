@@ -16,8 +16,8 @@ import {
   type ScenarioInfo,
   type ServerMessage,
   type TruthFile,
-  type TruthMessage,
 } from '@/lib/contracts'
+import { createLive, type Live } from '@/lib/motion'
 
 export type Connection = 'connecting' | 'open' | 'closed'
 export type PlatformError = { id: number; message: string }
@@ -46,7 +46,9 @@ export function usePlatform() {
   const [reportPhase, setReportPhase] = useState<ReportPhase>('none')
   const [scenarios, setScenarios] = useState<ScenarioInfo[]>([])
   const [plan, setPlan] = useState<PlanFile | null>(null)
-  const [liveTruth, setLiveTruth] = useState<TruthMessage | null>(null)
+  // Posiciones en directo para los iconos y la cámara: no pasan por el volcado de 100 ms ni por
+  // el estado de React (las lee el bucle `requestAnimationFrame` del mapa).
+  const [live] = useState<Live>(createLive)
 
   const ws = useRef<WebSocket | null>(null)
   const eventsRef = useRef<Envelope[]>([])
@@ -73,7 +75,11 @@ export function usePlatform() {
   const addEvent = useCallback(
     (event: Envelope, fromBackfill = false) => {
       // Al recuperar el timeline no se vacía nada: ya es el de la ejecución en curso.
-      if (!fromBackfill && (event.type === 'SimulationStarted' || event.type === 'SimulationReset')) clearRun()
+      if (!fromBackfill && (event.type === 'SimulationStarted' || event.type === 'SimulationReset')) {
+        clearRun()
+        live.gps.clear()
+        live.truth.clear()
+      }
       if (event.ephemeral) {
         if (event.type === 'AgentReplyChunk') {
           const p = event.payload as unknown as AgentReplyChunk
@@ -95,6 +101,10 @@ export function usePlatform() {
       if (seen.current.has(event.event_id)) return
       seen.current.add(event.event_id)
       eventsRef.current.push(event)
+      if (!fromBackfill && event.type === 'PositionUpdated') {
+        const p = event.payload as { x: number; y: number; heading_deg: number }
+        live.gps.push({ t: event.sim_time, x: p.x, y: p.y, heading: p.heading_deg })
+      }
       if (event.type === 'AgentReply') {
         const reply = event.payload as { reply_to: string }
         const { [reply.reply_to]: _done, ...rest } = chunksRef.current
@@ -102,7 +112,7 @@ export function usePlatform() {
       }
       dirty.current = true
     },
-    [clearRun],
+    [clearRun, live],
   )
 
   const showError = useCallback((message: string) => {
@@ -156,9 +166,18 @@ export function usePlatform() {
         const data = JSON.parse(msg.data as string) as ServerMessage
         if (data.op === 'event') addEvent(data.event)
         else if (data.op === 'state') {
+          if (stateRef.current && stateRef.current.run_id !== data.run_id) {
+            live.gps.clear()
+            live.truth.clear()
+            live.clock.reset()
+          }
           stateRef.current = data
+          live.speed = data.speed
+          live.clock.sync(data.sim_time, data.speed, data.status === 'running', performance.now())
           setState(data)
-        } else if (data.op === 'truth') setLiveTruth(data)
+        } else if (data.op === 'truth') {
+          if (data.run_id === stateRef.current?.run_id) live.truth.push({ t: data.t, x: data.x, y: data.y, heading: data.heading_deg })
+        }
         else if (data.op === 'error') showError(data.message)
       }
       socket.onclose = () => {
@@ -173,7 +192,7 @@ export function usePlatform() {
       window.clearTimeout(retry)
       ws.current?.close()
     }
-  }, [addEvent, showError])
+  }, [addEvent, showError, live])
 
   // Escenarios disponibles.
   useEffect(() => {
@@ -206,10 +225,10 @@ export function usePlatform() {
   /** Pide o deja de pedir la posición real en directo (mensaje `truth` del WebSocket, fuera del bus). */
   const setTruthFeed = useCallback((active: boolean) => {
     wantTruth.current = active
-    if (!active) setLiveTruth(null)
+    if (!active) live.truth.clear()
     const socket = ws.current
     if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ op: 'truth_feed', active }))
-  }, [])
+  }, [live])
 
   /** Publica un `OperatorMessage`. El id `ops-NNNN` lo calcula la web (máximo visto + 1): con dos
    *  pestañas abiertas pueden repetirse y la plataforma rechazaría el mensaje. */
@@ -243,7 +262,7 @@ export function usePlatform() {
     return true
   }, [showError])
 
-  return { connection, events, state, errors, chunks, activity, toolCalls, reportPhase, scenarios, plan, liveTruth, setTruthFeed, control, sendOperatorMessage }
+  return { connection, events, state, errors, chunks, activity, toolCalls, reportPhase, scenarios, plan, live, setTruthFeed, control, sendOperatorMessage }
 }
 
 /** La verdad de la simulación en curso (`GET /api/truth`). Solo se consulta con la capa activa. */

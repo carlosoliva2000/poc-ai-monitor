@@ -1,8 +1,8 @@
 'use client'
 
 import { LocateFixed, Maximize, Minus, Navigation, Plus } from 'lucide-react'
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import type { ActiveFault, PlanFile, TruthFile, TruthMessage } from '@/lib/contracts'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { ActiveFault, PlanFile, TruthFile } from '@/lib/contracts'
 import type { Derived } from '@/lib/derive'
 import {
   clampZoom,
@@ -24,6 +24,7 @@ import {
   type Camera,
   type Rect,
 } from '@/lib/map-view'
+import { renderTime, type Live } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 import type { Layers } from './layers-panel'
 
@@ -32,9 +33,8 @@ type DroneMapProps = {
   data: Derived
   /** Traza de la verdad (`/api/truth`); solo con la capa «Truth trail». */
   truth: TruthFile | null
-  /** Última posición real en directo (mensaje `truth`); solo con la capa «True position». */
-  liveTruth: TruthMessage | null
-  runId: string | null
+  /** Posiciones en directo (GPS y mensajes `truth`) y reloj de simulación: las lee el bucle de dibujo. */
+  live: Live
   layers: Layers
   faults: ActiveFault[]
   running: boolean
@@ -48,7 +48,8 @@ const GPS_GAP_S = 1.5 // más de 1,5 periodos sin posición del GPS = hueco
 const RADAR_GAP_S = 3
 const ZOOM_STEP = 1.5
 const HINT_MS = 1500
-const TRUE_MOVE_MS = 100 // el icono real se anima como mucho lo que tarda en llegar el siguiente envío
+const HIGHLIGHT = 'var(--highlight)'
+const WORLD_MARGIN_M = 60 // la rejilla se pinta más allá de la vista: la cámara de «seguir» se mueve entre dos renders
 
 /** Tamaño del contenedor, medido con `ResizeObserver`. */
 function useSize(ref: React.RefObject<HTMLDivElement | null>) {
@@ -75,13 +76,24 @@ const points = (pts: { x: number; y: number }[]) => pts.map((p) => `${p.x},${-p.
  * suelo); con su capa activa, otro icono (contorno) marca la **posición real** (rumbo del morro),
  * que llega en directo por el WebSocket.
  *
+ * Movimiento: los iconos y la cámara de «seguir» **no pasan por React**. Un bucle
+ * `requestAnimationFrame` interpola entre las dos últimas posiciones recibidas (`lib/motion.ts`) y
+ * escribe directamente en el DOM (`transform` de los iconos, de la línea que los une y del grupo
+ * del mundo): esos atributos no van en el JSX, así el render de cada 100 ms no los pisa. La
+ * cámara de «seguir» no toca el `viewBox` (lo fija React): desplaza el grupo del mundo la
+ * diferencia entre la posición interpolada y el centro de la última vista.
+ *
+ * Orden de pintado, de abajo arriba: rejilla · resalte (tubo) · verdad · ruta · puntos y estela del
+ * radar · estela y puntos del GPS · waypoints · línea conocido–real · icono real · icono conocido ·
+ * coordenadas y «N ↑».
+ *
  * Vista: la rejilla cubre toda la vista a cualquier zoom y la vista **no se recoloca sola**: la
  * vista base es la ruta planificada; solo «reset view» (ruta + datos) o cargar otro escenario la
  * cambian. Cámara: Ctrl + rueda = zoom hacia el cursor (la rueda sola desplaza la página),
  * arrastrar = paneo, botones + / − / restablecer / centrar y «seguir al dron». Los tamaños crecen
  * con la raíz del zoom, entre un mínimo y un máximo en píxeles (`SIZES`).
  */
-export const DroneMap = memo(function DroneMap({ plan, data, truth, liveTruth, runId, layers, faults, running, speed, simTime }: DroneMapProps) {
+export const DroneMap = memo(function DroneMap({ plan, data, truth, live, layers, faults, running, simTime }: DroneMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const size = useSize(containerRef)
   const [cam, setCam] = useState<Camera>(HOME)
@@ -107,10 +119,10 @@ export const DroneMap = memo(function DroneMap({ plan, data, truth, liveTruth, r
 
   const muted = (s: string) => faults.some((f) => f.source === s && f.mode === 'mute')
   const drone = data.gps[data.gps.length - 1] ?? null
-  const trueDrone = layers.truthDrone && liveTruth && liveTruth.run_id === runId ? liveTruth : null
 
-  // Cámara efectiva: con «seguir», el centro es el icono conocido (no el real).
-  const effective: Camera = follow && drone ? { zoom: cam.zoom, center: { x: drone.x, y: -drone.y } } : cam
+  // Cámara efectiva: con «seguir», el centro es la posición interpolada del icono conocido (no la real).
+  const followPos = follow ? (live.gps.sampleAt(renderTime(live, performance.now())) ?? (drone ? { x: drone.x, y: drone.y } : null)) : null
+  const effective: Camera = followPos ? { zoom: cam.zoom, center: { x: followPos.x, y: -followPos.y } } : cam
   const view = visibleRect(base, effective, size.w, size.h)
   const ppu = size.w > 0 && size.h > 0 ? fitScale(base, size.w, size.h) * effective.zoom : 0 // px por unidad SVG (= m)
   const px = (v: number) => (ppu > 0 ? v / ppu : v) // píxeles de pantalla → unidades SVG
@@ -120,13 +132,83 @@ export const DroneMap = memo(function DroneMap({ plan, data, truth, liveTruth, r
   const gpsW = scaledPx(SIZES.gpsTrail, zoom)
   const lineW = scaledPx(SIZES.line, zoom)
   const highlightW = scaledPx(SIZES.highlight, zoom)
+  const haloPx = 3 // borde del resalte, en px
   const step = gridStep(Math.max(view.w, view.h))
   const viewBox = `${view.x} ${view.y} ${view.w} ${view.h}`
   const bar = scaleBar(ppu)
 
-  // El último estado, para los manejadores nativos (rueda y arrastre).
+  // El último estado, para los manejadores nativos (rueda y arrastre) y el bucle de dibujo.
   const latest = useRef({ limit, view, effective, ppu, follow })
   latest.current = { limit, view, effective, ppu, follow }
+  // Lo que lee el bucle de dibujo: solo lo ya **confirmado** en el DOM (se asigna en el `useLayoutEffect`).
+  // Si leyera `view` del render, un fotograma entre el render y el commit mezclaría la vista nueva con el
+  // `viewBox` viejo y la cámara daría un salto.
+  const committed = useRef({ view, follow, drone, u, showTrue: layers.truthDrone, showKnown: layers.drone })
+
+  // Elementos que escribe el bucle de dibujo (sin atributos equivalentes en el JSX).
+  const worldRef = useRef<SVGGElement>(null)
+  const xLabelsRef = useRef<SVGGElement>(null)
+  const yLabelsRef = useRef<SVGGElement>(null)
+  const northRef = useRef<SVGGElement>(null)
+  const knownRef = useRef<SVGGElement>(null)
+  const knownRotRef = useRef<SVGGElement>(null)
+  const trueRef = useRef<SVGGElement>(null)
+  const trueRotRef = useRef<SVGGElement>(null)
+  const linkRef = useRef<SVGLineElement>(null)
+
+  /** Un fotograma: posiciones interpoladas de los dos iconos (mismo instante) y desplazamiento de la cámara. */
+  const paint = useRef(() => {})
+  paint.current = () => {
+    const { view, follow, drone, u, showTrue, showKnown } = committed.current
+    const t = renderTime(live, performance.now())
+    const known = live.gps.sampleAt(t) ?? (drone ? { x: drone.x, y: drone.y, heading: drone.heading } : null)
+    const real = showTrue ? live.truth.sampleAt(t) : null
+    if (knownRef.current && known) {
+      knownRef.current.setAttribute('transform', `translate(${known.x} ${-known.y})`)
+      knownRotRef.current?.setAttribute('transform', `rotate(${known.heading})`)
+    }
+    if (trueRef.current) {
+      trueRef.current.setAttribute('visibility', real ? 'visible' : 'hidden')
+      if (real) {
+        trueRef.current.setAttribute('transform', `translate(${real.x} ${-real.y})`)
+        trueRotRef.current?.setAttribute('transform', `rotate(${real.heading})`)
+      }
+    }
+    if (linkRef.current) {
+      const apart = known && real && showKnown && Math.hypot(known.x - real.x, known.y - real.y) > u * 2
+      linkRef.current.setAttribute('visibility', apart ? 'visible' : 'hidden')
+      if (apart && known && real) {
+        linkRef.current.setAttribute('x1', String(known.x))
+        linkRef.current.setAttribute('y1', String(-known.y))
+        linkRef.current.setAttribute('x2', String(real.x))
+        linkRef.current.setAttribute('y2', String(-real.y))
+      }
+    }
+    // Cámara de «seguir»: el viewBox es el del último render; el mundo se desplaza lo que ha avanzado el dron.
+    const dx = follow && known ? known.x - (view.x + view.w / 2) : 0
+    const dy = follow && known ? -known.y - (view.y + view.h / 2) : 0
+    worldRef.current?.setAttribute('transform', `translate(${-dx} ${-dy})`)
+    // Los rótulos pegados al borde de la pantalla compensan ese desplazamiento.
+    xLabelsRef.current?.setAttribute('transform', `translate(0 ${dy})`)
+    yLabelsRef.current?.setAttribute('transform', `translate(${dx} 0)`)
+    northRef.current?.setAttribute('transform', `translate(${dx} ${dy})`)
+  }
+  // Tras cada render, antes de pintar en pantalla: lo que se acaba de montar queda ya en su sitio.
+  const commits = useRef(0)
+  useLayoutEffect(() => {
+    committed.current = { view, follow, drone, u, showTrue: layers.truthDrone, showKnown: layers.drone }
+    paint.current()
+    if (containerRef.current) containerRef.current.dataset.commit = String(++commits.current)
+  })
+  useEffect(() => {
+    let id = 0
+    const loop = () => {
+      paint.current()
+      id = requestAnimationFrame(loop)
+    }
+    id = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(id)
+  }, [])
 
   useEffect(() => {
     const el = containerRef.current
@@ -190,13 +272,18 @@ export const DroneMap = memo(function DroneMap({ plan, data, truth, liveTruth, r
     setFollow(false)
   }
 
-  // Rejilla «infinita»: líneas en toda la vista (x del mundo = x del SVG; y del mundo = -y del SVG).
+  // Rejilla «infinita»: líneas en toda la vista y un margen (x del mundo = x del SVG; y del mundo = -y del SVG).
   const grid = useMemo(() => {
+    const m = WORLD_MARGIN_M + Math.max(view.w, view.h)
+    const x0 = view.x - m
+    const x1 = view.x + view.w + m
+    const y0 = view.y - m
+    const y1 = view.y + view.h + m
     const xs: number[] = []
     const ys: number[] = []
-    for (let x = Math.ceil(view.x / step) * step; x <= view.x + view.w; x += step) xs.push(x)
-    for (let y = Math.ceil(-(view.y + view.h) / step) * step; y <= -view.y; y += step) ys.push(y)
-    return { xs, ys }
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step) xs.push(x)
+    for (let y = Math.ceil(-y1 / step) * step; y <= -y0; y += step) ys.push(y)
+    return { xs, ys, x0, x1, y0, y1 }
   }, [step, view.x, view.y, view.w, view.h])
 
   const planned = plan?.waypoints.map((w) => `${w.x},${-w.y}`).join(' ') ?? ''
@@ -205,7 +292,6 @@ export const DroneMap = memo(function DroneMap({ plan, data, truth, liveTruth, r
   const truthLine = useMemo(() => (truth ? points(truth.trajectory) : ''), [truth])
   const since = data.openDetections.length ? Math.min(...data.openDetections.map((d) => d.since)) : null
   const highlight = useMemo(() => (since === null ? '' : points(data.gps.filter((p) => p.t >= since))), [data.gps, since])
-  const transitionMs = Math.max(60, Math.round(1000 / speed))
 
   // Los puntos pintados se limitan para no saturar el SVG a 16×.
   const gpsDots = useMemo(() => data.gps.slice(-1500), [data.gps])
@@ -220,7 +306,6 @@ export const DroneMap = memo(function DroneMap({ plan, data, truth, liveTruth, r
   const age = drone ? fixAge(simTime, drone.t) : 0
   const dim = muted('gps')
   const hollow = drone?.fix === 'none'
-  const showLink = !!(drone && layers.drone && trueDrone && Math.hypot(drone.x - trueDrone.x, drone.y - trueDrone.y) > u * 2)
 
   return (
     <div
@@ -242,160 +327,171 @@ export const DroneMap = memo(function DroneMap({ plan, data, truth, liveTruth, r
         role="img"
         aria-label={drone ? `x,y map (y towards the north). Drone at x ${drone.x.toFixed(0)}, y ${drone.y.toFixed(0)}.` : 'x,y map with the planned route.'}
       >
-        <g className="stroke-grid" data-testid="grid" data-step={step}>
-          {grid.xs.map((x) => (
-            <line key={`gx${x}`} x1={x} y1={view.y} x2={x} y2={view.y + view.h} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          ))}
-          {grid.ys.map((y) => (
-            <line key={`gy${y}`} x1={view.x} y1={-y} x2={view.x + view.w} y2={-y} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          ))}
-        </g>
-        <g className="fill-muted-foreground font-mono" fontSize={px(10)}>
-          {layers.coordinates && (
-            <g data-testid="coordinates">
-              {grid.xs
-                .filter((x) => x > view.x + edge && x < view.x + view.w - edge)
-                .map((x) => (
-                  <text key={`lx${x}`} x={x} y={view.y + view.h - px(5)} textAnchor="middle" {...halo}>
-                    {x}
-                  </text>
-                ))}
-              {grid.ys
-                .filter((y) => -y > view.y + edge && -y < view.y + view.h - edge)
-                .map((y) => (
-                  <text key={`ly${y}`} x={view.x + px(5)} y={-y + px(3.5)} textAnchor="start" {...halo}>
-                    {y}
-                  </text>
-                ))}
-            </g>
-          )}
-          <text x={view.x + px(8)} y={view.y + px(16)} fontSize={px(11)} {...halo}>
-            N ↑
-          </text>
-        </g>
-
-        {layers.truth && truth && truth.trajectory.length > 1 && (
-          <polyline points={truthLine} fill="none" className="stroke-foreground/70" strokeWidth={lineW} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-        )}
-
-        {layers.plan && plan && (
-          <polyline points={planned} fill="none" className="stroke-primary" strokeWidth={lineW} strokeDasharray="7 5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-        )}
-
-        {layers.radarPoints && (
-          <g style={{ opacity: muted('radar') ? 0.25 : 1 }} fill={RADAR}>
-            {radarDots.map((p, i) => (
-              <circle key={i} cx={p.x} cy={-p.y} r={u * 0.45} opacity={0.75} />
+        <g ref={worldRef}>
+          {/* 1 · Rejilla: la referencia más tenue; todo va encima. */}
+          <g className="stroke-grid" data-testid="grid" data-step={step}>
+            {grid.xs.map((x) => (
+              <line key={`gx${x}`} x1={x} y1={grid.y0} x2={x} y2={grid.y1} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            ))}
+            {grid.ys.map((y) => (
+              <line key={`gy${y}`} x1={grid.x0} y1={-y} x2={grid.x1} y2={-y} strokeWidth={1} vectorEffect="non-scaling-stroke" />
             ))}
           </g>
-        )}
 
-        {layers.radarTrail && (
-          <g style={{ opacity: muted('radar') ? 0.3 : 1 }} data-testid="radar-trail">
-            {radarSegments.map((s, i) =>
-              s.points.length > 1 ? (
-                <polyline key={i} points={points(s.points)} fill="none" stroke={RADAR} strokeWidth={lineW} strokeOpacity={0.85} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
-              ) : null,
-            )}
-          </g>
-        )}
+          {/* 2 · Resalte de la detección («tubo»): marca una zona, no es un dato; va bajo todos los datos para no
+              taparlos y su borde sobresale por los lados de las estelas. Borde opaco, interior con el fondo del
+              mapa (para que el borde no se vea a través del relleno) y relleno translúcido. */}
+          {layers.highlight && highlight && (
+            <g data-testid="highlight" fill="none" strokeLinejoin="round" strokeLinecap="round">
+              <polyline points={highlight} stroke={HIGHLIGHT} strokeWidth={highlightW + haloPx} vectorEffect="non-scaling-stroke" />
+              <polyline points={highlight} stroke="var(--card)" strokeWidth={highlightW} vectorEffect="non-scaling-stroke" />
+              <polyline points={highlight} stroke={HIGHLIGHT} strokeOpacity={0.22} strokeWidth={highlightW} vectorEffect="non-scaling-stroke" />
+            </g>
+          )}
 
-        {layers.gpsTrail && (
-          <g style={{ opacity: muted('gps') ? 0.3 : 1 }} data-testid="gps-trail">
-            {gpsSegments.map((s, i) =>
-              s.points.length > 1 ? (
-                <polyline
-                  key={i}
-                  points={points(s.points)}
-                  fill="none"
-                  className="stroke-accent"
-                  strokeWidth={gpsW}
-                  strokeDasharray={s.key === 'none' ? '3 5' : undefined}
-                  vectorEffect="non-scaling-stroke"
-                  strokeLinejoin="round"
-                  strokeLinecap={s.key === 'none' ? 'butt' : 'round'}
-                />
-              ) : null,
-            )}
-          </g>
-        )}
+          {/* 3 · Verdad: referencia de la demo, bajo los datos medidos. */}
+          {layers.truth && truth && truth.trajectory.length > 1 && (
+            <polyline points={truthLine} fill="none" className="stroke-foreground/70" strokeWidth={lineW} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+          )}
 
-        {layers.highlight && highlight && (
-          <polyline points={highlight} fill="none" className="stroke-destructive" strokeOpacity={0.5} strokeWidth={highlightW} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
-        )}
+          {/* 4 · Ruta planificada: referencia discontinua, bajo las estelas que se comparan con ella. */}
+          {layers.plan && plan && (
+            <polyline points={planned} fill="none" className="stroke-primary" strokeWidth={lineW} strokeDasharray="7 5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+          )}
 
-        {layers.gpsPoints && (
-          <g style={{ opacity: muted('gps') ? 0.25 : 1 }}>
-            {gpsDots.map((p, i) =>
-              p.fix === 'none' ? (
-                <circle key={i} cx={p.x} cy={-p.y} r={u * 0.5} fill="none" className="stroke-accent" strokeWidth={1.25} vectorEffect="non-scaling-stroke" />
-              ) : (
-                <circle key={i} cx={p.x} cy={-p.y} r={u * 0.4} className="fill-accent" />
-              ),
-            )}
-          </g>
-        )}
+          {/* 5 · Puntos del radar y 6 · su estela: fuente secundaria, bajo el GPS. */}
+          {layers.radarPoints && (
+            <g style={{ opacity: muted('radar') ? 0.25 : 1 }} fill={RADAR}>
+              {radarDots.map((p, i) => (
+                <circle key={i} cx={p.x} cy={-p.y} r={u * 0.45} opacity={0.75} />
+              ))}
+            </g>
+          )}
+          {layers.radarTrail && (
+            <g style={{ opacity: muted('radar') ? 0.3 : 1 }} data-testid="radar-trail">
+              {radarSegments.map((s, i) =>
+                s.points.length > 1 ? (
+                  <polyline key={i} points={points(s.points)} fill="none" stroke={RADAR} strokeWidth={lineW} strokeOpacity={0.85} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+                ) : null,
+              )}
+            </g>
+          )}
 
-        {layers.waypoints &&
-          plan?.waypoints.map((w, i) => {
-            if (i === plan.waypoints.length - 1) return null // la vuelta a la base
-            const isBase = w.id === 'BASE'
-            const reached = data.reached.has(w.id)
-            return (
-              <g key={`${w.id}${i}`} transform={`translate(${w.x} ${-w.y})`}>
-                {isBase ? (
-                  <circle r={u * 1.4} className="fill-card stroke-primary" strokeWidth={lineW + 0.5} vectorEffect="non-scaling-stroke" />
+          {/* 7 · Estela del GPS (la fuente principal, sobre el radar) y 8 · sus puntos, sobre su propia estela. */}
+          {layers.gpsTrail && (
+            <g style={{ opacity: muted('gps') ? 0.3 : 1 }} data-testid="gps-trail">
+              {gpsSegments.map((s, i) =>
+                s.points.length > 1 ? (
+                  <polyline
+                    key={i}
+                    points={points(s.points)}
+                    fill="none"
+                    className="stroke-accent"
+                    strokeWidth={gpsW}
+                    strokeDasharray={s.key === 'none' ? '3 5' : undefined}
+                    vectorEffect="non-scaling-stroke"
+                    strokeLinejoin="round"
+                    strokeLinecap={s.key === 'none' ? 'butt' : 'round'}
+                  />
+                ) : null,
+              )}
+            </g>
+          )}
+          {layers.gpsPoints && (
+            <g style={{ opacity: muted('gps') ? 0.25 : 1 }}>
+              {gpsDots.map((p, i) =>
+                p.fix === 'none' ? (
+                  <circle key={i} cx={p.x} cy={-p.y} r={u * 0.5} fill="none" className="stroke-accent" strokeWidth={1.25} vectorEffect="non-scaling-stroke" />
                 ) : (
-                  <rect x={-u} y={-u} width={u * 2} height={u * 2} transform="rotate(45)" className={reached ? 'fill-primary stroke-primary' : 'fill-card stroke-primary'} strokeWidth={lineW + 0.5} vectorEffect="non-scaling-stroke" />
-                )}
-                <text x={u * 1.8} y={-u * 1.6} fontSize={labelSize} className="fill-foreground font-mono font-medium" {...halo}>
-                  {w.id}
-                </text>
+                  <circle key={i} cx={p.x} cy={-p.y} r={u * 0.4} className="fill-accent" />
+                ),
+              )}
+            </g>
+          )}
+
+          {/* 9 · Waypoints y sus letreros: sobre las estelas para que los ids sigan legibles. */}
+          {layers.waypoints &&
+            plan?.waypoints.map((w, i) => {
+              if (i === plan.waypoints.length - 1) return null // la vuelta a la base
+              const isBase = w.id === 'BASE'
+              const reached = data.reached.has(w.id)
+              return (
+                <g key={`${w.id}${i}`} transform={`translate(${w.x} ${-w.y})`}>
+                  {isBase ? (
+                    <circle r={u * 1.4} className="fill-card stroke-primary" strokeWidth={lineW + 0.5} vectorEffect="non-scaling-stroke" />
+                  ) : (
+                    <rect x={-u} y={-u} width={u * 2} height={u * 2} transform="rotate(45)" className={reached ? 'fill-primary stroke-primary' : 'fill-card stroke-primary'} strokeWidth={lineW + 0.5} vectorEffect="non-scaling-stroke" />
+                  )}
+                  <text x={u * 1.8} y={-u * 1.6} fontSize={labelSize} className="fill-foreground font-mono font-medium" {...halo}>
+                    {w.id}
+                  </text>
+                </g>
+              )
+            })}
+
+          {/* 10 · Línea conocido–real: por debajo de los dos iconos que une. Su geometría la escribe el bucle de dibujo. */}
+          {layers.drone && layers.truthDrone && (
+            <line ref={linkRef} visibility="hidden" className="stroke-foreground/50" strokeWidth={1.25} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" data-testid="drone-link" />
+          )}
+
+          {/* 11 · Icono real (contorno discontinuo): bajo el conocido. Posición y rumbo, del bucle de dibujo. */}
+          {layers.truthDrone && (
+            <g ref={trueRef} visibility="hidden" data-testid="true-drone">
+              <title>True position · nose heading</title>
+              <g ref={trueRotRef}>
+                <polygon points={`0,${-u * 1.9} ${u * 1.3},${u * 1.4} 0,${u * 0.7} ${-u * 1.3},${u * 1.4}`} className="fill-card/40 stroke-foreground" strokeWidth={lineW + 0.5} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
               </g>
-            )
-          })}
-
-        {showLink && trueDrone && drone && (
-          <line x1={drone.x} y1={-drone.y} x2={trueDrone.x} y2={-trueDrone.y} className="stroke-foreground/50" strokeWidth={1.25} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" data-testid="drone-link" />
-        )}
-
-        {trueDrone && (
-          <g
-            data-testid="true-drone"
-            style={{
-              transform: `translate(${trueDrone.x}px, ${-trueDrone.y}px)`,
-              transition: running && !follow ? `transform ${TRUE_MOVE_MS}ms linear` : 'none',
-            }}
-          >
-            <title>True position · nose heading</title>
-            <g transform={`rotate(${trueDrone.heading_deg})`}>
-              <polygon points={`0,${-u * 1.9} ${u * 1.3},${u * 1.4} 0,${u * 0.7} ${-u * 1.3},${u * 1.4}`} className="fill-card/40 stroke-foreground" strokeWidth={lineW + 0.5} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
             </g>
-          </g>
-        )}
+          )}
 
-        {drone && layers.drone && (
-          <g
-            data-testid="known-drone"
-            style={{
-              transform: `translate(${drone.x}px, ${-drone.y}px)`,
-              transition: running && !follow ? `transform ${transitionMs}ms linear` : 'none',
-              opacity: dim ? 0.4 : 1,
-            }}
-          >
-            <title>Known position · GPS course over ground</title>
-            {layers.highlight && data.openDetections.length > 0 && <circle r={u * 3.2} fill="none" className="stroke-destructive" strokeWidth={lineW + 0.5} vectorEffect="non-scaling-stroke" />}
-            <circle r={u * 2.4} className={running ? 'animate-pulse fill-accent/15' : 'fill-accent/15'} />
-            <g transform={`rotate(${drone.heading})`}>
-              <polygon points={`0,${-u * 1.9} ${u * 1.3},${u * 1.4} 0,${u * 0.7} ${-u * 1.3},${u * 1.4}`} className={hollow ? 'fill-card stroke-accent' : 'fill-accent stroke-card'} strokeWidth={lineW + 0.5} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+          {/* 12 · Icono conocido, con el anillo del resalte y «last fix…»: el protagonista, arriba de los datos. */}
+          {drone && layers.drone && (
+            <g ref={knownRef} data-testid="known-drone" opacity={dim ? 0.4 : 1}>
+              <title>Known position · GPS course over ground</title>
+              {layers.highlight && data.openDetections.length > 0 && <circle r={u * 3.2} fill="none" stroke={HIGHLIGHT} strokeWidth={lineW + 1} vectorEffect="non-scaling-stroke" />}
+              <circle r={u * 2.4} className={running ? 'animate-pulse fill-accent/15' : 'fill-accent/15'} />
+              <g ref={knownRotRef}>
+                <polygon points={`0,${-u * 1.9} ${u * 1.3},${u * 1.4} 0,${u * 0.7} ${-u * 1.3},${u * 1.4}`} className={hollow ? 'fill-card stroke-accent' : 'fill-accent stroke-card'} strokeWidth={lineW + 0.5} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+              </g>
+              {dim && (
+                <text y={u * 4.6} fontSize={labelSize} textAnchor="middle" className="fill-foreground font-mono" data-testid="fix-age" {...halo}>
+                  last fix {age} s ago
+                </text>
+              )}
             </g>
-            {dim && (
-              <text y={u * 4.6} fontSize={labelSize} textAnchor="middle" className="fill-foreground font-mono" data-testid="fix-age" {...halo}>
-                last fix {age} s ago
-              </text>
+          )}
+
+          {/* 13 · Coordenadas y «N ↑»: texto con halo pegado al borde de la pantalla, encima de todo. */}
+          <g className="fill-muted-foreground font-mono" fontSize={px(10)}>
+            {layers.coordinates && (
+              <g data-testid="coordinates">
+                <g ref={xLabelsRef}>
+                  {grid.xs
+                    .filter((x) => x > view.x + edge && x < view.x + view.w - edge)
+                    .map((x) => (
+                      <text key={`lx${x}`} x={x} y={view.y + view.h - px(5)} textAnchor="middle" {...halo}>
+                        {x}
+                      </text>
+                    ))}
+                </g>
+                <g ref={yLabelsRef}>
+                  {grid.ys
+                    .filter((y) => -y > view.y + edge && -y < view.y + view.h - edge)
+                    .map((y) => (
+                      <text key={`ly${y}`} x={view.x + px(5)} y={-y + px(3.5)} textAnchor="start" {...halo}>
+                        {y}
+                      </text>
+                    ))}
+                </g>
+              </g>
             )}
+            <g ref={northRef}>
+              <text x={view.x + px(8)} y={view.y + px(16)} fontSize={px(11)} {...halo}>
+                N ↑
+              </text>
+            </g>
           </g>
-        )}
+        </g>
       </svg>
 
       {hint && (

@@ -13,6 +13,11 @@
 //                                              timeline al fondo, filtros, columnas redimensionadas
 //   node scripts/capture.mjs truthlag <carpeta> demo a 16× (y 4×): distancia en pantalla entre el icono conocido y el real
 //   node scripts/capture.mjs compare <carpeta9_1> <carpeta9> <salida>  junta capturas de las dos fases lado a lado
+//   node scripts/capture.mjs smooth <carpeta>  suavidad de «seguir al dron» por fotograma (wind, ×8 y ×20, 1×/4×/16×): smooth.json
+//   node scripts/capture.mjs telemetry <carpeta> la barra de telemetría de 1024 (inicio de lg) a 1920 px: capturas y comprobación de que no se corta nada
+//   node scripts/capture.mjs highlight <carpeta> [escenario…] resalte de detecciones con distintas capas y a ×0,5, ×1 y ×4 (módulo de IA en marcha)
+//   node scripts/capture.mjs followcheck <carpeta> «seguir» con pausa, reanudar, GPS callado, recuperación, reinicio y cambio de escenario: followcheck.json
+//   node scripts/capture.mjs fase9_2 <carpeta> <escenario> <velocidad> prueba completa con «esperar al agente» (módulo de IA y vLLM): resalte, telemetría, «seguir», fin
 //   node scripts/capture.mjs chattools <carpeta> chat del monitor con tools (módulo con el perfil qwen3-14b-t0-chat-tools)
 // Requiere plataforma (8100), módulo de IA y web (3000) en marcha. Una sola pestaña: los ids
 // `ops-` los calcula la web y con dos pestañas podrían repetirse.
@@ -62,7 +67,8 @@ async function setup(scenario, { waitAgent, interactive, speed, resetCheck = fal
   if (resetCheck) note(`tras cargar, modo interactivo = ${await page.getByRole('switch', { name: 'Interactive mode' }).getAttribute('aria-checked')}`)
   await page.getByRole('button', { name: `${speed}×`, exact: true }).click()
   const wa = page.getByRole('switch', { name: 'Wait for the agent' })
-  if (waitAgent && (await wa.getAttribute('aria-checked')) !== 'true') await wa.click()
+  // «esperar al agente» se conserva entre cargas: se fija al valor pedido, encendido o apagado
+  if ((await wa.getAttribute('aria-checked')) !== String(waitAgent)) await wa.click()
   const it = page.getByRole('switch', { name: 'Interactive mode' })
   // el modo interactivo se conserva entre cargas: se fija al valor pedido, encendido o apagado
   if ((await it.getAttribute('aria-checked')) !== String(interactive)) await it.click()
@@ -782,6 +788,309 @@ async function runCompare() {
   }
 }
 
+/** Suavidad de «seguir al dron»: por fotograma (requestAnimationFrame), cuánto se mueve en pantalla el icono
+ *  conocido (mundo → px con el zoom de ese fotograma) y el centro de la cámara. `wind` con «seguir» activado,
+ *  a ×8 y ×20 y a 1×, 4× y 16×. Salida: smooth.json. Uso: node scripts/capture.mjs smooth <carpeta> */
+async function runSmooth() {
+  const report = {}
+  const only = process.env.SMOOTH_ONLY?.split(':').map(Number) // «zoom:velocidad»: una sola combinación
+  for (const zoom of only ? [only[0]] : [8, 20]) {
+    for (const speed of only ? [only[1]] : [1, 4, 16]) {
+      await setup('wind', { waitAgent: false, interactive: false, speed })
+      const zin = page.getByRole('button', { name: 'Zoom in' })
+      const mapZoom = async () => Number(await page.locator('[data-testid=drone-map]').getAttribute('data-zoom'))
+      await page.getByRole('button', { name: 'Start', exact: true }).click()
+      await sleep(1500) // hay una primera posición del GPS
+      await page.getByRole('button', { name: 'Follow the drone' }).click()
+      for (let i = 0; i < 12 && (await mapZoom()) < zoom * 0.9; i++) await zin.click()
+      const wallMs = 10000
+      // Independiente de cómo se mueva la cámara (viewBox o transform): se mide en pantalla la base (fija en el
+      // mundo) y el icono conocido. Cámara = -Δ(base); movimiento del icono respecto al mapa = Δ(icono) - Δ(base).
+      const frames = await page.evaluate(async (ms) => {
+        const map = document.querySelector('[data-testid=drone-map]')
+        const out = []
+        const t0 = performance.now()
+        await new Promise((resolve) => {
+          const tick = (now) => {
+            const centre = (el) => {
+              const r = el?.getBoundingClientRect()
+              return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null
+            }
+            const base = centre(map.querySelector('svg circle.stroke-primary'))
+            const icon = centre(map.querySelector('[data-testid=known-drone]'))
+            out.push({ t: now, base, icon, commit: map.dataset.commit ?? null })
+            if (now - t0 < ms) requestAnimationFrame(tick)
+            else resolve()
+          }
+          requestAnimationFrame(tick)
+        })
+        return out
+      }, wallMs)
+      const steps = (which) => {
+        const v = []
+        for (let i = 1; i < frames.length; i++) {
+          const a = frames[i - 1], b = frames[i]
+          if (!a.base || !b.base || !a.icon || !b.icon) continue
+          const dbx = b.base.x - a.base.x, dby = b.base.y - a.base.y
+          const d = which === 'camera' ? Math.hypot(dbx, dby) : Math.hypot(b.icon.x - a.icon.x - dbx, b.icon.y - a.icon.y - dby)
+          v.push({ d, dn: (d / (b.t - a.t)) * (1000 / 60), commit: a.commit !== b.commit, dt: b.t - a.t })
+        }
+        return v
+      }
+      const stats = (v) => {
+        if (!v.length) return null
+        const d = v.map((x) => x.d).sort((a, b) => a - b)
+        const q = (p) => d[Math.min(d.length - 1, Math.floor(d.length * p))]
+        const mean = d.reduce((s, x) => s + x, 0) / d.length
+        const sd = Math.sqrt(d.reduce((s, x) => s + (x - mean) ** 2, 0) / d.length)
+        const dn = v.map((x) => x.dn).sort((x, y) => x - y)
+        const mdn = dn.reduce((t, x) => t + x, 0) / dn.length
+        const sdn = Math.sqrt(dn.reduce((t, x) => t + (x - mdn) ** 2, 0) / dn.length)
+        const dts = v.map((x) => x.dt).sort((x, y) => x - y)
+        const c = v.filter((x) => x.commit).map((x) => x.d)
+        const n = v.filter((x) => !x.commit).map((x) => x.d)
+        const avg = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null)
+        return {
+          frames: v.length, mean_px: mean, median_px: q(0.5), p95_px: q(0.95), max_px: d[d.length - 1],
+          still_pct: (100 * d.filter((x) => x < 0.05).length) / d.length, cv: mean > 0 ? sd / mean : null,
+          p95_px_per_60fps: dn[Math.min(dn.length - 1, Math.floor(dn.length * 0.95))], max_px_per_60fps: dn[dn.length - 1], cv_per_60fps: mdn > 0 ? sdn / mdn : null, frame_ms_p95: dts[Math.floor(dts.length * 0.95)], commit_frames: c.length, mean_px_commit_frames: avg(c), mean_px_other_frames: avg(n),
+        }
+      }
+      const key = `zoom_x${zoom}_speed_${speed}x`
+      if (process.env.SMOOTH_DUMP) writeFileSync(`${out}/frames_${key}.json`, JSON.stringify(frames))
+      report[key] = { zoom_real: await mapZoom(), fps: (frames.length / wallMs) * 1000, icon: stats(steps('icon')), camera: stats(steps('camera')) }
+      note(`${key}: ${JSON.stringify(report[key])}`)
+      await shot(`smooth_${key}`)
+      await page.getByRole('button', { name: 'Pause' }).click().catch(() => {})
+    }
+  }
+  writeFileSync(`${out}/smooth.json`, JSON.stringify(report, null, 2))
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
+/** Telemetría a varios anchos (1280×800 … 1920×1080): captura y comprobación por el DOM de que ningún valor se corta
+ *  (`scrollWidth <= clientWidth`) y de cuántas filas ocupa la barra. Salida: telemetry.json. */
+async function runTelemetry() {
+  await setup('wind', { waitAgent: false, interactive: false, speed: 4 })
+  await page.getByRole('button', { name: 'Start', exact: true }).click()
+  while ((await simTime()) < 40) await sleep(300)
+  await page.getByRole('button', { name: 'Pause' }).click().catch(() => {})
+  const report = {}
+  for (const [w, h] of [[1024, 768], [1280, 800], [1366, 768], [1440, 900], [1536, 960], [1920, 1080]]) {
+    await page.setViewportSize({ width: w, height: h })
+    await sleep(500)
+    report[`${w}x${h}`] = await page.evaluate(() => {
+      const dl = [...document.querySelectorAll('dl')].find((d) => d.textContent?.includes('ROUTE DEV.'))
+      const cells = [...dl.children].map((c) => {
+        const dd = c.querySelector('dd')
+        const dt = c.querySelector('dt')
+        return { label: dt.textContent, value: dd.textContent, cut: dd.scrollWidth > dd.clientWidth || dt.scrollWidth > dt.clientWidth || c.scrollWidth > c.clientWidth, top: Math.round(c.getBoundingClientRect().top), width: Math.round(c.getBoundingClientRect().width), title: c.getAttribute('title') }
+      })
+      const rows = new Set(cells.map((c) => c.top)).size
+      return { viewport_css_px: window.innerWidth, strip_width: Math.round(dl.getBoundingClientRect().width), rows, any_cut: cells.some((c) => c.cut), cells }
+    })
+    note(`${w}×${h}: filas=${report[`${w}x${h}`].rows}, algo cortado=${report[`${w}x${h}`].any_cut}`)
+    await page.locator('dl', { hasText: 'ROUTE DEV.' }).scrollIntoViewIfNeeded()
+    await shot(`telemetry_${w}x${h}`)
+  }
+  writeFileSync(`${out}/telemetry.json`, JSON.stringify(report, null, 2))
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
+/** Resalte de detecciones con capas distintas y a ×0,5, ×1 y ×4: solo estela del GPS, solo puntos del GPS, solo estela del
+ *  radar y todas. Hace falta el módulo de IA (basta `--detector-only`). Uso: node scripts/capture.mjs highlight <carpeta> [escenario…] */
+async function runHighlight() {
+  const scenarios = process.argv.slice(4).length ? process.argv.slice(4) : ['wind', 'demo']
+  const checks = { 'GPS trail': 'gpsTrail', 'GPS points': 'gpsPoints', 'Radar trail': 'radarTrail', 'Radar points': 'radarPoints' }
+  const combos = {
+    gps_trail: ['GPS trail'],
+    gps_points: ['GPS points'],
+    radar_trail: ['Radar trail'],
+    all: ['GPS trail', 'GPS points', 'Radar trail', 'Radar points'],
+  }
+  const map = page.locator('[data-testid=drone-map]')
+  const zoomOf = async () => Number(await map.getAttribute('data-zoom'))
+  const zoomTo = async (target) => {
+    const box = await page.locator('[data-testid=known-drone]').boundingBox()
+    const at = box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : { x: 400, y: 300 }
+    const z = await zoomOf()
+    await page.mouse.move(at.x, at.y)
+    await page.keyboard.down('Control')
+    await page.mouse.wheel(0, -Math.log(target / z) / 0.0015)
+    await page.keyboard.up('Control')
+    await sleep(400)
+  }
+  const report = {}
+  for (const scenario of scenarios) {
+    await setup(scenario, { waitAgent: false, interactive: false, speed: 16 })
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    // Se espera a tener un tramo de detección con unas cuantas muestras y se pausa.
+    const t1 = Date.now()
+    for (;;) {
+      const n = await page.evaluate(() => (document.querySelector('[data-testid=highlight] polyline')?.getAttribute('points') ?? '').split(' ').filter(Boolean).length)
+      if (n >= 35) break
+      if (Date.now() - t1 > 240000) throw new Error(`${scenario}: no aparece ninguna detección abierta (¿está el módulo de IA?)`)
+      await sleep(150)
+    }
+    await page.getByRole('button', { name: 'Pause' }).click()
+    await sleep(500)
+    note(`${scenario}: detección abierta, T+${await simTime()} s`)
+    for (const [combo, on] of Object.entries(combos)) {
+      for (const label of Object.keys(checks)) await page.getByRole('checkbox', { name: label, exact: true }).setChecked(on.includes(label))
+      for (const target of [0.5, 1, 4]) {
+        await zoomTo(target)
+        report[`${scenario}_${combo}_x${target}`] = { zoom: await zoomOf(), highlight: await map.locator('[data-testid=highlight]').count() }
+        await map.screenshot({ path: `${out}/${scenario}_${combo}_x${String(target).replace('.', '_')}.png` })
+        note(`captura ${scenario}_${combo}_x${target}`)
+      }
+    }
+    for (const label of Object.keys(checks)) await page.getByRole('checkbox', { name: label, exact: true }).setChecked(['GPS trail', 'Radar trail', 'Radar points'].includes(label))
+  }
+  writeFileSync(`${out}/highlight.json`, JSON.stringify(report, null, 2))
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
+/** «Seguir» en los casos límite: pausa, reanudar, GPS callado y recuperación, reinicio y cambio de escenario. Un muestreador por
+ *  fotograma recoge cámara (Δ de la base en pantalla) e icono respecto al mapa; las fases se marcan con `mark`. Salida: followcheck.json. */
+async function runFollowCheck() {
+  await setup('wind', { waitAgent: false, interactive: true, speed: 4 })
+  await page.getByRole('button', { name: 'Start', exact: true }).click()
+  await sleep(1500)
+  await page.getByRole('button', { name: 'Follow the drone' }).click()
+  const zin = page.getByRole('button', { name: 'Zoom in' })
+  for (let i = 0; i < 5; i++) await zin.click()
+  await page.evaluate(() => {
+    const map = document.querySelector('[data-testid=drone-map]')
+    window.__frames = []
+    window.__phase = 'start'
+    const centre = (el) => {
+      const r = el?.getBoundingClientRect()
+      return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null
+    }
+    const tick = (now) => {
+      window.__frames.push({ t: now, phase: window.__phase, base: centre(map.querySelector('svg circle.stroke-primary')), icon: centre(map.querySelector('[data-testid=known-drone]')) })
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+  const phase = async (name, action, ms) => {
+    await page.evaluate((n) => (window.__phase = n), name)
+    if (action) await action()
+    await sleep(ms)
+    note(`fase ${name}`)
+  }
+  await phase('A_running', null, 5000)
+  await phase('B_paused', () => page.getByRole('button', { name: 'Pause' }).click(), 3000)
+  await phase('C_resumed', () => page.getByRole('button', { name: 'Resume' }).click(), 5000)
+  await phase('D_gps_muted', () => page.getByRole('switch', { name: 'Mute GPS' }).click(), 8000)
+  await phase('E_gps_back', () => page.getByRole('switch', { name: 'Mute GPS' }).click(), 6000)
+  await phase('F_restart', async () => { await page.getByRole('button', { name: 'Restart' }).click() }, 1500)
+  await phase('G_running_again', () => page.getByRole('button', { name: /Start|Resume/ }).first().click(), 4000)
+  await phase('H_scenario_change', async () => { await page.selectOption('select[aria-label=Scenario]', 'nominal') }, 1500)
+  const frames = await page.evaluate(() => window.__frames)
+  const phases = {}
+  for (let i = 1; i < frames.length; i++) {
+    const a = frames[i - 1], b = frames[i]
+    if (!a.base || !b.base || !a.icon || !b.icon) continue
+    const cam = Math.hypot(b.base.x - a.base.x, b.base.y - a.base.y)
+    const icon = Math.hypot(b.icon.x - a.icon.x - (b.base.x - a.base.x), b.icon.y - a.icon.y - (b.base.y - a.base.y))
+    ;(phases[b.phase] ??= []).push({ cam, icon })
+  }
+  const report = {}
+  for (const [name, v] of Object.entries(phases)) {
+    const med = v.map((x) => x.cam).sort((x, y) => x - y)[Math.floor(v.length / 2)]
+    const max = Math.max(...v.map((x) => x.cam))
+    report[name] = { frames: v.length, cam_median_px: med, cam_max_px: max, cam_still_pct: (100 * v.filter((x) => x.cam < 0.05).length) / v.length, icon_max_px: Math.max(...v.map((x) => x.icon)), frames_over_5px: v.filter((x) => x.cam > 5).length }
+    note(`${name}: ${JSON.stringify(report[name])}`)
+  }
+  await shot('followcheck_final')
+  writeFileSync(`${out}/followcheck.json`, JSON.stringify(report, null, 2))
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
+/** Prueba completa desde la web de un escenario a una velocidad con «esperar al agente» (módulo de IA y vLLM en marcha), a 1536×960:
+ *  resalte mientras hay detecciones abiertas, telemetría sin cortes, «seguir» a ×8 (suavidad por fotograma), sin errores de página
+ *  y fin de la simulación. Uso: node scripts/capture.mjs fase9_2 <carpeta> <escenario> <velocidad> */
+async function runFase9_2() {
+  const [scenario = 'wind', speedArg = '4'] = process.argv.slice(4)
+  const speed = Number(speedArg)
+  await page.setViewportSize({ width: 1536, height: 960 })
+  const errors = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await setup(scenario, { waitAgent: true, interactive: false, speed })
+  await page.getByRole('checkbox', { name: 'True position' }).check()
+  await page.getByRole('button', { name: 'Start', exact: true }).click()
+  const map = page.locator('[data-testid=drone-map]')
+  const seen = { highlight_frames: 0, ring: 0, telemetry_cut: false, telemetry_rows: 1, paused_for_agent: 0 }
+  const poll = async () => {
+    seen.highlight_frames += (await map.locator('[data-testid=highlight]').count()) > 0 ? 1 : 0
+    const t = await page.evaluate(() => {
+      const dl = [...document.querySelectorAll('dl')].find((d) => d.textContent?.includes('ROUTE DEV.'))
+      const cells = [...dl.children]
+      return { cut: cells.some((c) => [c, c.querySelector('dd'), c.querySelector('dt')].some((e) => e.scrollWidth > e.clientWidth)), rows: new Set(cells.map((c) => Math.round(c.getBoundingClientRect().top))).size }
+    })
+    seen.telemetry_cut ||= t.cut
+    seen.telemetry_rows = Math.max(seen.telemetry_rows, t.rows)
+    if ((await headerText()).includes('Paused')) seen.paused_for_agent++
+  }
+  // Hasta T+60 s sin más; luego «seguir» a ×8 y 8 s de muestreo por fotograma.
+  while ((await simTime()) < 60) await sleep(500)
+  await page.getByRole('button', { name: 'Follow the drone' }).click()
+  const zin = page.getByRole('button', { name: 'Zoom in' })
+  for (let i = 0; i < 5; i++) await zin.click()
+  await page.evaluate(() => {
+    const map = document.querySelector('[data-testid=drone-map]')
+    window.__frames = []
+    window.__run = true
+    const centre = (el) => { const r = el?.getBoundingClientRect(); return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null }
+    const tick = (now) => {
+      window.__frames.push({ t: now, base: centre(map.querySelector('svg circle.stroke-primary')), icon: centre(map.querySelector('[data-testid=known-drone]')), paused: document.querySelector('header')?.innerText.includes('Paused') })
+      if (window.__run) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+  for (let i = 0; i < 16; i++) { await poll(); await sleep(500) }
+  await shot(`${scenario}_${speed}x_follow_x8`)
+  const frames = await page.evaluate(() => { window.__run = false; return window.__frames })
+  const steps = []
+  for (let i = 1; i < frames.length; i++) {
+    const a = frames[i - 1], b = frames[i]
+    if (!a.base || !b.base || a.paused || b.paused) continue // se miden solo los fotogramas con la simulación en marcha
+    steps.push(Math.hypot(b.base.x - a.base.x, b.base.y - a.base.y))
+  }
+  steps.sort((x, y) => x - y)
+  const q = (p) => steps[Math.min(steps.length - 1, Math.floor(steps.length * p))]
+  const follow = steps.length ? { frames: steps.length, median_px: q(0.5), p95_px: q(0.95), max_px: steps[steps.length - 1] } : { frames: 0 }
+  await page.getByRole('button', { name: 'Follow the drone' }).click() // se suelta «seguir»
+  await page.getByRole('button', { name: 'Reset view' }).click()
+  const t1 = Date.now()
+  const finished = async () => (await headerText()).includes('Finished')
+  while (!(await finished())) {
+    await poll()
+    if (Date.now() - t1 > 1500000) throw new Error('la simulación no termina')
+    if (seen.highlight_frames === 1) await shot(`${scenario}_${speed}x_highlight`)
+    await sleep(500)
+  }
+  await sleep(2500)
+  // El informe llega después del fin de la simulación: se espera hasta 3 minutos.
+  for (let i = 0; i < 90; i++) {
+    const tl = await (await fetch('http://127.0.0.1:8100/api/timeline')).json()
+    if (tl.events.some((e) => e.type === 'ReportGenerated')) break
+    await sleep(2000)
+  }
+  await shot(`${scenario}_${speed}x_final`)
+  const timeline = await (await fetch('http://127.0.0.1:8100/api/timeline')).json()
+  const count = (type) => timeline.events.filter((e) => e.type === type).length
+  const result = {
+    scenario, speed, wall_total_s: (Date.now() - t0) / 1000, page_errors: errors,
+    ...seen, follow_x8: follow,
+    events: { DetectionRaised: count('DetectionRaised'), AnomalyDetected: count('AnomalyDetected'), DetectionAcknowledged: count('DetectionAcknowledged'), ReportGenerated: count('ReportGenerated') },
+  }
+  note(`resultado: ${JSON.stringify(result)}`)
+  writeFileSync(`${out}/result.json`, JSON.stringify(result, null, 2))
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
 try {
   if (mode === 'demo') await runDemo()
   else if (mode === 'radar') await runRadar()
@@ -795,6 +1104,11 @@ try {
   else if (mode === 'chatsize') await runChatSize()
   else if (mode === 'deadgps') await runDeadGps()
   else if (mode === 'chattools') await runChatTools()
+  else if (mode === 'smooth') await runSmooth()
+  else if (mode === 'fase9_2') await runFase9_2()
+  else if (mode === 'followcheck') await runFollowCheck()
+  else if (mode === 'telemetry') await runTelemetry()
+  else if (mode === 'highlight') await runHighlight()
   else throw new Error(`modo desconocido: ${mode}`)
 } catch (e) {
   note(`ERROR: ${e.message}`)

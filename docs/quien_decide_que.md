@@ -66,6 +66,7 @@ Para comparar modelos sin tocar `agent-assets/` (huella `e28d071e856efb09`), `mo
 El resumen, la explicación y la recomendación de una alerta los escribe el modelo, y **el guardrail contrasta sus `checks` con las tools, no su prosa**. Con el 14B, a temperatura 0, la demo de viento (entonces en castellano) repetía siempre «GPS y radar discrepan 13,8 m» y «empuja en dirección contraria a la deriva» contra sus propios `checks` (GPS y radar sin discrepar, deriva a favor). Pedirle que escribiera sin nombres de campo lo agravó (los nombres le servían de ancla) y se revirtió. Hoy:
 - **La métrica «frases que contradicen los checks»** de `eval.md` lo vigila (solo vigila).
 - **La web** quita de lo que muestra los paréntesis que solo contienen `campo=valor` o `campo: valor`; es un parche de presentación, no arregla las frases falsas. El evento, `eval.md` y el informe conservan el texto original.
+- **El cliente del bus del módulo de IA (código)** solo acepta tres tipos de mensaje del WebSocket (`event`, `state` y `error`); cualquier otro `op` se descarta antes de validarlo y no llega al detector ni a los agentes (defensa en profundidad: la plataforma ya no se lo envía).
 - **Los chats** no repiten el problema porque reciben las alertas sin la explicación en prosa y con los hechos ya interpretados por el código (Fase 4.2).
 - Soluciones de verdad, sin hacer: `docs/mejoras_futuras.md`, «Texto fiable del monitor».
 

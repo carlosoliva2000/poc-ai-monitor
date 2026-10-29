@@ -129,7 +129,7 @@ export const SIZES = {
   unit: { base: 4.5, min: 3.5, max: 8 }, // iconos del dron, base, waypoints y puntos
   gpsTrail: { base: 2, min: 1.25, max: 3 },
   line: { base: 1.5, min: 1, max: 2.5 }, // ruta, estela del radar y de la verdad
-  highlight: { base: 5, min: 3.5, max: 8 },
+  highlight: { base: 12, min: 12, max: 16 }, // ancho del «tubo» de una detección: 4–6 veces la estela del GPS
   label: { base: 11, min: 10, max: 13 },
 } as const satisfies Record<string, SizeSpec>
 

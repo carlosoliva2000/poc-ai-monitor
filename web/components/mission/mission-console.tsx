@@ -15,7 +15,7 @@ import { progressMarks, SimControls } from './sim-controls'
 import { TelemetryStrip } from './telemetry-strip'
 
 export function MissionConsole() {
-  const { connection, events, state, errors, chunks, activity, toolCalls, reportPhase, scenarios, plan, liveTruth, setTruthFeed, control, sendOperatorMessage } = usePlatform()
+  const { connection, events, state, errors, chunks, activity, toolCalls, reportPhase, scenarios, plan, live, setTruthFeed, control, sendOperatorMessage } = usePlatform()
   const [layers, setLayers] = useLayers()
   const data = useMemo(() => derive(events), [events])
   const truth = useTruth(layers.truth, state?.run_id ?? null, state?.status === 'running')
@@ -80,7 +80,7 @@ export function MissionConsole() {
               <LayersPanel layers={layers} onChange={setLayers} />
             </div>
             <div className="aspect-[1060/652] w-full border-y border-border bg-card lg:aspect-auto lg:h-[clamp(420px,60dvh,900px)]">
-              <DroneMap plan={plan} data={data} truth={truth} liveTruth={liveTruth} runId={state?.run_id ?? null} layers={layers} faults={state?.active_faults ?? []} running={state?.status === 'running'} speed={state?.speed ?? 1} simTime={state?.sim_time ?? 0} />
+              <DroneMap plan={plan} data={data} truth={truth} live={live} layers={layers} faults={state?.active_faults ?? []} running={state?.status === 'running'} speed={state?.speed ?? 1} simTime={state?.sim_time ?? 0} />
             </div>
           </section>
 

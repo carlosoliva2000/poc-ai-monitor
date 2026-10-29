@@ -93,7 +93,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
     title: 'Overlays',
     items: [
       { id: 'wind', label: 'Wind', swatch: 'size-2 rounded-full bg-muted-foreground' },
-      { id: 'highlight', label: 'Detection highlight', swatch: 'h-1 w-5 rounded-full bg-destructive/60' },
+      { id: 'highlight', label: 'Detection highlight', swatch: 'h-2.5 w-5 rounded-full border-[1.5px] border-highlight bg-highlight/25' },
       { id: 'coordinates', label: 'Coordinates', swatch: 'size-2.5 border border-muted-foreground/70' },
     ],
   },
