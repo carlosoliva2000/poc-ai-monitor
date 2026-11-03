@@ -1,6 +1,6 @@
 # poc-ai-monitor · Quién decide qué
 
-Estado al cierre de la Fase 10 (29/10/2026): el modelo por defecto es `Qwen/Qwen3-14B-AWQ` sin razonamiento y a temperatura 0 (el perfil `actual` significa ahora «`agents.yaml` sin cambios», que es lo que antes era `qwen3-14b-t0`; la referencia antigua de Qwen2.5 es el perfil `qwen2.5-14b`), con **las siete ayudas del monitor encendidas** (las seis de la Fase 8 y la regla de causa duplicada), el monitor con el prompt y las skills en inglés (huella de `agent-assets/` en cada informe de fase), los chats a temperatura 0 con hechos interpretados por el código, el informe con los hechos escritos por el código y la evaluación con la métrica de `checks` contra las tools. El módulo de IA comprueba al arrancar que vLLM sirve el modelo de su configuración. Detalle y trazas en `docs/fases/fase3.md` (§9 ayudas, §10 conclusiones, §14 pendientes), `docs/fases/fase3_1.md` (informe), `docs/fases/fase7_2.md`, `docs/fases/fase8.md` y `docs/fases/fase10.md`. **Se mantiene al día al cerrar cada fase.**
+Estado al cierre de la Fase 11 (29/10/2026; la Fase 11 añade el modo guiado, apagado, y la memoria A, apagada, sin cambiar el reparto de abajo): el modelo por defecto es `Qwen/Qwen3-14B-AWQ` sin razonamiento y a temperatura 0 (el perfil `actual` significa ahora «`agents.yaml` sin cambios», que es lo que antes era `qwen3-14b-t0`; la referencia antigua de Qwen2.5 es el perfil `qwen2.5-14b`), con **las siete ayudas del monitor encendidas** (las seis de la Fase 8 y la regla de causa duplicada), el monitor con el prompt y las skills en inglés (huella de `agent-assets/` en cada informe de fase), los chats a temperatura 0 con hechos interpretados por el código, el informe con los hechos escritos por el código y la evaluación con la métrica de `checks` contra las tools. El módulo de IA comprueba al arrancar que vLLM sirve el modelo de su configuración. Detalle y trazas en `docs/fases/fase3.md` (§9 ayudas, §10 conclusiones, §14 pendientes), `docs/fases/fase3_1.md` (informe), `docs/fases/fase7_2.md`, `docs/fases/fase8.md` y `docs/fases/fase10.md`. **Se mantiene al día al cerrar cada fase.**
 
 ## 1. Las piezas y qué decide cada una
 
@@ -40,6 +40,7 @@ De la más a la menos intrusiva. Todas con interruptor en `agents.yaml` (`monito
 | `checks` obligatorios antes de la causa | Saltarse comprobaciones del árbol | `monitor.require_checks` |
 | Alerta propia para la fuente callada | Distinguir un silencio de un fallo ya alertado (la regla general del prompt gana al paso 5 de la skill) | `monitor.source_silent_own_alert` |
 | Sin causa duplicada (Fase 10) | Acordarse de sustituir o reconocer en vez de abrir una segunda alerta con la causa de una abierta | `monitor.no_duplicate_cause` |
+| Modo guiado (Fase 11, **apagado**) | Pedir la skill de la regla: el módulo la pone en el primer mensaje. Medido: el modelo ya la carga el 100 % de las veces, así que ahorra una iteración (−11 % de prompt) y no cambia ninguna decisión | `monitor.guided_skills` |
 | Hechos calculados en `get_track_metrics` | Comparar números y ángulos | `monitor.computed_facts` |
 | Última iteración solo con las tres respuestas | Encadenar tools de datos sin decidir | `monitor.final_iteration_response_tools_only` |
 | `tool_choice: required` | El formato de la llamada | `monitor.tool_choice` |
@@ -50,6 +51,8 @@ De la más a la menos intrusiva. Todas con interruptor en `agents.yaml` (`monito
 | Ids que rellena el módulo | Copiar ids | (sin interruptor; contrato v0.8) |
 | Prompts y skills reescritos para este modelo | Interpretar instrucciones largas | (sin interruptor; originales en git) |
 | (Retirada en la Fase 8) Excepción en `monitor_objective.md` (fase 7.2) para `SOURCE_SILENT` | Medido en la 7.2: con 1 repetición el modelo no cambió de conducta; se quitó del prompt y la regla se queda en el guardrail (`source_silent_own_alert`) | (sin interruptor; en git) |
+
+**La memoria del monitor no es una ayuda** (Fase 11, `monitor.memory: per_run`, apagada): no quita trabajo al modelo, cambia lo que ve. Con ella el modelo reconoce en vez de cerrar la alerta de recuperación del GPS en `faults` (3 de 3 repeticiones) y el prompt se multiplica por 2,2; se queda como `per_detection`. Detalle en `docs/fases/fase11.md`.
 
 **No son ayudas** y se quedan con cualquier modelo: la respuesta garantizada a cada aviso y los fallbacks, los cierres deterministas, el corte temporal, que el modelo nunca vea la verdad, los mensajes de rechazo accionables, `repetition_penalty` y `top_k` explícitos, las trazas y la evaluación contra etiquetas.
 
@@ -75,5 +78,6 @@ El resumen, la explicación y la recomendación de una alerta los escribe el mod
 - **Texto fiable del monitor** (`docs/mejoras_futuras.md`): explicación estructurada con plantillas, verificar el texto contra los `checks` antes de publicarlo, o un modelo mejor.
 - **Liberar al agente** (`docs/mejoras_futuras.md`): con un modelo más moderno (Qwen3 instruct, por ejemplo), apagar las ayudas del §3 de arriba abajo y comparar los `eval.md`.
 - **Probar el monitor con modelos de Claude** (`docs/mejoras_futuras.md`, dentro de «Liberar al agente»): `claude-haiku-5-5`, luego `claude-sonnet-5-5` y, solo como techo y avisando, `claude-opus-5-5`, con todas las ayudas apagadas. Exige una excepción explícita a la regla 1 («nada en la nube»), que decide Carlos.
+- **Hecho en la Fase 11:** modo guiado y memoria A medidos y dejados apagados (§3). Pendiente: que el cierre de la recuperación del GPS use solo la ventana posterior a la última alerta; sin `get_track_metrics` y la narración periódica siguen en `docs/mejoras_futuras.md`.
 - **Hecho en la Fase 10:** la regla para no abrir una alerta con la misma causa que otra abierta (`no_duplicate_cause`, ver §1 y §3) y la métrica de `checks` contra las tools en la evaluación (lo que pedía la Fase 8 antes de apagar el guardrail de coherencia). Pendiente: E4 con esta configuración, con 3 repeticiones para el Qwen3-30B-A3B-Instruct-2507.
 - **`faults`**: F3 ya está resuelto por la regla `source_silent_own_alert` (fase 7.2); quedan las dos cadenas de F2 (solo con `actual`) y las alertas que quedan abiertas: decisiones mecánicas candidatas a regla.

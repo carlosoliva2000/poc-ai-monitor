@@ -354,3 +354,21 @@ def test_a_new_source_silent_is_exempt_even_with_a_sensor_fault_open() -> None:
 
 def test_the_switch_off_keeps_the_previous_behaviour(two_detections) -> None:
     assert dup_check(alert_args(["det-2"], cause="WIND"), two_detections, switch=False).ok
+
+
+def test_evidence_from_the_history_does_not_hide_the_other_rejections(two_detections) -> None:
+    """El rechazo de una evidencia del historial no corta el resto de comprobaciones: el modelo
+    ve todos los errores a la vez y no se encuentra otro tras corregir el primero."""
+    verdict = check_publish_alert(
+        alert_args(["det-2"], cause="WIND", evidence_event_ids=["gps-000001", "gps-000002"]),
+        as_of=10.0,
+        state=two_detections,
+        index=index_with(**GOOD),
+        seen_ids={"gps-000001"},
+        history_ids={"gps-000002"},
+        no_duplicate_cause=True,
+    )
+    assert len(verdict.errors) == 2
+    assert verdict.errors[0].startswith("ai-1 (WIND) is open")
+    assert "'gps-000002' comes from an earlier warning" in verdict.errors[1]
+    assert "request it again" in verdict.errors[1]

@@ -314,4 +314,5 @@ def _call_trace(index: int, response: LlmResponse) -> CallTrace:
         content=response.content,
         reasoning=response.reasoning,
         reasoning_tokens=response.reasoning_tokens,
+        cached_tokens=response.cached_tokens,
     )

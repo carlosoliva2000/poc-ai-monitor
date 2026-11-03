@@ -46,7 +46,7 @@ def test_render_requires_every_marker() -> None:
 
 def test_objective_sections_and_markers() -> None:
     common, secs = sections(ASSETS.prompt("prompts/monitor_objective.md"))
-    assert set(secs) == {"batch", "raised", "updated", "cleared", "reminder"}
+    assert set(secs) == {"batch", "raised", "updated", "cleared", "reminder", "guided_skill"}
     assert "<!--" not in common  # los comentarios de la plantilla no llegan al modelo
     values = {
         "t_label": "T+01:46", "sim_time": "106", "open_alerts": "ninguna",
@@ -54,6 +54,7 @@ def test_objective_sections_and_markers() -> None:
         "detection_id": "det-1",
         "detection_json": "{}", "related_alerts": "x", "last_open_alert": "ai-1", "count": 2,
         "detection_ids": "det-1, det-2", "pending": "det-1", "detection_since": "100",
+            "skill_name": "route-deviation", "skill_content": "x",
     }  # fmt: skip
     for text in [common, *secs.values()]:
         assert not MARKER_RE.findall(render(text, **values))

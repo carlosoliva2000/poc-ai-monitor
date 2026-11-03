@@ -778,6 +778,7 @@ AID_NAMES = {
     "computed_facts": "hechos calculados",
     "source_silent_own_alert": "alerta propia para la fuente callada",
     "no_duplicate_cause": "sin causa duplicada",
+    "guided_skills": "modo guiado",
 }
 
 
@@ -864,7 +865,9 @@ def header(ev: Evaluation) -> list[str]:
         f" · repetition_penalty {extra.get('repetition_penalty', 'n/d')}"
         f" · presence_penalty {s.get('presence_penalty', 'n/d')}"
         f" · max_tokens {s.get('max_tokens', 'n/d')}",
-        f"- `guided_mode`: {first['guided_mode'] if first else 'n/d'} · esperar al agente: "
+        f"- `guided_mode`: {first['guided_mode'] if first else 'n/d'} · memoria del monitor: "
+        f"{(first.get('memory') or {}).get('mode', 'per_detection') if first else 'n/d'}"
+        f" · esperar al agente: "
         f"{meta_text(data.meta, 'wait_agent', _yes_no)} · velocidad: "
         f"{meta_text(data.meta, 'speed', _speed)} · modo interactivo: "
         f"{meta_text(data.meta, 'interactive', _yes_no)} · "

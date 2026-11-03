@@ -37,6 +37,7 @@ AID_NAMES = {
     "source_silent_own_alert": "own alert for a silent source (no acknowledgement, no superseding "
     "an alert of another cause)",
     "no_duplicate_cause": "no new alert with the cause of an open one (supersede or acknowledge)",
+    "guided_skills": "guided mode (the module puts the skill of the rule in the first message)",
 }
 CLOSE_GAP_S = 5.0  # desfase entre el fin de la detección y el cierre a partir del cual se explica
 MISSING = "Not available: the agent did not write this section."

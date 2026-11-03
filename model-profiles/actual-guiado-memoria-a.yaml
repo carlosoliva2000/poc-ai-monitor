@@ -1,0 +1,13 @@
+# Idéntico a `actual` (Qwen3-14B-AWQ sin razonamiento, T=0, las siete ayudas) salvo: el modo guiado y la memoria A.
+# Fase 11. Ficha: https://huggingface.co/Qwen/Qwen3-14B-AWQ
+description: Qwen/Qwen3-14B-AWQ, sin razonamiento, como actual con el modo guiado y la memoria A
+server:
+  model: Qwen/Qwen3-14B-AWQ
+  tool_call_parser: hermes
+  reasoning_parser: qwen3
+  max_model_len: 32768
+  extra_args: []
+agents:
+  monitor:
+    guided_skills: true
+    memory: per_run

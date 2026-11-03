@@ -1,0 +1,12 @@
+# Idéntico a `actual` (Qwen3-14B-AWQ sin razonamiento, T=0, las siete ayudas) salvo: la memoria A (monitor.memory: per_run).
+# Fase 11. Ficha: https://huggingface.co/Qwen/Qwen3-14B-AWQ
+description: "Qwen/Qwen3-14B-AWQ, sin razonamiento, como actual con la memoria A (monitor.memory = per_run)"
+server:
+  model: Qwen/Qwen3-14B-AWQ
+  tool_call_parser: hermes
+  reasoning_parser: qwen3
+  max_model_len: 32768
+  extra_args: []
+agents:
+  monitor:
+    memory: per_run

@@ -300,6 +300,7 @@ def check_publish_alert(
     unanswered: set[str] | None = None,
     source_silent_own_alert: bool = False,
     no_duplicate_cause: bool = False,
+    history_ids: frozenset[str] | set[str] = frozenset(),
 ) -> Verdict:
     args, errors = _parse(PublishAlertArgs, raw)
     if args is None:
@@ -307,6 +308,7 @@ def check_publish_alert(
     if args.detection_ids is None:
         return Verdict(errors=[_missing_detection_ids(pending)])
     unseen: list[str] = []
+    from_history: list[str] = []
     no_change: str | None = None
     for event_id in args.evidence_event_ids:
         sim_time = index.get(event_id)
@@ -314,6 +316,13 @@ def check_publish_alert(
             errors.append(f"evidence {event_id!r} does not exist: cite only ids you have seen")
         elif sim_time > as_of + 1e-9:
             errors.append(f"evidence {event_id!r} is later than the current time")
+        elif event_id in history_ids and event_id not in seen_ids:
+            # va aparte y al final: si cortara las demás comprobaciones, el modelo corregiría
+            # esto y se encontraría después con otro rechazo que no vio a la vez
+            from_history.append(
+                f"evidence {event_id!r} comes from an earlier warning, not from this one: "
+                "request it again with get_events or get_track_metrics before citing it"
+            )
         elif event_id not in seen_ids:
             unseen.append(event_id)
     for detection_id in args.detection_ids:
@@ -383,7 +392,7 @@ def check_publish_alert(
         )
     if no_change and not errors:
         errors.append(no_change)
-    return Verdict(args=args, errors=errors, unseen_evidence=unseen)
+    return Verdict(args=args, errors=[*errors, *from_history], unseen_evidence=unseen)
 
 
 def _missing_detection_ids(pending: set[str] | None) -> str:

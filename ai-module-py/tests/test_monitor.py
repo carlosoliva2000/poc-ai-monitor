@@ -323,17 +323,6 @@ def test_data_tools_are_capped_at_as_of_and_skills_are_traced(tmp_path: Path) ->
     assert trace["skills_loaded"] == [{"name": "route-deviation", "by": "model"}]
 
 
-def test_guided_mode_preloads_the_skill_of_the_rule(tmp_path: Path) -> None:
-    script = Script(tool_response(call("publish_alert", **alert_args(["det-0001"]))))
-    rt, _, monitor, llm = setup(tmp_path, script)
-    monitor.config = replace(monitor.config, guided_mode=True)
-    run(monitor.handle_batch([raised(rule="GPS_DEGRADED", source="gps")]))
-    messages = llm.requests[0]["messages"]
-    assert messages[2]["tool_calls"][0]["function"]["name"] == "load_skill"
-    assert "source-discrepancy" in messages[3]["content"]
-    assert rt.trace.records[0]["skills_loaded"] == [{"name": "source-discrepancy", "by": "guided"}]
-
-
 def test_a_cleared_waits_for_the_alert_of_its_own_detection() -> None:
     from collections import deque
 

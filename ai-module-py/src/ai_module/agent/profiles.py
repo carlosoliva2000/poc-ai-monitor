@@ -44,8 +44,11 @@ AID_KEYS = (
     "computed_facts",
     "source_silent_own_alert",
     "no_duplicate_cause",
+    "guided_skills",
 )
-AGENT_KEYS = (*SAMPLING_KEYS, "reasoning", *LIMIT_KEYS, *AID_KEYS)
+# La memoria del monitor no es una ayuda: cambia lo que el modelo recuerda, no lo que se le quita.
+MEMORY_KEYS = ("memory", "memory_budget_tokens", "memory_target_tokens")
+AGENT_KEYS = (*SAMPLING_KEYS, "reasoning", *LIMIT_KEYS, *AID_KEYS, *MEMORY_KEYS)
 ALLOWED = {
     "description": None,
     "server": ("model", "tool_call_parser", "reasoning_parser", "max_model_len", "extra_args"),
@@ -57,6 +60,7 @@ ALLOWED = {
 }
 # Modelos híbridos de 27B que cuelgan vLLM y han tirado Windows: no se sirven.
 FORBIDDEN_MODELS = ("qwen3.5-27b", "qwen3.8-27b")
+MEMORY_GROWTH_TOKENS = 4000  # lo que puede crecer el contexto durante una invocación
 PLATFORM_MARGIN_S = 15.0  # `max_invocation_s` + margen < espera de la plataforma
 DEFAULT_WAIT_S = 90.0
 
@@ -160,7 +164,23 @@ class Profile:
                 f"profile {self.name}: monitor max_invocation_s {monitor['max_invocation_s']} + "
                 f"{PLATFORM_MARGIN_S:g} must be below the platform wait {wait:g}"
             )
+        self._check_memory(monitor)
         return out
+
+    def _check_memory(self, monitor: dict[str, Any]) -> None:
+        """Con la memoria A, el historial que se compacta más lo que crece una invocación y la
+        respuesta tienen que caber en `max_model_len`."""
+        if monitor.get("memory", "per_detection") != "per_run":
+            return
+        budget = int(monitor.get("memory_budget_tokens", 26000))
+        target = int(monitor.get("memory_target_tokens", 18000))
+        max_len = int(self.server.get("max_model_len", 32768))
+        room = budget + int(monitor.get("max_tokens", 800)) + MEMORY_GROWTH_TOKENS
+        if target >= budget or room > max_len:
+            raise ProfileError(
+                f"profile {self.name}: memory_budget_tokens {budget} (target {target}) + max_tokens"
+                f" + {MEMORY_GROWTH_TOKENS} for one invocation must fit in max_model_len {max_len}"
+            )
 
 
 def _validate(name: str, raw: Any) -> dict[str, Any]:

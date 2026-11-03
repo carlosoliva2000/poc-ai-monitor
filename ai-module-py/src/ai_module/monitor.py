@@ -7,7 +7,8 @@ agente», el reproductor se reanuda con él). Las respuestas son `AnomalyDetecte
 
 - Una invocación a la vez; las detecciones que llegan mientras trabaja se agrupan en la siguiente.
 - Los `DetectionCleared` que no cambian nada se responden sin LLM (determinista).
-- Memoria de la opción B: cada invocación empieza de cero con el estado de `MonitorState`.
+- Memoria: por defecto la opción B (cada invocación empieza de cero con el estado de
+  `MonitorState`); con `monitor.memory: per_run`, la A (`monitor_memory.py`).
 - Garantía: al terminar la invocación, lo que siga sin respuesta se responde en código (fallback).
 """
 
@@ -37,6 +38,7 @@ from .agent.guardrails import (
 from .agent.llm import Messages
 from .agent.tools import Toolbox, strip_computed_facts
 from .agent.trace import InvocationTrace
+from .monitor_memory import MonitorMemory, chars_of
 from .outbox import format_t
 from .runtime import Runtime
 
@@ -85,6 +87,9 @@ class Invocation:
     """Lo que han devuelto las tools de datos en esta invocación (para contrastar los `checks`)."""
     alerts: dict[str, list[str]] = field(default_factory=dict)
     """`alert_id` -> `detection_ids` de las alertas publicadas en esta invocación."""
+    history_ids: set[str] = field(default_factory=set)
+    """Con la memoria A: ids que solo se ven en el historial de turnos anteriores (no son
+    evidencia válida hasta que el modelo vuelva a pedir el dato en esta invocación)."""
 
     def unanswered(self) -> list[Pending]:
         return [p for p in self.pending if not p.answered]
@@ -114,6 +119,7 @@ class Monitor:
         self._idle = asyncio.Event()
         self._idle.set()
         self._skills_by_model = 0
+        self.memory: MonitorMemory | None = None
 
     # --- Cola -----------------------------------------------------------------------------
 
@@ -129,6 +135,8 @@ class Monitor:
         """Nueva simulación o reinicio: se descarta la cola y se cancela la invocación en curso
         (sus respuestas irían a una ejecución que ya no existe)."""
         self.queue.clear()
+        if self.memory is not None:
+            self.memory.reset()
         if self._current is not None and not self._current.done():
             self._current.cancel()
         if not self._busy:
@@ -181,7 +189,7 @@ class Monitor:
             as_of=as_of,
             queue_at_start=len(self.queue),
             wall_start=_wall_iso(),
-            guided_mode=self.config.guided_mode,
+            guided_mode=self.config.guided_skills,
             aids=self.config.aids(),
         )
         started = time.monotonic()
@@ -241,12 +249,26 @@ class Monitor:
         objective = self._objective(inv)
         inv.seen_ids |= set(ID_RE.findall(objective))
         system = rt.assets.system_prompt(cfg)
-        messages: Messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": objective},
-        ]
-        if cfg.guided_mode:
-            self._preload_skill(inv, messages)
+        history_ids: set[str] = set()
+        chars_start = 0
+        memory = self._memory()
+        if memory is None:
+            messages: Messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": objective},
+            ]
+        else:
+            warnings = "; ".join(
+                f"{p.detection_id} ({p.event.payload.get('rule', '?')}, {p.kind})"
+                for p in inv.pending
+            )
+            messages, info = memory.begin_turn(
+                system, objective, t=format_t(inv.as_of), warnings=warnings
+            )
+            history_ids = memory.history_ids() - inv.seen_ids
+            chars_start = chars_of(messages)
+            trace.memory = {"mode": "per_run", **info.__dict__}
+        inv.history_ids = history_ids
 
         toolbox = Toolbox(
             rt.assets,
@@ -305,6 +327,53 @@ class Monitor:
             await self._guarantee(inv, result)
         finally:
             await rt.activity(AgentName.MONITOR, ActivityState.FINISHED, inv.invocation_id, first)
+            if memory is not None:
+                self._remember(memory, inv, messages, chars_start)
+
+    def _memory(self) -> MonitorMemory | None:
+        """La memoria A (se crea la primera vez que hace falta), o `None` con `per_detection`."""
+        cfg = self.config
+        if cfg.memory != "per_run":
+            return None
+        if self.memory is None:
+            texts = self.rt.assets.prompt(cfg.memory_prompt or "prompts/monitor_memory.md")
+            self.memory = MonitorMemory(texts, cfg.memory_budget_tokens, cfg.memory_target_tokens)
+        return self.memory
+
+    def _remember(
+        self, memory: MonitorMemory, inv: Invocation, messages: Messages, chars_start: int
+    ) -> None:
+        """Memoria A: guarda el turno (con lo que ya ha publicado el módulo), ajusta la
+        estimación de tokens con las llamadas de la invocación y deja la traza con una copia de
+        lo que vio el modelo (la lista se sigue ampliando en los turnos siguientes)."""
+        trace = inv.trace
+        memory.end_turn(messages, self._outcome(inv))
+        calls = trace.calls
+        last_assistant = max(
+            (i for i, m in enumerate(messages) if m["role"] == "assistant"), default=0
+        )
+        if len(calls) >= 2 and calls[-1].finish_reason is not None and last_assistant:
+            memory.observe(
+                (chars_start, calls[0].prompt_tokens),
+                (chars_of(messages[:last_assistant]), calls[-1].prompt_tokens),
+            )
+        trace.messages = list(messages)
+
+    def _outcome(self, inv: Invocation) -> str:
+        """Una frase con lo que respondió la invocación (para el resumen de un turno antiguo)."""
+        parts: list[str] = []
+        for event in inv.trace.published:
+            kind = event["type"]
+            if kind == EventType.ANOMALY_DETECTED.value:
+                alert = self.rt.state.alerts.get(event["event_id"])
+                if alert is not None:
+                    chain = f" (supersedes {alert.supersedes})" if alert.supersedes else ""
+                    parts.append(f"{alert.alert_id} {alert.cause} {alert.severity}{chain}")
+            elif kind == EventType.DETECTION_ACKNOWLEDGED.value:
+                parts.append("acknowledged")
+            elif kind == EventType.ALERT_CLOSED.value:
+                parts.append("alert closed")
+        return ", ".join(dict.fromkeys(parts))
 
     # --- Prompts --------------------------------------------------------------------------
 
@@ -343,39 +412,34 @@ class Monitor:
                     sim_time=f"{inv.as_of:g}",
                 )
             )
+        parts.extend(self._guided_sections(inv, secs))
         return "\n\n".join(parts)
+
+    def _guided_sections(self, inv: Invocation, secs: dict[str, str]) -> list[str]:
+        """Modo guiado: la skill de la regla de cada aviso `raised` o `updated` (sin repetir),
+        con el texto que devolvería `load_skill`."""
+        if not self.config.guided_skills:
+            return []
+        names: list[str] = []
+        for p in inv.pending:
+            name = self.config.guided_skill_by_rule.get(p.event.payload.get("rule") or "")
+            if p.kind != "cleared" and name and name not in names:
+                names.append(name)
+        for name in names:
+            inv.trace.skills_loaded.append({"name": name, "by": "guided"})
+        return [
+            render(
+                secs["guided_skill"],
+                skill_name=name,
+                skill_content=self.rt.assets.skills[name].content,
+            )
+            for name in names
+        ]
 
     def _reminder(self, inv: Invocation) -> str:
         _, secs = sections(self.rt.assets.prompt(self.config.objective_prompt or ""))
         ids = ", ".join(dict.fromkeys(p.detection_id for p in inv.unanswered()))
         return render(secs["reminder"], pending=ids)
-
-    def _preload_skill(self, inv: Invocation, messages: Messages) -> None:
-        """Modo guiado: la skill de la regla de la primera detección se precarga como si el
-        modelo hubiera llamado a `load_skill`."""
-        first = next((p for p in inv.pending if p.kind != "cleared"), inv.pending[0])
-        rule = first.event.payload.get("rule")
-        name = self.config.guided_skill_by_rule.get(rule or "")
-        if name is None:
-            return
-        call_id = f"guided-{inv.invocation_id}"
-        arguments = json.dumps({"name": name})
-        messages.append(
-            {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [
-                    {
-                        "id": call_id,
-                        "type": "function",
-                        "function": {"name": "load_skill", "arguments": arguments},
-                    }
-                ],
-            }
-        )
-        content = self.rt.assets.skills[name].content
-        messages.append({"role": "tool", "tool_call_id": call_id, "content": content})
-        inv.trace.skills_loaded.append({"name": name, "by": "guided"})
 
     # --- Tools que publican ---------------------------------------------------------------
 
@@ -473,6 +537,7 @@ class Monitor:
             unanswered={p.detection_id for p in inv.unanswered()},
             source_silent_own_alert=self.config.source_silent_own_alert,
             no_duplicate_cause=self.config.no_duplicate_cause,
+            history_ids=inv.history_ids - inv.seen_ids,
         )
         if not verdict.ok:
             return self._reject(inv, "publish_alert", raw, verdict)

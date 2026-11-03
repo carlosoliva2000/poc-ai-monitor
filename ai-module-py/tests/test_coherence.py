@@ -416,6 +416,7 @@ def test_default_switches_are_all_on_and_recorded_in_the_trace(tmp_path: Path) -
         "computed_facts": True,
         "source_silent_own_alert": True,
         "no_duplicate_cause": True,
+        "guided_skills": False,
     }
 
 

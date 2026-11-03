@@ -73,6 +73,9 @@ class LlmResponse:
     """Texto del razonamiento de esta llamada (vacío si el modelo no razona)."""
     reasoning_tokens: int | None = None
     """Tokens de razonamiento si vLLM los da en `usage`, si no `None`."""
+    cached_tokens: int | None = None
+    """Tokens del prompt servidos desde la caché de prefijos, si vLLM los da en
+    `usage.prompt_tokens_details`, si no `None`."""
 
     def assistant_message(self) -> dict[str, Any]:
         """El mensaje del asistente para devolver al modelo en la siguiente petición."""
@@ -145,6 +148,7 @@ class OpenAiLlm:
             return LlmResponse(
                 reasoning=reasoning_of(message),
                 reasoning_tokens=reasoning_tokens_of(usage),
+                cached_tokens=cached_tokens_of(usage),
                 content=message.content or "",
                 tool_calls=calls,
                 finish_reason=choice.finish_reason,
@@ -164,6 +168,7 @@ class OpenAiLlm:
         )
         content = reasoning = ""
         reasoning_tokens: int | None = None
+        cached_tokens: int | None = None
         calls: dict[int, dict[str, str]] = {}
         finish_reason: str | None = None
         prompt_tokens = completion_tokens = 0
@@ -172,6 +177,7 @@ class OpenAiLlm:
                 prompt_tokens = chunk.usage.prompt_tokens
                 completion_tokens = chunk.usage.completion_tokens
                 reasoning_tokens = reasoning_tokens_of(chunk.usage)
+                cached_tokens = cached_tokens_of(chunk.usage)
             if not chunk.choices:
                 continue
             choice = chunk.choices[0]
@@ -199,6 +205,7 @@ class OpenAiLlm:
             latency_s=time.monotonic() - start,
             reasoning=reasoning,
             reasoning_tokens=reasoning_tokens,
+            cached_tokens=cached_tokens,
         )
 
 
@@ -211,4 +218,10 @@ def reasoning_of(message: Any) -> str:
 def reasoning_tokens_of(usage: Any) -> int | None:
     details = getattr(usage, "completion_tokens_details", None)
     value = getattr(details, "reasoning_tokens", None)
+    return value if isinstance(value, int) else None
+
+
+def cached_tokens_of(usage: Any) -> int | None:
+    details = getattr(usage, "prompt_tokens_details", None)
+    value = getattr(details, "cached_tokens", None)
     return value if isinstance(value, int) else None

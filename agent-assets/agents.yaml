@@ -50,7 +50,7 @@ agents:
     top_k: -1               # sin límite: con temperature 0 no influye
     # --- Ayudas al modelo (todas activadas). Cada una se puede apagar para probar otro modelo
     # (de la más a la menos intrusiva: coherence_guardrail, require_checks, computed_facts,
-    # final_iteration_response_tools_only, tool_choice, source_silent_own_alert, no_duplicate_cause). Apagarlas no cambia nada más.
+    # final_iteration_response_tools_only, tool_choice, source_silent_own_alert, no_duplicate_cause; el modo guiado es otra ayuda, apagada por defecto). Apagarlas no cambia nada más.
     tool_choice: required   # "required" | "auto". El monitor siempre responde con una tool call
     # En la última iteración permitida solo se ofrecen las tools de `final_tools` (sin forzar
     # ninguna por nombre), para que el agente no se quede encadenando tools de datos.
@@ -61,13 +61,21 @@ agents:
     computed_facts: true        # get_track_metrics entrega notable, with_drift, disagreed, etc.
     source_silent_own_alert: true   # un SOURCE_SILENT nuevo lleva alerta propia (SENSOR_FAULT, sin supersedes)
     no_duplicate_cause: true    # no se abre una alerta con la causa de otra abierta sin `supersedes`
-    guided_mode: false      # true = el módulo precarga la skill que corresponde a la regla
+    # Modo guiado (ayuda): true = el módulo mete en el primer mensaje de usuario la skill que
+    # corresponde a la regla de cada aviso (sección `guided_skill` de monitor_objective.md).
+    guided_skills: false
     guided_skill_by_rule:
       ROUTE_DEVIATION: route-deviation
       SOURCE_DISCREPANCY: source-discrepancy
       SOURCE_SILENT: source-discrepancy
       GPS_DEGRADED: source-discrepancy
-    memory: per_invocation  # opción B; la opción A (conversation) queda como mejora
+    # Memoria del monitor (no es una ayuda): `per_detection` = una conversación nueva por invocación
+    # (opción B); `per_run` = una sola durante la simulación (opción A), compactada por bloques
+    # cuando el historial pasa de `memory_budget_tokens` (hasta `memory_target_tokens`).
+    memory: per_detection
+    memory_prompt: prompts/monitor_memory.md
+    memory_budget_tokens: 26000
+    memory_target_tokens: 18000
     last_decisions_in_state: 3
 
   chat_monitor:

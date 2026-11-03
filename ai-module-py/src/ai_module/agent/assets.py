@@ -72,9 +72,19 @@ class AgentConfig:
     no_duplicate_cause: bool = True
     """Interruptor del monitor: un aviso `SOURCE_SILENT` nuevo lleva alerta propia (ni se
     reconoce ni sustituye a una alerta de otra causa)."""
-    guided_mode: bool = False
+    guided_skills: bool = False
+    """Interruptor del monitor (modo guiado): el módulo mete en el primer mensaje de usuario la
+    skill de la regla de cada aviso, sin que el modelo tenga que pedirla."""
     guided_skill_by_rule: dict[str, str] = field(default_factory=dict)
     last_decisions_in_state: int = 3
+    memory: str = "per_detection"
+    """Memoria del monitor: `per_detection` (una conversación nueva por invocación, la opción B) o
+    `per_run` (una sola durante la simulación, la opción A). No es una ayuda."""
+    memory_prompt: str | None = None
+    memory_budget_tokens: int = 26000
+    """Con `per_run`: tamaño estimado del historial a partir del cual se compacta."""
+    memory_target_tokens: int = 18000
+    """Con `per_run`: tamaño al que se compacta."""
     max_history_messages: int = 12
     stream: bool = False
     no_report_reply: str = ""
@@ -102,6 +112,7 @@ class AgentConfig:
             "computed_facts": self.computed_facts,
             "source_silent_own_alert": self.source_silent_own_alert,
             "no_duplicate_cause": self.no_duplicate_cause,
+            "guided_skills": self.guided_skills,
         }
 
     def sampling(self) -> dict[str, Any]:
@@ -142,6 +153,20 @@ class LlmSettings:
     base_url: str
     api_key: str
     model: str
+
+
+MEMORY_MODES = ("per_detection", "per_run")
+
+
+def _memory_mode(agent: str, value: object) -> str:
+    """Solo el monitor distingue la memoria; el resto de agentes conserva su texto informativo
+    (`per_invocation`, `conversation`) y aquí toma el valor por defecto."""
+    if agent != "monitor":
+        return "per_detection"
+    mode = "per_detection" if value is None else str(value)
+    if mode not in MEMORY_MODES:
+        raise AssetError(f"monitor.memory must be one of {MEMORY_MODES}, not {mode!r}")
+    return mode
 
 
 def render(template: str, **values: object) -> str:
@@ -309,9 +334,13 @@ class Assets:
             reasoning=None if pick("reasoning") is None else bool(pick("reasoning")),
             max_tokens=int(pick("max_tokens")),
             tool_choice=str(pick("tool_choice", "auto")),
-            guided_mode=bool(spec.get("guided_mode", False)),
+            guided_skills=bool(spec.get("guided_skills", False)),
             guided_skill_by_rule=dict(spec.get("guided_skill_by_rule", {})),
             last_decisions_in_state=int(spec.get("last_decisions_in_state", 3)),
+            memory=_memory_mode(name, spec.get("memory")),
+            memory_prompt=spec.get("memory_prompt"),
+            memory_budget_tokens=int(spec.get("memory_budget_tokens", 26000)),
+            memory_target_tokens=int(spec.get("memory_target_tokens", 18000)),
             max_history_messages=int(spec.get("max_history_messages", 12)),
             stream=bool(spec.get("stream", False)),
             no_report_reply=str(spec.get("no_report_reply", "")),

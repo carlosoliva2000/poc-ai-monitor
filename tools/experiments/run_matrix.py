@@ -79,6 +79,24 @@ def http_ok(url: str, timeout: float = 3.0) -> str | None:
         return None
 
 
+CACHE_COUNTERS = ("vllm:prefix_cache_queries_total", "vllm:prefix_cache_hits_total")
+
+
+def cache_counters(base_url: str = "http://127.0.0.1:8000") -> dict[str, float] | None:
+    """Contadores de la caché de prefijos de vLLM (`/metrics`), o `None` si no los da (servidor
+    falso, otro puerto)."""
+    text = http_ok(f"{base_url}/metrics")
+    if text is None:
+        return None
+    found: dict[str, float] = {}
+    for line in text.splitlines():
+        name, _, value = line.partition(" ")
+        key = name.split("{", 1)[0]
+        if key in CACHE_COUNTERS:
+            found[key] = found.get(key, 0.0) + float(value)
+    return found or None
+
+
 def parse_version(text: str | None) -> str:
     """`{"version": "0.31.0"}` de `GET /version` de vLLM."""
     try:
@@ -283,6 +301,7 @@ def run_command(spec: RunSpec, args: argparse.Namespace, llm_url: str | None) ->
 def execute(spec: RunSpec, args: argparse.Namespace, llm_url: str | None, folder: Path) -> dict:
     """Una ejecución: lanza `run.py`, copia sus ficheros y devuelve su entrada del manifiesto."""
     started = time.monotonic()
+    cache_before = cache_counters()
     log = folder / "logs" / f"{spec.profile}_{spec.scenario}_r{spec.rep}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -307,6 +326,16 @@ def execute(spec: RunSpec, args: argparse.Namespace, llm_url: str | None, folder
         if (source / name).exists():
             shutil.copy2(source / name, target / name)
     entry.update(status="ok", run_id=source.name, returncode=done.returncode if done else None)
+    cache_after = cache_counters()
+    if cache_before and cache_after:
+        delta = {k: cache_after.get(k, 0.0) - cache_before.get(k, 0.0) for k in CACHE_COUNTERS}
+        entry["prefix_cache"] = {
+            "queries": delta[CACHE_COUNTERS[0]],
+            "hits": delta[CACHE_COUNTERS[1]],
+        }
+        (target / "vllm_metrics.json").write_text(
+            json.dumps(entry["prefix_cache"], indent=2) + "\n", encoding="utf-8"
+        )
     return entry
 
 

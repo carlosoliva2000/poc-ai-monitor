@@ -27,6 +27,8 @@ class CallTrace:
     """Tools ofrecidas en esta llamada si se redujeron (última iteración), si no `None`."""
     reasoning: str = ""
     reasoning_tokens: int | None = None
+    cached_tokens: int | None = None
+    """Tokens del prompt servidos desde la caché de prefijos de vLLM (`None` si no los da)."""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -40,6 +42,7 @@ class CallTrace:
             "restricted_tools": self.restricted_tools,
             "reasoning": self.reasoning,
             "reasoning_tokens": self.reasoning_tokens,
+            "cached_tokens": self.cached_tokens,
         }
 
 
@@ -58,6 +61,8 @@ class InvocationTrace:
     sampling: dict[str, Any] = field(default_factory=dict)
     stream: bool = False
     guided_mode: bool = False
+    """Modo guiado (`monitor.guided_skills`) activo en esta invocación; el nombre se conserva para
+    leer las trazas anteriores."""
     aids: dict[str, Any] = field(default_factory=dict)
     """Ayudas al modelo activas en esta invocación (interruptores del monitor)."""
     tools_offered: list[str] = field(default_factory=list)
@@ -78,6 +83,9 @@ class InvocationTrace:
     """Por alerta publicada por el modelo, los valores que debían tener sus `checks` según las
     tools de la invocación y el estado (los del guardrail de coherencia, esté o no activo). La
     evaluación los compara con los que declaró."""
+    memory: dict[str, Any] = field(default_factory=dict)
+    """Con la memoria A (`per_run`): turno, tokens estimados antes y después de compactar y
+    cuántos turnos pasaron al nivel A y al B. Vacío con `per_detection`."""
     conversation_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:

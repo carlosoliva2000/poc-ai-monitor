@@ -33,3 +33,8 @@ Task: call `get_track_metrics` **once** with `since` = <<detection_since>> and `
 
 ## reminder
 You have not yet responded to: <<pending>>. A text does not count as a response: respond now by calling `publish_alert`, `acknowledge_detection` or `close_alert`.
+
+## guided_skill
+Skill for this warning (`<<skill_name>>`), already loaded for you. Follow its procedure step by step, in order and without skipping any; you do not need to call `load_skill` for it (you may still load another one if it tells you to).
+
+<<skill_content>>
