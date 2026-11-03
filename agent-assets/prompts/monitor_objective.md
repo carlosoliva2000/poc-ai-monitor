@@ -29,7 +29,7 @@ Task: check whether your diagnosis is still correct. If the cause or the severit
 ## cleared
 Detection <<detection_id>> has been cleared and it was the **last open detection** of alert <<last_open_alert>>: <<detection_json>>
 Your associated alerts: <<related_alerts>>.
-Task: call `get_track_metrics` **once** with `since` = <<detection_since>> and `until` = <<sim_time>> (from the start of the detection until now) and decide with that result. If the situation has returned to normal (the deviation goes down again and GPS and radar agree), close with `close_alert` and say why. If you think the problem continues (for example, another source is still wrong), do not close it: respond with `acknowledge_detection` (with the `alert_id`) and explain why in `reason`.
+Task: call `get_track_metrics` **once** with `since` = <<window_since>> and `until` = <<sim_time>> (the last 20 seconds) and decide with how things are now, not with how they were while the problem was going on. If the situation has returned to normal (the deviation goes down again and GPS and radar agree), close with `close_alert` and say why. If you think the problem continues (for example, another source is still wrong), do not close it: respond with `acknowledge_detection` (with the `alert_id`) and explain why in `reason`.
 
 ## reminder
 You have not yet responded to: <<pending>>. A text does not count as a response: respond now by calling `publish_alert`, `acknowledge_detection` or `close_alert`.

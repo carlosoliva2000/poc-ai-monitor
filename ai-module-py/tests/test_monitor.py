@@ -22,7 +22,7 @@ from agent_helpers import (
 )
 from test_monitor_state import alert
 
-from ai_module.monitor import Monitor
+from ai_module.monitor import Monitor, closure_window_start
 from poc_contracts.enums import EventType
 
 RESPONSES = (EventType.ANOMALY_DETECTED, EventType.ALERT_CLOSED, EventType.DETECTION_ACKNOWLEDGED)
@@ -252,6 +252,24 @@ def test_the_last_cleared_of_an_alert_goes_to_the_llm_which_closes_it(tmp_path: 
         "was the **last open detection** of alert ai-0090"
         in (llm.requests[0]["messages"][1]["content"])
     )
+
+
+def test_closure_window_is_the_last_20_seconds_but_not_before_the_detection() -> None:
+    assert closure_window_start(100.0, 150.0) == 130.0  # los últimos 20 s
+    assert closure_window_start(145.0, 150.0) == 145.0  # no antes del inicio de la detección
+    assert closure_window_start(None, 150.0) == 130.0
+    assert closure_window_start(None, 12.0) == 0.0
+
+
+def test_the_closing_warning_asks_for_the_last_20_seconds(tmp_path: Path) -> None:
+    script = Script(tool_response(call("close_alert", alert_id="ai-0090", reason="ok")))
+    rt, _, monitor, llm = setup(tmp_path, script)
+    rt.state.apply(raised("det-0001", 5.0))
+    rt.state.apply(alert("ai-0090", ["det-0001"]))
+    run(monitor.handle_batch([detection_event("cleared", "det-0001", 60.0)]))
+    text = llm.requests[0]["messages"][1]["content"]
+    assert "`since` = 40 and `until` = 60 (the last 20 seconds)" in text
+    assert "how things are now" in text
 
 
 def test_the_llm_may_keep_the_alert_open_and_it_is_respected(tmp_path: Path) -> None:

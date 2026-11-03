@@ -53,7 +53,7 @@ def test_objective_sections_and_markers() -> None:
         "open_detections": "ninguna", "last_decisions": "ninguna", "gps_alert_recent": "no",
         "detection_id": "det-1",
         "detection_json": "{}", "related_alerts": "x", "last_open_alert": "ai-1", "count": 2,
-        "detection_ids": "det-1, det-2", "pending": "det-1", "detection_since": "100",
+        "detection_ids": "det-1, det-2", "pending": "det-1", "window_since": "100",
             "skill_name": "route-deviation", "skill_content": "x",
     }  # fmt: skip
     for text in [common, *secs.values()]:

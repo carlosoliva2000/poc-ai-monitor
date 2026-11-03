@@ -430,14 +430,14 @@ def test_the_model_never_sees_the_event_id_of_a_detection(tmp_path: Path) -> Non
     assert '"detection_id":"det-0001"' in prompt
 
 
-def test_cleared_prompt_fixes_the_window_from_the_start_of_the_detection(tmp_path: Path) -> None:
+def test_cleared_prompt_fixes_the_window_to_the_last_20_seconds(tmp_path: Path) -> None:
     rt, _, monitor, llm = monitor_with(tmp_path, Script("x"))
     rt.state.apply(detection_event("raised", "det-0001", 106.0))
     rt.state.apply(alert("ai-0001", ["det-0001"]))
     rt.clock.observe(156.0)
     run(monitor.handle_batch([detection_event("cleared", "det-0001", 156.0)]))
     prompt = llm.requests[0]["messages"][1]["content"]
-    assert "`since` = 106 and `until` = 156" in prompt and "**once**" in prompt
+    assert "`since` = 136 and `until` = 156" in prompt and "**once**" in prompt
 
 
 def test_coherence_guardrail_rejects_and_the_switch_turns_it_off(tmp_path: Path) -> None:

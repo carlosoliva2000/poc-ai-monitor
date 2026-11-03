@@ -11,7 +11,8 @@ Context: the radar has no bias (it says where the drone really is); the drone na
 ## 0. Is there already an open GPS alert that explains it?
 If a `GPS_JAMMING` or `SENSOR_FAULT` alert of the GPS is open and the `GPS_DEGRADED` detection is still open, this discrepancy is a consequence of the GPS loss, not a new problem.
 - `SENSOR_FAULT` alert: publish `GPS_JAMMING`, `severity: high`, with `supersedes` pointing to it.
-- Alert already `GPS_JAMMING`: `acknowledge_detection` with its `alert_id`.
+- `GPS_JAMMING` alert with `severity: medium` and `gps_radar.disagreed` is now `true` (the drone already drifts): publish `GPS_JAMMING`, `severity: high`, with `supersedes` pointing to it.
+- Alert already `GPS_JAMMING` with `severity: high`, or `medium` while `gps_radar.disagreed` is still `false`: `acknowledge_detection` with its `alert_id`.
 Otherwise, continue.
 
 ## 1. Metrics
@@ -28,8 +29,8 @@ If the discrepancy disappears suddenly because the GPS jumps to the radar, the d
 
 ## 4. Degraded GPS (`GPS_DEGRADED`)
 Call `get_events` with `source` = `gps` and `last_n` = 5 (`fix`, `sats`, `hdop`) and `get_track_metrics` with `since` = sim_time of the detection − 20.
-- Bad fix/sats/hdop and `gps_radar.disagreed` `true`: **`GPS_JAMMING`**, `severity: high`, `confidence` 0.8–0.9 (the drone navigates by dead reckoning and drifts off). Recommendation: do not trust the GPS, radar as reference.
-- Only degraded and `gps_radar.disagreed` `false`: **`SENSOR_FAULT`**, `severity: medium`, `confidence` 0.5–0.7.
+- Bad fix (`fix: none`, `sats` 0 or `hdop` 20 or more): **`GPS_JAMMING`** (loss or interference of the GPS), `confidence` 0.8–0.9. `severity: high` if `gps_radar.disagreed` is `true` (the drone navigates by dead reckoning and drifts off), `medium` if it is not yet. Recommendation: do not trust the GPS, radar as reference.
+- Only a somewhat high `hdop` or few satellites, with a fix and `gps_radar.disagreed` `false`: **`SENSOR_FAULT`**, `severity: medium`, `confidence` 0.5–0.7.
 - If the radar goes silent at the same time, the deviation cannot be confirmed: lower `confidence` to 0.7 at most (the `fix: none` is enough).
 - When `GPS_DEGRADED` is cleared, the position jumps to the real one and it is normal for `ROUTE_DEVIATION` to be raised (step 2 of `route-deviation`).
 

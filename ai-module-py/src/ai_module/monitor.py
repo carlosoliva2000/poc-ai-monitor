@@ -52,6 +52,8 @@ KIND_OF_TYPE: dict[EventType, Kind] = {
 }
 ID_RE = re.compile(r"\b(?:gps|rad|met|lnk|bat|mis|det|ai|ops)-\d+\b")
 MAX_FALLBACK_EVIDENCE = 6
+CLOSURE_WINDOW_S = 20.0
+"""Ventana (s) que mira el modelo en un aviso de cierre: cómo está la situación ahora."""
 
 
 @dataclass
@@ -70,6 +72,13 @@ class Pending:
         return self.event.event_id
 
 
+def closure_window_start(detection_since: float | None, as_of: float) -> float:
+    """Inicio de la ventana del aviso de cierre: los últimos `CLOSURE_WINDOW_S` s, sin salirse por
+    atrás del inicio de la detección ni por debajo de 0."""
+    start = max(as_of - CLOSURE_WINDOW_S, 0.0)
+    return max(start, detection_since) if detection_since is not None else start
+
+
 @dataclass
 class Invocation:
     """Lo que lleva una invocación del monitor: sus eventos pendientes y lo que ya ha publicado."""
@@ -81,8 +90,8 @@ class Invocation:
     seen_ids: set[str] = field(default_factory=set)
     repeats: dict[str, int] = field(default_factory=dict)
     """Cuántas veces ha repetido el modelo cada llamada ya rechazada."""
-    rejected: dict[str, list[str]] = field(default_factory=dict)
-    """Llamadas ya rechazadas (herramienta + argumentos) y sus errores."""
+    rejected: set[str] = field(default_factory=set)
+    """Llamadas ya rechazadas (herramienta + argumentos)."""
     facts: InvocationFacts = field(default_factory=InvocationFacts)
     """Lo que han devuelto las tools de datos en esta invocación (para contrastar los `checks`)."""
     alerts: dict[str, list[str]] = field(default_factory=dict)
@@ -401,6 +410,7 @@ class Monitor:
             # correspondencia con los eventos la hace el módulo (`Invocation.take`)
             payload = {"t": format_t(p.event.sim_time), **p.event.payload}
             record = rt.state.detections.get(p.detection_id)
+            window_since = closure_window_start(record.since if record else None, inv.as_of)
             parts.append(
                 render(
                     secs[p.kind],
@@ -408,7 +418,7 @@ class Monitor:
                     detection_json=compact_json(payload),
                     related_alerts=rt.state.describe_related_alerts(p.detection_id),
                     last_open_alert=p.last_open_of or "",
-                    detection_since=f"{record.since:g}" if record else f"{p.event.sim_time:g}",
+                    window_since=f"{window_since:g}",
                     sim_time=f"{inv.as_of:g}",
                 )
             )
@@ -502,7 +512,8 @@ class Monitor:
         self, inv: Invocation, tool: str, raw: dict[str, Any], verdict: Verdict
     ) -> dict[str, Any]:
         """Devuelve el rechazo al modelo. Si repite una llamada idéntica a otra ya rechazada, el
-        rechazo lo dice (el 14B repetía la misma llamada hasta agotar las iteraciones)."""
+        rechazo lo dice (el 14B repetía la misma llamada hasta agotar las iteraciones). Los
+        errores son siempre los vigentes de esta llamada: se compara la llamada, no los errores."""
         key = tool + json.dumps(raw, sort_keys=True, ensure_ascii=False, default=str)
         errors = verdict.errors
         if key in inv.rejected:
@@ -513,12 +524,9 @@ class Monitor:
                     {"tool": tool, "errors": ["repeats a rejected call for the second time"]}
                 )
                 raise AbortInvocation(f"{tool}: rejected call repeated for the second time")
-            errors = [
-                "This is the same call as before; change what I told you.",
-                *inv.rejected[key],
-            ]
+            errors = ["This is the same call as before; change what I told you.", *verdict.errors]
         else:
-            inv.rejected[key] = verdict.errors
+            inv.rejected.add(key)
         inv.trace.guardrail_rejections.append({"tool": tool, "errors": errors})
         return {"ok": False, "errors": errors}
 

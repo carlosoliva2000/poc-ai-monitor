@@ -3,6 +3,7 @@ español y accionables, llamada repetida, solo detecciones pendientes y estado e
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from agent_helpers import (
@@ -23,6 +24,8 @@ from test_monitor_state import alert, closed
 from test_report_chat import operator_message
 
 from ai_module.agent.assets import Assets
+from ai_module.agent.engine import AbortInvocation
+from ai_module.agent.guardrails import Verdict
 from ai_module.agent.tools import Toolbox
 from ai_module.chat import Chat
 from ai_module.monitor import Monitor
@@ -203,6 +206,26 @@ def test_the_same_rejected_call_is_called_out(tmp_path: Path) -> None:
     assert second["errors"][0] == "This is the same call as before; change what I told you."
     assert second["errors"][1:] == first["errors"]  # y repite qué había que cambiar
     assert any(e.type == EventType.ANOMALY_DETECTED for e in published)
+
+
+def test_a_repeated_call_gets_the_current_errors_not_the_first_ones() -> None:
+    """La misma llamada se detecta por sus argumentos; los errores son los vigentes (aquí cambian
+    entre un rechazo y el siguiente, p. ej. porque el modelo pidió una evidencia entremedias)."""
+    inv = SimpleNamespace(
+        rejected=set(), repeats={}, trace=SimpleNamespace(guardrail_rejections=[])
+    )
+    call_args = {"detection_ids": ["det-0001"]}
+    reject = Monitor._reject
+    first = reject(None, inv, "publish_alert", call_args, Verdict(errors=["a", "b"]))
+    second = reject(None, inv, "publish_alert", call_args, Verdict(errors=["b"]))
+    assert first["errors"] == ["a", "b"]
+    assert second["errors"] == ["This is the same call as before; change what I told you.", "b"]
+    with pytest.raises(AbortInvocation):
+        reject(None, inv, "publish_alert", call_args, Verdict(errors=["b"]))
+    other = reject(
+        None, inv, "publish_alert", {"detection_ids": ["det-0002"]}, Verdict(errors=["c"])
+    )
+    assert other["errors"] == ["c"]  # otra llamada: sin aviso de repetición
 
 
 # --- 5. iteraciones y tiempos -------------------------------------------------------------------
