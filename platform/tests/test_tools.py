@@ -233,13 +233,19 @@ def test_alerts_summary_and_status(runs_dir: Path) -> None:
     d1 = bus.publish(detection(1, 20.0))
     bus.publish(monitor_reply(1, d1.event_id, 20.0))
     second = monitor_reply(2, "det-0001", 20.0).model_copy(
-        update={"payload": {**monitor_reply(2, "det-0001", 20.0).payload, "supersedes": "ai-0001"}}
+        update={
+            "payload": {
+                **monitor_reply(2, "det-0001", 20.0).payload,
+                "supersedes": "ai-0001",
+                "phase": "recovering",
+            }
+        }
     )
     bus.publish(second)
     alerts = MyAlertsResult.model_validate(call_tool(ctx, "get_my_alerts", {}))
-    assert [(a.alert_id, a.status.value) for a in alerts.alerts] == [
-        ("ai-0001", "superseded"),
-        ("ai-0002", "open"),
+    assert [(a.alert_id, a.status.value, a.phase.value) for a in alerts.alerts] == [
+        ("ai-0001", "superseded", "active"),  # sin `phase` en el payload: `active`
+        ("ai-0002", "open", "recovering"),
     ]
     only_open = call_tool(ctx, "get_my_alerts", {"only_open": True})
     assert [a["alert_id"] for a in only_open["alerts"]] == ["ai-0002"]

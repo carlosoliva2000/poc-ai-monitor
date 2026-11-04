@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from ai_module.evaluate import (
     RunData,
     contradicting_rules,
@@ -93,6 +95,7 @@ class Builder:
         conf: float = 0.8,
         texts: dict[str, str] | None = None,
         checks: dict[str, Any] | None = None,
+        phase: str | None = None,
     ) -> dict:
         payload = {
             "alert_id": alert_id,
@@ -110,6 +113,8 @@ class Builder:
             "checks": checks,
             **(texts or {}),
         }
+        if phase is not None:  # sin ella, como las ejecuciones anteriores a la v0.14
+            payload["phase"] = phase
         return self.ev(
             "AnomalyDetected",
             t,
@@ -232,19 +237,28 @@ def demo_run(
     spoof: str = "GPS_SPOOFING",
     recovery: str = "GPS_SPOOFING",
     hijack: str = "HIJACK",
+    phases: str | None = None,
+    recovery_ack: bool = False,
 ) -> Builder:
-    """`demo` con las cuatro detecciones de la tabla 4.4 y la causa que se indique en cada una."""
+    """`demo` con las cuatro detecciones de la tabla 4.4 y la causa que se indique en cada una.
+    Con `phases` (la fase de la alerta de recuperación) las alertas llevan `phase`: `active` y la
+    indicada en la recuperación; con `recovery_ack`, la recuperación se reconoce en vez de
+    publicarse."""
     b = Builder(tmp_path)
+    phase = "active" if phases else None
     r1 = b.raised("det-0001", 106.0, "ROUTE_DEVIATION")
-    b.alert("ai-0002", 107.0, wind, r1, ["det-0001"])
+    b.alert("ai-0002", 107.0, wind, r1, ["det-0001"], phase=phase)
     c1 = b.cleared("det-0001", 156.0, "ROUTE_DEVIATION")
     b.ack("ai-0003", 157.0, c1, "det-0001", None)
     r2 = b.raised("det-0010", 192.0, "SOURCE_DISCREPANCY")
-    b.alert("ai-0011", 193.0, spoof, r2, ["det-0010"])
+    b.alert("ai-0011", 193.0, spoof, r2, ["det-0010"], phase=phase)
     r3 = b.raised("det-0020", 222.0, "ROUTE_DEVIATION")
-    b.alert("ai-0021", 223.0, recovery, r3, ["det-0020"], supersedes="ai-0011")
+    if recovery_ack:
+        b.ack("ai-0022", 223.0, r3, "det-0020", "ai-0011")
+    else:
+        b.alert("ai-0021", 223.0, recovery, r3, ["det-0020"], supersedes="ai-0011", phase=phases)
     r4 = b.raised("det-0030", 338.0, "ROUTE_DEVIATION")
-    b.alert("ai-0031", 339.0, hijack, r4, ["det-0030"])
+    b.alert("ai-0031", 339.0, hijack, r4, ["det-0030"], phase=phase)
     return b
 
 
@@ -860,6 +874,95 @@ def test_the_severity_of_each_published_alert_is_listed_by_label(tmp_path: Path)
     data = json.loads((b.folder / "eval.json").read_text(encoding="utf-8"))
     [first] = data["alert_severities"]["A1"][:1]
     assert first == {
-        "alert_id": "ai-0002", "cause": "WIND", "severity": "high", "sim_time": 107.0,
-        "fallback": False,
+        "alert_id": "ai-0002", "cause": "WIND", "severity": "high", "phase": None,
+        "sim_time": 107.0, "fallback": False,
     }  # fmt: skip
+
+
+# --- Fase de la alerta (v0.14) ----------------------------------------------------------------
+
+
+def metrics_message(step: float | None) -> dict:
+    result = {"gps_deviation_from_plan_m": {"mean": 7.2, "max": 73.9}, "gps_max_step_m": step}
+    return {"role": "tool", "content": json.dumps(result), "tool_call_id": "c"}
+
+
+def recovery_trace(b: Builder, messages: list[dict], **overrides: Any) -> None:
+    b.trace.append(trace_record(causation_ids=["det-0020"], messages=messages, **overrides))
+
+
+def test_a_run_without_phase_says_it_cannot_count_recoveries(tmp_path: Path) -> None:
+    ev = evaluate(demo_run(tmp_path).write())
+    assert ev.recovery_misses is None
+    assert "· n/d recuperaciones sin fase recovering" in summary(ev)
+    assert "n/d: las alertas de esta ejecución no llevan `phase`" in render_markdown(ev)
+
+
+def test_a_recovery_published_as_recovering_is_not_a_miss(tmp_path: Path) -> None:
+    b = demo_run(tmp_path, phases="recovering")
+    ev = evaluate(b.write())
+    assert ev.recovery_misses == []
+    md = render_markdown(ev)
+    assert "- A2: ai-0011 GPS_SPOOFING high [active] T+03:13 → ai-0021 GPS_SPOOFING high" in md
+    assert "[recovering]" in md and "Recuperaciones sin fase `recovering`: 0" in md
+    assert "· 0 recuperaciones sin fase recovering" in summary(ev)
+    write_evaluation(b.folder)
+    data = json.loads((b.folder / "eval.json").read_text(encoding="utf-8"))
+    assert data["recovery_misses"] == []
+    phases = [a["phase"] for a in data["alert_severities"]["A2"]]
+    assert sorted(phases) == ["active", "recovering"]
+
+
+@pytest.mark.parametrize(
+    ("messages", "kwargs", "reason"),
+    [
+        ([metrics_message(67.9)], {}, "other"),  # lo publicó `active` con el salto a la vista
+        ([], {}, "no_metrics"),
+        ([metrics_message(5.0)], {}, "window_without_jump"),
+        ([metrics_message(None)], {}, "window_without_jump"),
+        ([metrics_message(67.9)], {"recovery_ack": True}, "acknowledged"),
+        ([], {"recovery_ack": True}, "no_metrics"),
+    ],
+)
+def test_a_recovery_without_the_recovering_phase_is_a_miss_with_its_reason(
+    tmp_path: Path, messages: list[dict], kwargs: dict, reason: str
+) -> None:
+    b = demo_run(tmp_path, phases="active", **kwargs)
+    recovery_trace(b, messages)
+    ev = evaluate(b.write())
+    assert [(m.label_id, m.detection_id, m.reason) for m in ev.recovery_misses or []] == [
+        ("A2", "det-0020", reason)
+    ]
+    md = render_markdown(ev)
+    assert f"❌ A2 (det-0020): sin fase `recovering` · motivo `{reason}`" in md
+    assert "· 1 recuperaciones sin fase recovering" in summary(ev)
+    assert ev.results[1].verdict == "✅" or kwargs  # el diagnóstico de la causa no cambia
+
+
+def test_a_fallback_recovery_is_a_miss_and_the_veto_counts_come_from_the_trace(
+    tmp_path: Path,
+) -> None:
+    b = demo_run(tmp_path, phases="active")
+    b.events = [e for e in b.events if e["event_id"] != "ai-0021"]
+    b.ack(
+        "ai-0022",
+        223.0,
+        next(e for e in b.events if e["event_id"] == "det-0020"),
+        "det-0020",
+        None,
+        fallback=True,
+    )
+    rejections = [
+        {"tool": "acknowledge_detection", "errors": ["x"], "tag": "recovery_ack_veto"},
+        {"tool": "acknowledge_detection", "errors": ["y"], "tag": "recovery_ack_no_metrics"},
+        {"tool": "publish_alert", "errors": ["z"]},
+    ]
+    recovery_trace(b, [metrics_message(67.9)], guardrail_rejections=rejections)
+    ev = evaluate(b.write())
+    assert [m.reason for m in ev.recovery_misses or []] == ["fallback"]
+    monitor = ev.agents["monitor"]
+    assert monitor["recovery_ack_vetoes"] == 1 and monitor["recovery_ack_no_metrics"] == 1
+    assert monitor["rejections"] == 3
+    md = render_markdown(ev)
+    assert "Veto del reconocimiento de la recuperación: 1 veces" in md
+    assert "rechazos por no haber pedido get_track_metrics: 1" in md

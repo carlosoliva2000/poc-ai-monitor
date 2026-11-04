@@ -23,6 +23,8 @@
 //                                              secuestro, chat del monitor, informe y chat del informe (módulo de IA con la configuración por defecto)
 //   node scripts/capture.mjs fase14_1 <carpeta> demo a 16× con «esperar al agente» a 1920×1080: informe de misión con el anexo
 //                                              (autoevaluación del monitor) plegado y desplegado (módulo de IA con la configuración por defecto)
+//   node scripts/capture.mjs fase14_2 <carpeta> demo a 16× con «esperar al agente» a 1920×1080: la alerta de recuperación con su fase («recovering»)
+//                                              y la cadena del episodio leída como estados (módulo de IA con la configuración por defecto)
 // Requiere plataforma (8100), módulo de IA y web (3000) en marcha. Una sola pestaña: los ids
 // `ops-` los calcula la web y con dos pestañas podrían repetirse.
 import { chromium } from 'playwright'
@@ -390,6 +392,31 @@ async function runFase14_1() {
   await page.locator('[data-testid=report-view]').evaluate((el) => (el.scrollTop = 0))
   await sleep(200)
   await shot('03_informe_de_mision_inicio')
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
+async function runFase14_2() {
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await setup('demo', { waitAgent: true, interactive: false, speed: 16 })
+  await page.getByRole('button', { name: 'Start', exact: true }).click()
+  note('play')
+  const deadline = Date.now() + 20 * 60 * 1000
+  let phased = false
+  while (Date.now() < deadline && !(await headerText()).includes('Finished')) {
+    if (!phased && (await count('[data-testid=alert-card] [data-testid=phase-chip]')) > 0) {
+      phased = true
+      await page.locator('[data-testid=alert-card] details').evaluateAll((ds) => ds.forEach((d) => (d.open = true)))
+      await page.locator('[data-testid=supersedes]').last().scrollIntoViewIfNeeded()
+      await sleep(400)
+      await shot('01_alerta_en_recuperacion')
+    }
+    await sleep(500)
+  }
+  note(`alerta recovering vista: ${phased}`)
+  await sleep(1500)
+  note(`cadenas: ${await page.locator('[data-testid=episode-path]').allTextContents()}`)
+  await page.locator('[data-testid=episode-chip]').first().scrollIntoViewIfNeeded()
+  await shot('02_cadena_spoofing_recovering_closed')
   writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
 }
 
@@ -1204,6 +1231,7 @@ try {
   else if (mode === 'fase9_2') await runFase9_2()
   else if (mode === 'fase10') await runFase10()
   else if (mode === 'fase14_1') await runFase14_1()
+  else if (mode === 'fase14_2') await runFase14_2()
   else if (mode === 'followcheck') await runFollowCheck()
   else if (mode === 'telemetry') await runTelemetry()
   else if (mode === 'highlight') await runHighlight()

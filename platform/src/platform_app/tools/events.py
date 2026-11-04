@@ -96,6 +96,7 @@ def get_my_alerts(ctx: ToolContext, args: GetMyAlertsArgs) -> MyAlertsResult:
                 summary=p.summary,
                 status=status,
                 sim_time=event.sim_time,
+                phase=p.phase,
             )
         )
     return MyAlertsResult(alerts=alerts)

@@ -2,6 +2,8 @@
 // si cambia el contrato, cambian aquí.
 
 export type Severity = 'low' | 'medium' | 'high'
+/** Fase de una alerta (v0.14): `recovering` cuando el problema ha terminado y la situación vuelve a la normalidad. */
+export type Phase = 'active' | 'recovering'
 export type SensorSource = 'gps' | 'radar' | 'meteo' | 'link' | 'battery'
 export type FaultMode = 'mute' | 'loss'
 export type Cause = 'WIND' | 'HIJACK' | 'GPS_SPOOFING' | 'SENSOR_FAULT' | 'GPS_JAMMING' | 'UNKNOWN'
@@ -77,6 +79,8 @@ export type Anomaly = {
   as_of_sim_time: number
   fallback: boolean
   checks: Checks | null
+  /** Ausente en las ejecuciones anteriores a la v0.14: se lee como `active`. */
+  phase?: Phase
 }
 export type AlertClosed = { alert_id: string; reason: string; as_of_sim_time: number }
 export type DetectionAcknowledged = {

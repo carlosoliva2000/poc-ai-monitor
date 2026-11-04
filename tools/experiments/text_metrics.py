@@ -48,6 +48,7 @@ COMPASS_TOL = 25.0  # grados, cuando el texto da solo un punto cardinal
 DIST_TOL = 1.0  # m
 
 ANNEX_TITLES = ("Monitor assessment", "Technical recommendations")
+RECOMMENDATION_KINDS = ("alert.recommendation", "report.Recommendations")
 COUNTERS = (
     "internal_names",
     "enum_names",
@@ -60,6 +61,15 @@ COUNTERS = (
     "gps_radar_distance",
     "deviation",
     "wind_drift",
+)
+# Contadores de estilo (Fase 14.2): se miden aparte, no entran en las fugas ni en los errores.
+STYLE_COUNTERS = (
+    "generic_recommendation",
+    "no_action_recommendation",
+    "now_window_mix",
+    "foreign_source_in_close",
+    "summary_missing_type",
+    "monitor_talk_in_recommendations",
 )
 COMPASS = {
     name: i * 22.5
@@ -122,6 +132,172 @@ MODULE_FIELDS = [
     "sim_time",
     "tool_choice",
 ]
+
+
+# --- Recomendaciones genéricas y sin acción (Fase 14.2) ----------------------------------------
+# Heurísticas léxicas en inglés, sobre cada recomendación de una alerta y cada punto numerado de
+# «Recommendations» del informe. Un punto puede ser a la vez genérico y sin acción.
+
+GENERIC_FORMULAS = (
+    r"ensure (?:the )?(?:secure|safe) communication",
+    r"verify the (?:[\w-]+ ){0,3}(?:authenticity|integrity)",
+    r"ensure (?:that )?(?:there is )?no unauthori[sz]ed access",
+    r"ensure (?:the )?(?:integrity|security) of",
+    r"(?:follow|adhere to|implement) (?:standard |established |appropriate )?"
+    r"(?:security|safety) (?:protocols|procedures|measures)",
+    r"take appropriate (?:action|measures|steps)",
+    r"(?:strengthen|enhance|improve) (?:the )?(?:security|cybersecurity)",
+    r"ensure (?:the )?(?:system|network|communications?) (?:is|are) secure",
+)
+GENERIC_RE = re.compile("|".join(GENERIC_FORMULAS), re.IGNORECASE)
+# Verbos de acción concretos (no «investigate», «verify», «ensure», «review», «consider»…).
+ACTION_VERBS = (
+    r"use|rely|switch|keep|hold|maintain|hover|return|land|abort|take|regain|recover|"
+    r"re-?establish|restore|check|inspect|replace|re-?calibrate|calibrate|restart|reboot|"
+    r"re-?route|reduce|slow|descend|climb|divert|contact|notify|alert|inform|report|escalate|"
+    r"resume|continue|navigate|fly|monitor|watch|track|compare|cross-?check|confirm|do not|"
+    r"avoid|wait|let"
+)
+ACTION_OBJECTS = (
+    r"drone|radar|link|route|gps|controller|control|base|waypoint|position|flight|mission|"
+    r"receiver|sensor|antenna|operator|ground station|wind|deviation|signal|track"
+)
+ACTION_RE = re.compile(r"\b(?:" + ACTION_VERBS + r")\b", re.IGNORECASE)
+OBJECT_RE = re.compile(r"\b(?:" + ACTION_OBJECTS + r")", re.IGNORECASE)
+POINT_RE = re.compile(r"^\s*(?:\d+[.)]|[-*•])\s+", re.MULTILINE)
+
+
+def recommendation_points(text: str) -> list[str]:
+    """Los puntos de una lista numerada o con viñetas; si no la hay, el texto entero."""
+    parts = [p.strip() for p in POINT_RE.split(text) if p.strip()]
+    return parts if POINT_RE.search(text) and parts else [text.strip()]
+
+
+def recommendation_style(text: str) -> dict[str, list[str]]:
+    """`generic_recommendation`: puntos con una fórmula vacía de seguridad.
+    `no_action_recommendation`: puntos sin un verbo de acción concreto y un objeto (el dron, el
+    radar, el enlace, la ruta, el GPS…) en el mismo punto."""
+    generic, no_action = [], []
+    for point in map(norm, recommendation_points(text)):  # se separa antes de normalizar
+        if GENERIC_RE.search(point):
+            generic.append(point)
+        if not (ACTION_RE.search(point) and OBJECT_RE.search(point)):
+            no_action.append(point)
+    return {"generic_recommendation": generic, "no_action_recommendation": no_action}
+
+
+# --- «Ahora» frente a la ventana y fuentes ajenas en el cierre (Fase 14.2) -----------------------
+# Heurísticas léxicas en inglés (frases con marcador de presente o de pasado y una cifra), con las
+# mismas tolerancias que el resto (distancias ±1 m, viento ±0,5 m/s). Cuentan frases, no cifras.
+
+PRESENT_RE = re.compile(r"\b(?:now|currently|at the moment|at present|right now|at this moment)\b")
+PAST_RE = re.compile(
+    r"\b(?:was|were|had|reached|peaked|earlier|previously|during|before|between)\b"
+)
+# causa de la alerta -> fuentes que no tienen que ver con ella (el viento en un secuestro…)
+FOREIGN_TERMS = {
+    "HIJACK": ("wind",),
+    "GPS_SPOOFING": ("wind",),
+    "SENSOR_FAULT": ("wind",),
+}
+WIND_TERM_RE = re.compile(r"\b(?:wind|gusts?|weather)\b", re.IGNORECASE)
+
+
+def figure_mentions(low: str) -> list[tuple[str, float]]:
+    """(magnitud, valor) de las cifras de distancia GPS–radar, desviación y viento de una frase."""
+    out: list[tuple[str, float]] = []
+    if "gps" in low and "radar" in low:
+        for m in DIST_RE.finditer(low):
+            if not re.search(r"=|deviation|jump|step|route|plan", m.group(0)):
+                out.append(("distance", float(m.group(1))))
+    for m in DEV_RE.finditer(low):
+        start = next(m.start(k) for k in (1, 2) if m.group(k) is not None)
+        if not THRESHOLD_RE.search(low[:start]):
+            out.append(("deviation", float(next(g for g in m.groups() if g is not None))))
+    if "wind" in low or "gust" in low:
+        for pattern in SPEED_PATTERNS:
+            out.extend(("wind_speed", float(m.group(1))) for m in pattern.finditer(low))
+    return out
+
+
+def now_window_mix(text: str, facts: "Facts") -> list[str]:
+    """Frases que mezclan «ahora» y la ventana: en presente («now», «currently»…) con una cifra
+    que solo está en la ventana, en pasado («was», «reached»…) con una que solo está en `now`, o
+    «disagree by N m» con N de `now` (coinciden ahora: no discrepan)."""
+    sets = {
+        "distance": (facts.now_distance, facts.window_distance),
+        "deviation": (facts.now_deviation, facts.window_deviation),
+        "wind_speed": (facts.now_wind_speed, facts.window_wind_speed),
+    }
+    found: list[str] = []
+    for sentence in sentences(text):
+        low = sentence.lower()
+        present, past = bool(PRESENT_RE.search(low)), bool(PAST_RE.search(low))
+        for kind, value in figure_mentions(low):
+            now, window = sets[kind]
+            only_window = near(value, window, DIST_TOL) and not near(value, now, DIST_TOL)
+            only_now = near(value, now, DIST_TOL) and not near(value, window, DIST_TOL)
+            if kind == "wind_speed":
+                only_window = near(value, window, SPEED_TOL) and not near(value, now, SPEED_TOL)
+                only_now = near(value, now, SPEED_TOL) and not near(value, window, SPEED_TOL)
+            if (present and not past and only_window) or (past and not present and only_now):
+                found.append(f"{kind} {value:g} :: {sentence}")
+        if "gps" in low and "radar" in low:
+            for m in DISAGREE_RE.finditer(low):
+                if NEGATION_RE.search(low[max(0, m.start() - 25) : m.start()]):
+                    continue
+                value = float(m.group(1))
+                if near(value, facts.now_distance, DIST_TOL) and not near(
+                    value, facts.window_distance, DIST_TOL
+                ):
+                    found.append(f"disagree by {value:g} (now) :: {sentence}")
+    return found
+
+
+def foreign_source_in_close(text: str, cause: str | None, sources: set[str]) -> list[str]:
+    """Frases de un cierre que hablan de una fuente ajena a la causa de la alerta (el viento en un
+    secuestro, en un engaño del GPS o en el fallo de un sensor que no es la meteo), también para
+    decir que no importa."""
+    terms = FOREIGN_TERMS.get(cause or "", ())
+    if "wind" not in terms or "meteo" in sources:
+        return []
+    return [s for s in sentences(text) if WIND_TERM_RE.search(s)]
+
+
+# --- Informe de misión: tipo de cada anomalía y jerga del monitor (Fase 14.2) ---------------------
+# Heurísticas léxicas en inglés. Una anomalía es una cadena de alertas: basta con que el Summary
+# nombre alguna de sus causas.
+
+CAUSE_WORDS = {
+    "WIND": r"wind",
+    "HIJACK": r"hijack",
+    "GPS_SPOOFING": r"spoof",
+    "SENSOR_FAULT": r"sensor|fault|silen|radar|receiver",
+    "GPS_JAMMING": r"jam|gps loss|loss of (?:the )?gps|lost|interfer|signal loss",
+    "UNKNOWN": r"unknown|undiagnosed|no diagnosis",
+}
+MONITOR_TALK_RE = re.compile(
+    r"\b(?:guardrails?|fall-?backs?|rejections?|rejected|wall-?clock|diagnosis delay|"
+    r"the monitor|monitoring system|detector|model aids?|prompts?|thresholds?)\b",
+    re.IGNORECASE,
+)
+
+
+def summary_missing_type(text: str, chains: list[set[str]]) -> list[str]:
+    """Una entrada por anomalía cuyo tipo (ninguna de las causas de su cadena) no nombra el
+    resumen del informe."""
+    low = norm(text).lower()
+    return [
+        "/".join(sorted(causes))
+        for causes in chains
+        if not any(re.search(CAUSE_WORDS.get(c, c.lower()), low) for c in causes)
+    ]
+
+
+def monitor_talk(text: str) -> list[str]:
+    """Puntos de las recomendaciones que hablan del sistema de monitorización (retrasos, rechazos,
+    guardrails, ayudas…) y no del dron: eso va en el anexo."""
+    return [p for p in map(norm, recommendation_points(text)) if MONITOR_TALK_RE.search(p)]
 
 
 # --- Normalización y nombres internos ----------------------------------------------------------
@@ -230,8 +406,21 @@ class Facts:
     deviation: set[float] = field(default_factory=set)
     with_drift: set[bool] = field(default_factory=set)
     """Valores de `wind.with_drift` de las consultas (el viento va a favor de la deriva o no)."""
+    now_distance: set[float] = field(default_factory=set)
+    now_deviation: set[float] = field(default_factory=set)
+    now_wind_speed: set[float] = field(default_factory=set)
+    """Los valores del bloque `now` (v0.13), aparte de los agregados de la ventana de abajo."""
+    window_distance: set[float] = field(default_factory=set)
+    window_deviation: set[float] = field(default_factory=set)
+    window_wind_speed: set[float] = field(default_factory=set)
 
     def merge(self, other: "Facts") -> None:
+        self.now_distance |= other.now_distance
+        self.now_deviation |= other.now_deviation
+        self.now_wind_speed |= other.now_wind_speed
+        self.window_distance |= other.window_distance
+        self.window_deviation |= other.window_deviation
+        self.window_wind_speed |= other.window_wind_speed
         self.wind_speed |= other.wind_speed
         self.wind_from |= other.wind_from
         self.distance |= other.distance
@@ -260,15 +449,33 @@ def add_metrics(facts: Facts, metrics: dict[str, Any]) -> None:
                 facts.deviation.add(float(value))
     if metrics.get("gps_max_step_m") is not None:
         facts.deviation.add(float(metrics["gps_max_step_m"]))
+    # agregados de la ventana, aparte (para distinguir «ahora» de «la ventana», Fase 14.2)
+    facts.window_distance |= {
+        float((metrics.get("gps_radar_distance_m") or {})[stat])
+        for stat in ("mean", "max")
+        if (metrics.get("gps_radar_distance_m") or {}).get(stat) is not None
+    }
+    facts.window_deviation |= {
+        float((metrics.get(key) or {})[stat])
+        for key in ("gps_deviation_from_plan_m", "radar_deviation_from_plan_m")
+        for stat in ("mean", "max")
+        if (metrics.get(key) or {}).get(stat) is not None
+    }
+    facts.window_wind_speed |= {
+        float(wind[key]) for key in ("mean_speed_mps", "max_gust_mps") if wind.get(key) is not None
+    }
     now = metrics.get("now") or {}  # bloque de la Fase 14.1, paso 2
     if now.get("gps_radar_distance_m") is not None:
         facts.distance.add(float(now["gps_radar_distance_m"]))
+        facts.now_distance.add(float(now["gps_radar_distance_m"]))
     for key in ("gps_deviation_from_plan_m", "radar_deviation_from_plan_m"):
         if now.get(key) is not None:
             facts.deviation.add(float(now[key]))
+            facts.now_deviation.add(float(now[key]))
     for key in ("wind_speed_mps", "wind_gust_mps"):
         if now.get(key) is not None:
             facts.wind_speed.add(float(now[key]))
+            facts.now_wind_speed.add(float(now[key]))
     if now.get("wind_from_deg") is not None:
         facts.wind_from.add(float(now["wind_from_deg"]))
 
@@ -480,6 +687,9 @@ def measure_text(
     existing_ids: set[str],
     corpus: set[tuple[str, ...]],
     prose: list[str],
+    cause: str | None = None,
+    sources: set[str] | None = None,
+    chains: list[set[str]] | None = None,
 ) -> Measured:
     names, enums, bools = find_names(text)
     grams = set(corpus)
@@ -494,6 +704,16 @@ def measure_text(
         "bad_ids": [i for i in cited if i not in existing_ids],
         **check_numbers(text, facts),
     }
+    if kind in RECOMMENDATION_KINDS:
+        findings.update(recommendation_style(text))
+    if kind == "report.Summary" and chains is not None:
+        findings["summary_missing_type"] = summary_missing_type(text, chains)
+    if kind == "report.Recommendations":
+        findings["monitor_talk_in_recommendations"] = monitor_talk(text)
+    if kind.startswith(("alert.", "end.")):
+        findings["now_window_mix"] = now_window_mix(text, facts)
+    if kind == "end.reason" and cause is not None:
+        findings["foreign_source_in_close"] = foreign_source_in_close(text, cause, sources or set())
     plain = norm(text)
     return Measured(
         scenario,
@@ -531,6 +751,27 @@ def measure_run(
     )
     monitor = [r for r in records if r.get("agent") == "monitor"]
     out: list[Measured] = []
+    det_source = {
+        e["payload"]["detection_id"]: e["payload"].get("source")
+        for e in events
+        if e.get("type") == "DetectionRaised"
+    }
+    alert_cause: dict[str, str] = {}
+    alert_sources: dict[str, set[str]] = {}
+    chain_causes: dict[str, set[str]] = {}  # raíz de la cadena -> causas de sus alertas
+    root_of: dict[str, str] = {}
+    for e in events:
+        if e.get("type") == "AnomalyDetected":
+            p = e["payload"]
+            alert_cause[p["alert_id"]] = p.get("cause", "")
+            alert_sources[p["alert_id"]] = {
+                det_source[d] for d in p.get("detection_ids", []) if det_source.get(d)
+            }
+            if p.get("supersedes") in alert_sources:  # una cadena es un episodio
+                alert_sources[p["alert_id"]] |= alert_sources[p["supersedes"]]
+            root = root_of.get(p.get("supersedes") or "", p["alert_id"])
+            root_of[p["alert_id"]] = root
+            chain_causes.setdefault(root, set()).add(p.get("cause", ""))
 
     def run_facts(until: float | None, own: dict[str, Any] | None) -> tuple[Facts, list[str]]:
         facts = Facts()
@@ -569,6 +810,8 @@ def measure_run(
                             existing,
                             corpus,
                             prose,
+                            alert_cause.get(payload.get("alert_id") or ""),
+                            alert_sources.get(payload.get("alert_id") or "", set()),
                         )
                     )
         elif kind == "AgentReply":
@@ -602,7 +845,15 @@ def measure_run(
             kind = "annex" if title in ANNEX_TITLES else "report"
             out.append(
                 measure_text(
-                    scenario, f"{kind}.{title}", "report", body, facts, existing, corpus, prose
+                    scenario,
+                    f"{kind}.{title}",
+                    "report",
+                    body,
+                    facts,
+                    existing,
+                    corpus,
+                    prose,
+                    chains=list(chain_causes.values()),
                 )
             )
         for label, (_, body) in sorted(seen.items()):
@@ -636,6 +887,7 @@ def chain_rows(
             alerts = sorted(run.alerts[label], key=lambda e: (e["sim_time"], e["seq"]))
             steps = " → ".join(
                 f"{a['payload']['cause']} {a['payload']['severity']} {a['payload']['confidence']:g}"
+                f"{' [recovering]' if a['payload'].get('phase') == 'recovering' else ''}"
                 f"{' (fb)' if a['payload'].get('fallback') else ''}"
                 for a in alerts
             )
@@ -671,7 +923,7 @@ def summarize(measured: list[Measured], with_annex: bool = False) -> dict[str, A
     n = len(measured) or 1
     return {
         "texts": len(measured),
-        **{c: total[c] for c in COUNTERS},
+        **{c: total[c] for c in (*COUNTERS, *STYLE_COUNTERS)},
         "total_errors": sum(total[c] for c in COUNTERS[4:]),
         "total_leaks": sum(total[c] for c in COUNTERS[:4]),
         "chars_mean": round(sum(m.chars for m in measured) / n, 1),
@@ -704,7 +956,10 @@ def render(
     ]
     for gap in missing:
         out += [f"- missing: {gap}", ""]
-    header = ["source", "texts", *COUNTERS, "leaks", "errors", "chars", "figures", "ids", "times"]
+    header = [
+        "source", "texts", *COUNTERS, "leaks", "errors", *STYLE_COUNTERS,
+        "chars", "figures", "ids", "times",
+    ]  # fmt: skip
     out += ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     for name, measured in results.items():
         s = summarize(measured)
@@ -712,6 +967,7 @@ def render(
         row += [
             s["total_leaks"],
             s["total_errors"],
+            *(s[c] for c in STYLE_COUNTERS),
             s["chars_mean"],
             s["figures_mean"],
             s["ids_mean"],

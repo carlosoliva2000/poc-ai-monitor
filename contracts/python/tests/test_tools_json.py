@@ -24,8 +24,9 @@ def test_args_match_tools_json(name: str) -> None:
     model_schema = TOOL_MODELS[name][0].model_json_schema()
     json_props = TOOLS[name]["properties"]
     assert set(model_schema.get("properties", {})) == set(json_props)
-    # `checks` es obligatorio en `tools.json` y opcional en el modelo (`require_checks`)
-    optional_in_model = {"checks"} if name == "publish_alert" else set()
+    # `checks` y `phase` son obligatorios en `tools.json` y opcionales en el modelo: `checks` por
+    # el interruptor `require_checks`; `phase` porque el módulo la rellena si falta (v0.14)
+    optional_in_model = {"checks", "phase"} if name == "publish_alert" else set()
     assert set(model_schema.get("required", [])) | optional_in_model == set(TOOLS[name]["required"])
     defs = model_schema.get("$defs", {})
     for prop, spec in json_props.items():

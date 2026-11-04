@@ -48,6 +48,7 @@ AID_KEYS = (
     "now_facts",
     "source_silent_own_alert",
     "no_duplicate_cause",
+    "recovery_ack_veto",
     "guided_skills",
 )
 # La memoria del monitor no es una ayuda: cambia lo que el modelo recuerda, no lo que se le quita.

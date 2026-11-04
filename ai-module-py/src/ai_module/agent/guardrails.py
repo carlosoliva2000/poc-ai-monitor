@@ -9,7 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from poc_contracts.enums import AlertStatus
+from poc_contracts.enums import AlertPhase, AlertStatus
 from poc_contracts.envelope import EventDraft
 from poc_contracts.tools import AcknowledgeDetectionArgs, CloseAlertArgs, PublishAlertArgs
 
@@ -20,7 +20,11 @@ LINK_RSSI_JUMP_DB = 10.0  # un enlace es anómalo si el RSSI varía más de esto
 LINK_LATENCY_RATIO = 2.5  # o si la latencia máxima supera esta vez la mínima
 RECOVERY_STEP_M = 30.0  # la recuperación del GPS salta al menos esto de golpe
 RECOVERY_CAUSES = ("GPS_SPOOFING", "GPS_JAMMING", "SENSOR_FAULT")
-RECOVERY_SEVERITY = "medium"  # severidad que el guardrail impone a la alerta de recuperación
+RECOVERY_SEVERITIES = ("low", "medium")  # severidades válidas de una alerta `recovering`
+ACTIVE = AlertPhase.ACTIVE.value
+RECOVERING = AlertPhase.RECOVERING.value
+TAG_RECOVERY_ACK_VETO = "recovery_ack_veto"  # etiqueta del rechazo en la traza
+TAG_RECOVERY_ACK_NO_METRICS = "recovery_ack_no_metrics"
 SILENT_CAUSE = "SENSOR_FAULT"  # causa de la alerta propia de una fuente callada
 
 
@@ -135,6 +139,52 @@ def _source_of(name: str, facts: InvocationFacts, state: MonitorState) -> str:
     return "get_track_metrics"
 
 
+@dataclass
+class RecoveryContext:
+    """Qué dicen los datos de la invocación sobre la recuperación del GPS en un
+    `ROUTE_DEVIATION`. Dos niveles (Fase 14.2): `gps_related` (hay alerta del GPS reciente y el
+    GPS discrepa o salta: la causa es la de esa alerta) y `jump` (el GPS ha vuelto de golpe a la
+    posición real, `gps_max_step_m` ≥ 30 m: la alerta está en recuperación)."""
+
+    on_route_deviation: bool
+    recent: Any  # AlertRecord | None
+    step: float | None
+    gps_related: bool
+    jump: bool
+
+    @property
+    def expected_phase(self) -> str:
+        return RECOVERING if self.jump else ACTIVE
+
+
+def recovery_context(
+    detection_ids: list[str], facts: InvocationFacts, state: MonitorState, as_of: float
+) -> RecoveryContext:
+    metrics = facts.metrics or {}
+    on_route_deviation = any(
+        (d := state.detections.get(i)) is not None and d.rule == "ROUTE_DEVIATION"
+        for i in detection_ids
+    )
+    step = metrics.get("gps_max_step_m")
+    jump = step is not None and step >= RECOVERY_STEP_M
+    disagreed = metric_facts(facts.metrics)["gps_radar_disagreed"]
+    recent = state.recent_gps_alert(as_of) if on_route_deviation else None
+    return RecoveryContext(
+        on_route_deviation,
+        recent,
+        step,
+        gps_related=recent is not None and (disagreed or jump),
+        jump=recent is not None and jump,
+    )
+
+
+def effective_phase(args: Any, facts: InvocationFacts, state: MonitorState, as_of: float) -> str:
+    """La fase de la alerta: la que da el modelo o, si la omite, la que dicen los datos."""
+    if args.phase is not None:
+        return args.phase.value
+    return recovery_context(args.detection_ids, facts, state, as_of).expected_phase
+
+
 def check_coherence(
     args: Any,
     facts: InvocationFacts,
@@ -177,41 +227,35 @@ def check_coherence(
             )
     if cause == "HIJACK" and not expected["link_checked"]:
         errors.append("HIJACK requires having looked at the link: call get_events with source link")
-    on_route_deviation = any(
-        (d := state.detections.get(i)) is not None and d.rule == "ROUTE_DEVIATION"
-        for i in args.detection_ids
-    )
-    if on_route_deviation:
-        step = metrics.get("gps_max_step_m")
-        disagreed = expected["gps_radar_disagreed"] or (
-            step is not None and step >= RECOVERY_STEP_M
-        )
-        recent = state.recent_gps_alert(as_of)
-        if recent is not None and disagreed:
-            # recuperación del GPS: la única causa aceptada es la de esa alerta, y la alerta
-            # nueva sustituye a la anterior si esta sigue abierta
+    ctx = recovery_context(args.detection_ids, facts, state, as_of)
+    step = ctx.step
+    given_phase = args.phase.value if args.phase is not None else None
+    if ctx.on_route_deviation:
+        recent = ctx.recent
+        if ctx.gps_related:
+            # la causa es la de la alerta del GPS, y la alerta nueva sustituye a la anterior si
+            # esta sigue abierta
             still_open = recent.status == AlertStatus.OPEN
             want_supersedes = recent.alert_id if still_open else None
-            if still_open and recent.severity == RECOVERY_SEVERITY:
+            how = (
+                f"supersedes {recent.alert_id}"
+                if still_open
+                else f"no supersedes ({recent.alert_id} is already closed)"
+            )
+            what = (
+                f"GPS recovery of {recent.alert_id} ({recent.cause})"
+                if ctx.jump
+                else f"this deviation belongs to the GPS alert {recent.alert_id} ({recent.cause})"
+            )
+            if cause != recent.cause or args.supersedes != want_supersedes:
+                errors.append(f"{what}: expected cause {recent.cause} and {how}")
+            if ctx.jump and args.severity.value not in RECOVERY_SEVERITIES:
                 errors.append(
-                    f"GPS recovery of {recent.alert_id} ({recent.cause}), which is already "
-                    f"{RECOVERY_SEVERITY}: nothing changes, use acknowledge_detection with "
-                    f"alert_id {recent.alert_id}"
+                    f"GPS recovery of {recent.alert_id} (GPS jump {_num(step)} m): severity high "
+                    "does not fit, use low or medium"
                 )
-            elif (
-                cause != recent.cause
-                or args.supersedes != want_supersedes
-                or args.severity.value != RECOVERY_SEVERITY
-            ):
-                how = (
-                    f"supersedes {recent.alert_id}"
-                    if still_open
-                    else f"no supersedes ({recent.alert_id} is already closed)"
-                )
-                errors.append(
-                    f"GPS recovery of {recent.alert_id} ({recent.cause}): expected cause "
-                    f"{recent.cause}, severity {RECOVERY_SEVERITY} and {how}"
-                )
+            if given_phase is not None and given_phase != ctx.expected_phase:
+                errors.append(_phase_error(ctx, given_phase))
         elif cause in RECOVERY_CAUSES:
             errors.append(
                 f"a route deviation with cause {cause} is the GPS recovery and requires a GPS "
@@ -221,7 +265,30 @@ def check_coherence(
                 f"(gps_radar.disagreed={str(expected['gps_radar_disagreed']).lower()}) "
                 f"or a GPS jump of 30 m or more (gps_max_step_m={_num(step)})"
             )
+    handled_above = ctx.on_route_deviation and ctx.gps_related  # ya está dicho arriba
+    if given_phase == RECOVERING and not ctx.jump and not handled_above:
+        errors.append(_phase_error(ctx, given_phase))
     return errors
+
+
+def _phase_error(ctx: RecoveryContext, given: str) -> str:
+    """Los mensajes de la fase llevan datos y nada que copiar: sin nombres de campo ni de tool."""
+    if given == RECOVERING:
+        if not ctx.on_route_deviation:
+            return "phase recovering only fits the route deviation that follows a GPS alert"
+        if ctx.recent is None:
+            return (
+                "phase recovering needs a GPS alert that is open or closed 60 s ago or less; "
+                "there is none"
+            )
+        return (
+            f"phase recovering needs a GPS jump of {RECOVERY_STEP_M:g} m or more; this window "
+            f"has {_num(ctx.step)} m"
+        )
+    return (
+        f"wrong phase for this data (GPS jump {_num(ctx.step)} m, threshold "
+        f"{RECOVERY_STEP_M:g} m): use recovering"
+    )
 
 
 @dataclass
@@ -232,6 +299,10 @@ class Verdict:
     errors: list[str] = field(default_factory=list)
     unseen_evidence: list[str] = field(default_factory=list)
     """Evidencias que existen pero el modelo no ha visto en esta invocación (se cuentan)."""
+    phase: str | None = None
+    """Fase con la que se publica la alerta (la del modelo, o la que dicen los datos)."""
+    tag: str | None = None
+    """Etiqueta del rechazo en la traza (`recovery_ack_veto`, `recovery_ack_no_metrics`)."""
 
     @property
     def ok(self) -> bool:
@@ -310,6 +381,7 @@ def check_publish_alert(
     unseen: list[str] = []
     from_history: list[str] = []
     no_change: str | None = None
+    phase = effective_phase(args, facts or InvocationFacts(), state, as_of)
     for event_id in args.evidence_event_ids:
         sim_time = index.get(event_id)
         if sim_time is None:
@@ -356,13 +428,17 @@ def check_publish_alert(
                 f"({target.cause}) and gets its own alert: publish_alert with cause "
                 f"{SILENT_CAUSE} and without supersedes"
             )
-        elif args.cause.value == target.cause and args.severity.value == target.severity:
-            # una alerta que sustituye a otra tiene que cambiar algo; si no, es un reconocimiento.
-            # Se comprueba al final: en la recuperación del GPS la regla específica (publicar con
-            # severity medium) debe pasar por delante, o este mensaje mandaría reconocer.
+        elif (
+            args.cause.value == target.cause
+            and args.severity.value == target.severity
+            and phase == target.phase
+        ):
+            # una alerta que sustituye a otra tiene que cambiar algo (causa, severidad o fase); si
+            # no, es un reconocimiento. Se comprueba al final: las reglas específicas de la
+            # recuperación (causa, `supersedes`, fase) deben pasar por delante.
             no_change = (
-                f"Nothing changes with respect to {target.alert_id} (same cause and severity): "
-                f"use acknowledge_detection with alert_id {target.alert_id}"
+                f"Nothing changes with respect to {target.alert_id} (same cause, severity and "
+                f"phase): use acknowledge_detection with alert_id {target.alert_id}"
             )
     else:
         for detection_id in args.detection_ids:
@@ -392,7 +468,7 @@ def check_publish_alert(
         )
     if no_change and not errors:
         errors.append(no_change)
-    return Verdict(args=args, errors=[*errors, *from_history], unseen_evidence=unseen)
+    return Verdict(args=args, errors=[*errors, *from_history], unseen_evidence=unseen, phase=phase)
 
 
 def _missing_detection_ids(pending: set[str] | None) -> str:
@@ -407,9 +483,14 @@ def check_acknowledge(
     unanswered: set[str],
     pending: set[str],
     source_silent_own_alert: bool = False,
+    facts: InvocationFacts | None = None,
+    as_of: float = 0.0,
+    recovery_ack_veto: bool = False,
 ) -> Verdict:
     """`unanswered`: detecciones del lote que aún no tienen respuesta; `pending`: todas las del
-    lote."""
+    lote. Con `recovery_ack_veto` (Fase 14.2) no se puede reconocer la recuperación del GPS: un
+    `ROUTE_DEVIATION` abierto mientras la alerta del GPS sigue `active` y los datos de la
+    invocación muestran el salto (o no se pidió `get_track_metrics`, con lo que no se sabe)."""
     args, errors = _parse(AcknowledgeDetectionArgs, raw)
     if args is None:
         return Verdict(errors=errors)
@@ -432,7 +513,40 @@ def check_acknowledge(
             "a SOURCE_SILENT warning is always a different fault and gets its own alert: "
             f"publish_alert with cause {SILENT_CAUSE} and without supersedes"
         )
+    if not errors and recovery_ack_veto:
+        return _check_recovery_ack(args, facts or InvocationFacts(), state, as_of)
     return Verdict(args=args, errors=errors)
+
+
+def _check_recovery_ack(
+    args: Any, facts: InvocationFacts, state: MonitorState, as_of: float
+) -> Verdict:
+    open_route = any(
+        (d := state.detections.get(i)) is not None and d.rule == "ROUTE_DEVIATION" and d.open
+        for i in args.detection_ids
+    )
+    recent = state.recent_gps_alert(as_of) if open_route else None
+    if recent is None or recent.status != AlertStatus.OPEN or recent.phase != ACTIVE:
+        return Verdict(args=args)
+    if facts.metrics is None:
+        return Verdict(
+            errors=[
+                f"{recent.alert_id} ({recent.cause}) is an open GPS alert and this deviation may "
+                "be its recovery: request the track metrics of the last 30 s before responding"
+            ],
+            tag=TAG_RECOVERY_ACK_NO_METRICS,
+        )
+    step = facts.metrics.get("gps_max_step_m")
+    if step is not None and step >= RECOVERY_STEP_M:
+        return Verdict(
+            errors=[
+                f"GPS recovery of {recent.alert_id} ({recent.cause}), GPS jump {step:g} m "
+                f"(threshold {RECOVERY_STEP_M:g} m): it cannot be acknowledged; publish the alert "
+                f"with that cause, supersedes {recent.alert_id} and phase recovering"
+            ],
+            tag=TAG_RECOVERY_ACK_VETO,
+        )
+    return Verdict(args=args)
 
 
 def check_close_alert(raw: dict[str, Any], *, state: MonitorState) -> Verdict:

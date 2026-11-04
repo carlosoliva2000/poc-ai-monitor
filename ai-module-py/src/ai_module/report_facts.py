@@ -70,6 +70,11 @@ def severity_name(severity: str) -> str:
     return SEVERITY_NAMES.get(severity, severity)
 
 
+def phase_note(alert: AlertRecord) -> str:
+    """«, in recovery» en una alerta `recovering` (v0.14); nada en una activa."""
+    return ", in recovery" if alert.phase == "recovering" else ""
+
+
 @dataclass
 class Anomaly:
     """Una cadena de alertas del monitor y las detecciones que atiende."""
@@ -110,7 +115,9 @@ class Anomaly:
                 f"severity {severity_name(self.first.severity)} → "
                 f"{severity_name(self.last.severity)}"
             )
-        return "; ".join(changes) or "no change of cause or severity"
+        if self.last.phase == "recovering" and self.first.phase != "recovering":
+            changes.append("now in recovery")
+        return "; ".join(changes) or "no change of cause, severity or phase"
 
     @property
     def status(self) -> str:
@@ -118,7 +125,7 @@ class Anomaly:
         a la hora en que terminó la última detección; si se desvía más de `CLOSE_GAP_S` (sin
         esperar, el monitor responde mientras la simulación avanza), se añade cuándo terminó."""
         if self.closed_at is None:
-            return "OPEN at the end"
+            return "OPEN at the end" + (" (in recovery)" if self.last.phase == "recovering" else "")
         text = f"closed by the monitor at {format_t(self.closed_at)}"
         ends = [d.closed_at for d in self.detections]
         if ends and None not in ends:
@@ -213,7 +220,8 @@ def timeline_table(state: MonitorState, facts: ReportFacts, summary: dict[str, A
             replaces = f", supersedes {alert.supersedes}" if alert.supersedes else ""
             what = (
                 f"Alert {alert.alert_id} ({anomaly.label}): {cause_name(alert.cause)} "
-                f"({severity_name(alert.severity)}, confidence {alert.confidence:g}){replaces}"
+                f"({severity_name(alert.severity)}{phase_note(alert)}, "
+                f"confidence {alert.confidence:g}){replaces}"
             )
             if alert.fallback:
                 what += " [fallback: the agent did not conclude]"
@@ -369,7 +377,8 @@ def _alert_line(alert: AlertRecord, max_chars: int = 600, mission: bool = False)
     at = "" if mission else f" at {format_t(alert.sim_time)}"
     return (
         f"- Monitor {alert.alert_id}{at}: {cause_name(alert.cause)} "
-        f'({severity_name(alert.severity)}, confidence {alert.confidence:g}) "{alert.summary}". '
+        f"({severity_name(alert.severity)}{phase_note(alert)}, confidence {alert.confidence:g}) "
+        f'"{alert.summary}". '
         f"Explanation: {explanation} Checks: {checks}."
     )
 

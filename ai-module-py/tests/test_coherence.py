@@ -217,19 +217,19 @@ def test_gps_recovery_is_exclusive_to_the_cause_of_the_recent_gps_alert(
 ) -> None:
     state.apply(alert("ai-1", ["det-1"], cause="GPS_SPOOFING"))
     state.apply(detection_event("raised", "det-2", 9.0))  # el RD de la recuperación
-    facts = InvocationFacts(metrics=metrics(disagreed=True))
     both = checks(gps_alert_recent=True, gps_radar_disagreed=True)
+    facts = InvocationFacts(metrics=metrics(disagreed=True, step=68.0))
     ok = alert_args(
         ["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", severity="medium", checks=both
     )
-    assert check(ok, state, facts).ok
-    jump = alert_args(
+    verdict = check(ok, state, facts)
+    assert verdict.ok and verdict.phase == "recovering"  # sin `phase`: la pone el módulo
+    jump_only = alert_args(
         ["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", checks=checks(gps_alert_recent=True)
     )
-    assert check(jump, state, InvocationFacts(metrics=metrics(disagreed=False, step=68.0))).ok
+    assert check(jump_only, state, InvocationFacts(metrics=metrics(step=68.0))).ok
     expected = (
-        "GPS recovery of ai-1 (GPS_SPOOFING): expected cause GPS_SPOOFING, "
-        "severity medium and supersedes ai-1"
+        "GPS recovery of ai-1 (GPS_SPOOFING): expected cause GPS_SPOOFING and supersedes ai-1"
     )
     for cause in ("GPS_JAMMING", "SENSOR_FAULT", "HIJACK", "WIND", "UNKNOWN"):
         other = alert_args(["det-2"], cause=cause, supersedes="ai-1", checks=both)
@@ -258,30 +258,69 @@ def test_exclusive_recovery_when_the_gps_alert_is_already_closed(state: MonitorS
     assert any("is not an open alert" in e for e in check(bad, state, facts).errors)
 
 
-def test_gps_recovery_must_be_published_with_severity_medium(state: MonitorState) -> None:
-    """Además de la causa y del `supersedes`, la recuperación se publica con `severity medium`."""
-    state.apply(alert("ai-1", ["det-1"], cause="GPS_SPOOFING"))  # severidad high
+def test_recovery_phase_and_severity_are_decided_by_the_data_and_the_model(
+    state: MonitorState,
+) -> None:
+    """Con el salto, la alerta es `recovering` (lo pone el código) y la severidad es `low` o
+    `medium` a elección del modelo; `high` se rechaza con datos. Con `phase: active` explícito,
+    también."""
+    state.apply(alert("ai-1", ["det-1"], cause="GPS_SPOOFING"))  # high, active
     state.apply(detection_event("raised", "det-2", 9.0))
-    facts = InvocationFacts(metrics=metrics(disagreed=True))
+    facts = InvocationFacts(metrics=metrics(disagreed=True, step=68.0))
     both = checks(gps_alert_recent=True, gps_radar_disagreed=True)
-    expected = (
-        "GPS recovery of ai-1 (GPS_SPOOFING): expected cause GPS_SPOOFING, "
-        "severity medium and supersedes ai-1"
-    )
-    for severity in ("high", "low"):
-        # con `high` (la de la alerta) la regla de la recuperación pasa por delante de «No cambia
-        # nada»: si no, el rechazo mandaría reconocer y la recuperación perdería su `supersedes`
-        wrong = alert_args(
-            ["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", severity=severity, checks=both
-        )
-        assert check(wrong, state, facts).errors == [expected], severity
-    ok = alert_args(
+
+    def publish(**changes: Any) -> Any:
+        args = alert_args(["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", checks=both)
+        return check({**args, **changes}, state, facts)
+
+    for severity in ("low", "medium"):
+        verdict = publish(severity=severity)
+        assert verdict.ok and verdict.phase == "recovering", severity
+        assert publish(severity=severity, phase="recovering").ok
+    high = publish(severity="high")
+    assert high.errors == [
+        "GPS recovery of ai-1 (GPS jump 68 m): severity high does not fit, use low or medium"
+    ]
+    active = publish(severity="medium", phase="active")
+    assert active.errors == [
+        "wrong phase for this data (GPS jump 68 m, threshold 30 m): use recovering"
+    ]
+
+
+def test_active_medium_alert_is_replaced_by_the_recovery_with_the_same_severity(
+    state: MonitorState,
+) -> None:
+    """Antes la recuperación de una alerta ya `medium` se rechazaba («reconoce»); ahora cambia la
+    fase, así que la sustitución es válida."""
+    state.apply(alert("ai-1", ["det-1"], cause="GPS_SPOOFING", severity="medium"))
+    state.apply(detection_event("raised", "det-2", 9.0))
+    facts = InvocationFacts(metrics=metrics(disagreed=True, step=68.0))
+    both = checks(gps_alert_recent=True, gps_radar_disagreed=True)
+    args = alert_args(
         ["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", severity="medium", checks=both
     )
-    assert check(ok, state, facts).ok
+    assert check(args, state, facts).ok
 
 
-def test_gps_recovery_with_a_closed_alert_also_needs_severity_medium(state: MonitorState) -> None:
+def test_alert_already_recovering_changes_only_with_another_severity(state: MonitorState) -> None:
+    state.apply(
+        alert("ai-1", ["det-1"], cause="GPS_SPOOFING", severity="medium", phase="recovering")
+    )
+    state.apply(detection_event("raised", "det-2", 9.0))
+    facts = InvocationFacts(metrics=metrics(disagreed=True, step=68.0))
+    both = checks(gps_alert_recent=True, gps_radar_disagreed=True)
+    same = alert_args(
+        ["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", severity="medium", checks=both
+    )
+    assert check(same, state, facts).errors == [
+        "Nothing changes with respect to ai-1 (same cause, severity and phase): use "
+        "acknowledge_detection with alert_id ai-1"
+    ]
+    lower = {**same, "severity": "low"}
+    assert check(lower, state, facts).ok
+
+
+def test_gps_recovery_with_a_closed_alert_rejects_severity_high(state: MonitorState) -> None:
     state.apply(alert("ai-1", ["det-1"], cause="GPS_JAMMING"))
     state.apply(detection_event("cleared", "det-1", 8.0))
     state.apply(closed("ai-1", t=9.0))
@@ -290,33 +329,86 @@ def test_gps_recovery_with_a_closed_alert_also_needs_severity_medium(state: Moni
     high = alert_args(
         ["det-2"], cause="GPS_JAMMING", severity="high", checks=checks(gps_alert_recent=True)
     )
-    assert check(high, state, facts).errors == [
-        "GPS recovery of ai-1 (GPS_JAMMING): expected cause GPS_JAMMING, "
-        "severity medium and no supersedes (ai-1 is already closed)"
+    errors = check(high, state, facts).errors
+    assert len(errors) == 1 and "severity high does not fit" in errors[0]
+    low = {**high, "severity": "low"}
+    verdict = check(low, state, facts)
+    assert verdict.ok and verdict.phase == "recovering"
+    wrong_cause = {**low, "cause": "SENSOR_FAULT"}
+    assert check(wrong_cause, state, facts).errors == [
+        "GPS recovery of ai-1 (GPS_JAMMING): expected cause GPS_JAMMING and no supersedes "
+        "(ai-1 is already closed)"
     ]
 
 
-def test_recovery_of_a_gps_alert_that_is_already_medium_is_an_acknowledgement(
-    state: MonitorState,
-) -> None:
-    """La regla excluyente pide `severity medium` con `supersedes`; si la alerta ya es de esa
-    severidad no cambia nada, y las dos reglas no pueden contradecirse: se dice que reconozca."""
+def test_discrepancy_without_a_jump_is_not_a_recovery(state: MonitorState) -> None:
+    """GPS y radar discrepan pero el GPS no ha saltado (el engaño sigue): causa y `supersedes`
+    son los de la alerta del GPS, pero la fase es `active`, la severidad es libre y `recovering`
+    se rechaza."""
     state.apply(alert("ai-1", ["det-1"], cause="GPS_SPOOFING", severity="medium"))
     state.apply(detection_event("raised", "det-2", 9.0))
-    facts = InvocationFacts(metrics=metrics(disagreed=True))
+    facts = InvocationFacts(metrics=metrics(disagreed=True, step=5.1))
     both = checks(gps_alert_recent=True, gps_radar_disagreed=True)
-    same = alert_args(
+    high = alert_args(
+        ["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", severity="high", checks=both
+    )
+    verdict = check(high, state, facts)
+    assert verdict.ok and verdict.phase == "active"
+    recovering = {**high, "phase": "recovering"}
+    assert check(recovering, state, facts).errors == [
+        "phase recovering needs a GPS jump of 30 m or more; this window has 5.1 m"
+    ]
+    other = {**high, "cause": "UNKNOWN"}
+    assert check(other, state, facts).errors == [
+        "this deviation belongs to the GPS alert ai-1 (GPS_SPOOFING): expected cause "
+        "GPS_SPOOFING and supersedes ai-1"
+    ]
+    same = {**high, "severity": "medium"}
+    assert check(same, state, facts).errors == [
+        "Nothing changes with respect to ai-1 (same cause, severity and phase): use "
+        "acknowledge_detection with alert_id ai-1"
+    ]
+
+
+def test_second_jump_with_the_spoofing_still_active_is_marked_as_recovering(
+    state: MonitorState,
+) -> None:
+    """Límite conocido: el criterio de la fase es solo el salto de
+    30 m o más. Un segundo salto con el engaño aún en marcha se marcaría `recovering`. Si
+    apareciera, se añadiría «GPS y radar coinciden ahora» (cuando haya las dos fuentes)."""
+    state.apply(alert("ai-1", ["det-1"], cause="GPS_SPOOFING"))
+    state.apply(detection_event("raised", "det-2", 9.0))
+    facts = InvocationFacts(metrics=metrics(disagreed=True, step=45.0))  # radar y GPS aún lejos
+    both = checks(gps_alert_recent=True, gps_radar_disagreed=True)
+    args = alert_args(
         ["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", severity="medium", checks=both
     )
-    assert check(same, state, facts).errors == [
-        "GPS recovery of ai-1 (GPS_SPOOFING), which is already medium: nothing "
-        "changes, use acknowledge_detection with alert_id ai-1"
+    verdict = check(args, state, facts)
+    assert verdict.ok and verdict.phase == "recovering"
+
+
+def test_phase_recovering_outside_a_recovery_is_rejected(state: MonitorState) -> None:
+    facts = InvocationFacts(metrics=metrics())
+    args = alert_args(["det-1"], phase="recovering")
+    assert check(args, state, facts).errors == [
+        "phase recovering needs a GPS alert that is open or closed 60 s ago or less; there is none"
     ]
-    other = alert_args(["det-2"], cause="SENSOR_FAULT", supersedes="ai-1", checks=both)
-    assert check(other, state, facts).errors == [
-        "GPS recovery of ai-1 (GPS_SPOOFING), which is already medium: nothing "
-        "changes, use acknowledge_detection with alert_id ai-1"
-    ]
+    plain = check(alert_args(["det-1"]), state, facts)
+    assert plain.ok and plain.phase == "active"
+    # un aviso que no es de desviación de ruta tampoco puede ser una recuperación
+    state.apply(alert("ai-1", ["det-1"], cause="GPS_SPOOFING"))
+    state.apply(detection_event("raised", "det-3", 9.0, rule="SOURCE_SILENT", source="gps"))
+    silent = alert_args(
+        ["det-3"],
+        cause="SENSOR_FAULT",
+        phase="recovering",
+        checks=checks(gps_alert_recent=True, gps_radar_disagreed=True),
+    )
+    jump = InvocationFacts(metrics=metrics(disagreed=True, step=68.0))
+    assert (
+        "phase recovering only fits the route deviation that follows a GPS alert"
+        in check(silent, state, jump).errors
+    )
 
 
 def test_gps_recovery_without_a_recent_gps_alert_is_rejected(state: MonitorState) -> None:
@@ -416,6 +508,7 @@ def test_default_switches_are_all_on_and_recorded_in_the_trace(tmp_path: Path) -
         "computed_facts": True,
         "source_silent_own_alert": True,
         "no_duplicate_cause": True,
+        "recovery_ack_veto": True,
         "guided_skills": False,
     }
 
@@ -610,8 +703,8 @@ def test_a_wrong_cause_on_a_recovery_with_a_closed_gps_alert_says_there_is_no_su
     facts = InvocationFacts(metrics=metrics(step=90.0))
     wrong = alert_args(["det-2"], cause="HIJACK", checks=checks(gps_alert_recent=True))
     assert (
-        "GPS recovery of ai-1 (GPS_JAMMING): expected cause GPS_JAMMING, "
-        "severity medium and no supersedes (ai-1 is already closed)"
+        "GPS recovery of ai-1 (GPS_JAMMING): expected cause GPS_JAMMING and no supersedes "
+        "(ai-1 is already closed)"
     ) in check(wrong, state, facts).errors
 
 

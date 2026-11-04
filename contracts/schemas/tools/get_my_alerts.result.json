@@ -1,5 +1,14 @@
 {
   "$defs": {
+    "AlertPhase": {
+      "description": "Fase de una alerta (v0.14): `active` mientras el problema sigue; `recovering` cuando el\nGPS ha vuelto tras un engaño o una pérdida y el dron corrige hacia la ruta.",
+      "enum": [
+        "active",
+        "recovering"
+      ],
+      "title": "AlertPhase",
+      "type": "string"
+    },
     "AlertStatus": {
       "enum": [
         "open",
@@ -36,6 +45,10 @@
         "sim_time": {
           "title": "Sim Time",
           "type": "number"
+        },
+        "phase": {
+          "$ref": "#/$defs/AlertPhase",
+          "default": "active"
         }
       },
       "required": [

@@ -1,5 +1,5 @@
 import { stripFieldValues } from './clean-text.ts'
-import type { Cause, Envelope, Severity, SensorSource } from './contracts'
+import type { Anomaly, Cause, Envelope, Phase, Severity, SensorSource } from './contracts'
 
 export function formatT(seconds: number) {
   const s = Math.max(0, Math.floor(seconds))
@@ -17,6 +17,26 @@ export const CAUSE_LABEL: Record<Cause, string> = {
   UNKNOWN: 'No diagnosis',
 }
 export const SEVERITY_LABEL: Record<Severity, string> = { low: 'low', medium: 'medium', high: 'high' }
+export const PHASE_LABEL: Record<Phase, string> = { active: 'active', recovering: 'recovering' }
+
+/** La fase de una alerta; sin el campo (ejecución anterior a la v0.14), `active`. */
+export const phaseOf = (a: Pick<Anomaly, 'phase'>): Phase => a.phase ?? 'active'
+
+/**
+ * La cadena de una alerta contada como estados, no como cambios de severidad:
+ * «GPS spoofing → recovering → closed». Cada causa distinta aparece una vez, en orden.
+ */
+export function episodePath(chain: Pick<Anomaly, 'cause' | 'phase'>[], closed: boolean): string[] {
+  const steps: string[] = []
+  let last: string | null = null
+  for (const a of chain) {
+    const step = phaseOf(a) === 'recovering' ? PHASE_LABEL.recovering : CAUSE_LABEL[a.cause]
+    if (step !== last) steps.push(step)
+    last = step
+  }
+  if (closed) steps.push('closed')
+  return steps
+}
 export const SOURCE_LABEL: Record<SensorSource, string> = {
   gps: 'GPS',
   radar: 'Radar',

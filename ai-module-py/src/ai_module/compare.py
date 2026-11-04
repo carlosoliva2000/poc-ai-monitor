@@ -117,6 +117,25 @@ def checks_cell(runs: list[RunRecord]) -> str:
     return text + (f" (n/d en {len(ok) - len(measured)})" if len(measured) < len(ok) else "")
 
 
+def recovery_cell(runs: list[RunRecord]) -> str:
+    """Recuperaciones sin fase `recovering` (suma, con los motivos) y veces que saltó el veto del
+    reconocimiento; `n/d` en las ejecuciones anteriores a la v0.14."""
+    ok = [r for r in runs if r.status == "ok"]
+    measured = [r.eval for r in ok if r.eval.get("recovery_misses") is not None]
+    if not measured:
+        return "n/d"
+    reasons = Counter(m["reason"] for e in measured for m in e["recovery_misses"])
+    text = str(sum(reasons.values()))
+    if reasons:
+        text += " (" + ", ".join(f"{k} {v}" for k, v in sorted(reasons.items())) + ")"
+    vetoes = sum(e["agents"].get("monitor", {}).get("recovery_ack_vetoes", 0) for e in measured)
+    no_metrics = sum(
+        e["agents"].get("monitor", {}).get("recovery_ack_no_metrics", 0) for e in measured
+    )
+    text += f" · veto {vetoes} · sin métricas {no_metrics}"
+    return text
+
+
 def checks_by_field(records: list[RunRecord], profiles: list[str]) -> list[str]:
     """Tabla perfil × campo con los checks que no cuadran (vacía si no hay ninguno)."""
     counts: dict[str, Counter[str]] = {p: Counter() for p in profiles}
@@ -218,7 +237,7 @@ def latency(runs: list[RunRecord]) -> str:
 
 HEADERS = [
     "Perfil", "Aciertos (✅ por etiqueta)", "1 cadena", "Falsas alarmas", "Fallbacks",
-    "Alertas abiertas", "Frases que contradicen", "Checks≠tools",
+    "Alertas abiertas", "Frases que contradicen", "Checks≠tools", "Recuperación sin fase",
     "No latinos (monitor / informe / chats)",
     "Rechazos guardrails",
     "Cortes por longitud (monitor / informe / chats)", "Latencia monitor p50 / p95",
@@ -238,6 +257,7 @@ def row(profile: str, runs: list[RunRecord], planned: int) -> list[str]:
         str(total(runs, lambda e: len(e["open_alerts"]))),
         str(total(runs, lambda e: len(e["contradictions"]))),
         checks_cell(runs),
+        recovery_cell(runs),
         non_latin(runs),
         str(sum(agent_total(runs, a, "rejections") for a in NON_LATIN_AGENTS)),
         length_cuts(runs),

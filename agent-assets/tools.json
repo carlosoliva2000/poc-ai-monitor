@@ -91,6 +91,7 @@
           },
           "cause": {"type": "string", "enum": ["WIND", "HIJACK", "GPS_SPOOFING", "SENSOR_FAULT", "GPS_JAMMING", "UNKNOWN"], "description": "Most probable cause"},
           "severity": {"type": "string", "enum": ["low", "medium", "high"]},
+          "phase": {"type": "string", "enum": ["active", "recovering"], "description": "Decide it before writing the texts, which must agree with it: `recovering` when the problem of the episode is over and the situation is going back to normal; `active` while the problem continues"},
           "confidence": {"type": "number", "description": "Confidence in the cause, from 0 to 1"},
           "evidence_event_ids": {"type": "array", "items": {"type": "string"}, "description": "2 to 6 ids of events you have seen in the tools (e.g. met-0010, gps-000106) that support the diagnosis; they go here, not in the explanation"},
           "summary": {"type": "string", "description": "One sentence, at most 160 characters"},
@@ -98,7 +99,7 @@
           "recommendation": {"type": "string", "description": "What you recommend to the person in charge of the drone. Recommend only: you cannot act"},
           "supersedes": {"type": "string", "description": "Optional: alert_id of an earlier alert of yours that this one replaces"}
         },
-        "required": ["checks", "cause", "severity", "confidence", "evidence_event_ids", "summary", "explanation", "recommendation"]
+        "required": ["checks", "cause", "severity", "phase", "confidence", "evidence_event_ids", "summary", "explanation", "recommendation"]
       }
     }
   },
@@ -106,7 +107,7 @@
     "type": "function",
     "function": {
       "name": "acknowledge_detection",
-      "description": "Responds to one or several detections without creating a new alert (publishes a DetectionAcknowledged event). Use it when the detection belongs to an alert of yours that is already open and neither its cause nor its severity changes (pass alert_id), or when you decide no alert is needed (do not pass alert_id).",
+      "description": "Responds to one or several detections without creating a new alert (publishes a DetectionAcknowledged event). Use it when the detection belongs to an alert of yours that is already open and neither its cause, its severity nor its phase changes (pass alert_id), or when you decide no alert is needed (do not pass alert_id).",
       "parameters": {
         "type": "object",
         "properties": {

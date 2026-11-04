@@ -505,6 +505,90 @@ def false_alarms(data: RunData) -> tuple[list[Item], list[Event]]:
     return stray_detections, stray_alerts
 
 
+RECOVERY_LABELS = (LabelType.GPS_SPOOFING, LabelType.GPS_LOSS)
+RECOVERY_JUMP_M = 30.0  # el salto del GPS que marca la recuperación (`gps_max_step_m`)
+RECOVERY_REASONS = {
+    "fallback": "el agente no concluyó y respondió el módulo",
+    "no_metrics": "no pidió get_track_metrics",
+    "window_without_jump": "la ventana pedida no incluía el salto del GPS",
+    "acknowledged": "reconoció el aviso en lugar de publicar la recuperación",
+    "other": "otro motivo",
+}
+
+
+@dataclass
+class RecoveryMiss:
+    """Una recuperación del GPS que no se publicó con `phase: recovering`."""
+
+    label_id: str
+    detection_id: str
+    reason: str
+
+
+def metrics_seen(record: dict[str, Any] | None) -> tuple[bool, float | None]:
+    """Si la invocación pidió `get_track_metrics` y el mayor `gps_max_step_m` que vio."""
+    called, step = False, None
+    for message in (record or {}).get("messages", []):
+        if message.get("role") != "tool":
+            continue
+        try:
+            result = json.loads(message.get("content") or "")
+        except ValueError:
+            continue
+        if isinstance(result, dict) and "gps_deviation_from_plan_m" in result:
+            called = True
+            value = result.get("gps_max_step_m")
+            if value is not None:
+                step = value if step is None else max(step, value)
+    return called, step
+
+
+def recovery_misses(data: RunData) -> list[RecoveryMiss] | None:
+    """Etiquetas de spoofing o pérdida de GPS cuyo `ROUTE_DEVIATION` de la recuperación no dio
+    ninguna alerta `recovering`, con el motivo. `None` si las alertas no llevan `phase`
+    (ejecución anterior a la v0.14: no se puede contar sin dar un falso fallo)."""
+    if not any("phase" in a["payload"] for a in data.alerts.values()):
+        return None
+    misses: list[RecoveryMiss] = []
+    for label in data.labels:
+        if label.type not in RECOVERY_LABELS:
+            continue
+        if any(a["payload"].get("phase") == "recovering" for a in label_alerts(data, label)):
+            continue
+        items = [
+            i
+            for i in data_items_of(data, label)
+            if i.rule == "ROUTE_DEVIATION"
+            and i.kind == "Raised"
+            and i.event["sim_time"] >= label.end_s - 2
+        ]
+        if not items:
+            continue  # no hubo detección de la recuperación: nada que publicar
+        item = items[0]
+        response = item.first
+        record = next(
+            (
+                t
+                for t in data.trace
+                if t["agent"] == "monitor" and item.event["event_id"] in t["causation_ids"]
+            ),
+            None,
+        )
+        called, step = metrics_seen(record)
+        if response is None or response.fallback:
+            reason = "fallback"
+        elif not called:
+            reason = "no_metrics"
+        elif step is None or step < RECOVERY_JUMP_M:
+            reason = "window_without_jump"
+        elif response.kind == "acknowledge":
+            reason = "acknowledged"
+        else:
+            reason = "other"
+        misses.append(RecoveryMiss(label.id, item.detection_id, reason))
+    return misses
+
+
 def treated_as_recovery(item: Item) -> bool:
     """El agente trató este aviso como recuperación tras un engaño o una pérdida del GPS: lo
     respondió con una alerta (o enlazándolo a una) con causa del GPS."""
@@ -586,6 +670,18 @@ def agent_stats(trace: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             "skills_guided": guided_skills,
             "invalid_json": sum(t["invalid_json"] for t in records),
             "rejections": sum(len(t["guardrail_rejections"]) for t in records),
+            "recovery_ack_vetoes": sum(
+                1
+                for t in records
+                for r in t["guardrail_rejections"]
+                if r.get("tag") == "recovery_ack_veto"
+            ),
+            "recovery_ack_no_metrics": sum(
+                1
+                for t in records
+                for r in t["guardrail_rejections"]
+                if r.get("tag") == "recovery_ack_no_metrics"
+            ),
             "reminders": sum(t["reminders"] for t in records),
             "fallbacks": sum(1 for t in records if t["fallback"]),
             "fallback_closes": sum(1 for t in records if t["fallback_close"]),
@@ -723,6 +819,8 @@ class Evaluation:
     non_latin: dict[str, dict[str, Any]]
     checks: ChecksReport | None
     """`None`: la traza no guarda los valores esperados (ejecución anterior a la Fase 10)."""
+    recovery_misses: list[RecoveryMiss] | None = None
+    """`None`: las alertas no llevan `phase` (ejecución anterior a la v0.14)."""
 
 
 def evaluate(folder: Path) -> Evaluation:
@@ -750,6 +848,7 @@ def evaluate(folder: Path) -> Evaluation:
         contradictions(list(data.alerts.values())),
         non_latin_stats(data),
         checks_report(data.alerts, data.trace),
+        recovery_misses(data),
     )
 
 
@@ -762,8 +861,13 @@ def summary_line(ev: Evaluation) -> str:
         f"{len(ev.unanswered)} detecciones sin respuesta · "
         f"{len(ev.open_alerts)} alertas abiertas al final · "
         f"{len(ev.contradictions)} frases que contradicen los checks · "
-        f"{checks_count_text(ev)} checks que no cuadran con las tools"
+        f"{checks_count_text(ev)} checks que no cuadran con las tools · "
+        f"{recovery_count_text(ev)} recuperaciones sin fase recovering"
     )
+
+
+def recovery_count_text(ev: Evaluation) -> str:
+    return "n/d" if ev.recovery_misses is None else str(len(ev.recovery_misses))
 
 
 def checks_count_text(ev: Evaluation) -> str:
@@ -778,6 +882,7 @@ AID_NAMES = {
     "computed_facts": "hechos calculados",
     "source_silent_own_alert": "alerta propia para la fuente callada",
     "no_duplicate_cause": "sin causa duplicada",
+    "recovery_ack_veto": "veto del reconocimiento de la recuperación",
     "guided_skills": "modo guiado",
 }
 
@@ -938,7 +1043,10 @@ def label_alerts(data: RunData, label: Label) -> list[Event]:
 def alert_severity_text(alert: Event) -> str:
     p = alert["payload"]
     fallback = " (fallback)" if p["fallback"] else ""
-    return f"{p['alert_id']} {p['cause']} {p['severity']} {fmt_t(alert['sim_time'])}{fallback}"
+    phase = f" [{p['phase']}]" if p.get("phase") else ""  # sin la clave: ejecución anterior (v0.13)
+    return (
+        f"{p['alert_id']} {p['cause']} {p['severity']}{phase} {fmt_t(alert['sim_time'])}{fallback}"
+    )
 
 
 def severities_section(ev: Evaluation) -> list[str]:
@@ -955,6 +1063,31 @@ def severities_section(ev: Evaluation) -> list[str]:
         lines.append(f"- {r.label.id}: {text}")
     if not ev.results:
         lines.append("- sin etiquetas")
+    return lines
+
+
+def phase_section(ev: Evaluation) -> list[str]:
+    lines = ["", "### Fase de las alertas y recuperaciones", ""]
+    if ev.recovery_misses is None:
+        return lines + ["n/d: las alertas de esta ejecución no llevan `phase` (anterior a v0.14)."]
+    lines.append(
+        "La fase de cada alerta va en la lista de arriba (informativo: `recovering` solo en la "
+        "recuperación del GPS, su severidad es `low` o `medium` y la elige el modelo). Una "
+        "recuperación sin alerta `recovering` cuenta como fallo de ciclo de vida."
+    )
+    if not ev.recovery_misses:
+        lines.append("- Recuperaciones sin fase `recovering`: 0")
+    for m in ev.recovery_misses:
+        lines.append(
+            f"- ❌ {m.label_id} ({m.detection_id}): sin fase `recovering` · motivo "
+            f"`{m.reason}` ({RECOVERY_REASONS[m.reason]})"
+        )
+    monitor = ev.agents.get("monitor", {})
+    lines.append(
+        f"- Veto del reconocimiento de la recuperación: {monitor.get('recovery_ack_vetoes', 0)} "
+        "veces · rechazos por no haber pedido get_track_metrics: "
+        f"{monitor.get('recovery_ack_no_metrics', 0)}"
+    )
     return lines
 
 
@@ -1150,6 +1283,7 @@ def render_markdown(ev: Evaluation) -> str:
         header(ev),
         labels_section(ev),
         severities_section(ev),
+        phase_section(ev),
         responses_section(ev),
         false_section(ev),
         contradictions_section(ev),
@@ -1205,12 +1339,16 @@ def to_json(ev: Evaluation) -> dict[str, Any]:
             "by_field": ev.checks.by_field(),
             "mismatches": [asdict(m) for m in ev.checks.mismatches],
         },
+        "recovery_misses": None
+        if ev.recovery_misses is None
+        else [asdict(m) for m in ev.recovery_misses],
         "alert_severities": {
             r.label.id: [
                 {
                     "alert_id": a["payload"]["alert_id"],
                     "cause": a["payload"]["cause"],
                     "severity": a["payload"]["severity"],
+                    "phase": a["payload"].get("phase"),
                     "sim_time": a["sim_time"],
                     "fallback": a["payload"]["fallback"],
                 }

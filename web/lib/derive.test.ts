@@ -31,3 +31,14 @@ test('sin llamadas ni trozos no se inventa ninguna respuesta', () => {
   const entries = chatEntries([op('ops-0001')], 'monitor', {}, [])
   assert.deepEqual(entries.map((e) => e.kind), ['operator'])
 })
+
+test('la cadena de una alerta se cuenta como estados: causa → recovering → closed', async () => {
+  const { episodePath, phaseOf } = await import('./format.ts')
+  const spoof = { cause: 'GPS_SPOOFING' as const }
+  assert.deepEqual(episodePath([spoof, { ...spoof, phase: 'recovering' }], true), ['GPS spoofing', 'recovering', 'closed'])
+  assert.deepEqual(episodePath([spoof, { ...spoof, phase: 'recovering' }], false), ['GPS spoofing', 'recovering'])
+  assert.deepEqual(episodePath([{ cause: 'SENSOR_FAULT' }, { cause: 'GPS_JAMMING' }], true), ['Sensor fault', 'GPS loss/interference', 'closed'])
+  assert.deepEqual(episodePath([{ cause: 'WIND' }], false), ['Wind'])
+  assert.equal(phaseOf({}), 'active') // ejecución anterior a la v0.14
+  assert.equal(phaseOf({ phase: 'recovering' }), 'recovering')
+})

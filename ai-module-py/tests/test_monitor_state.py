@@ -14,6 +14,7 @@ def alert(
     supersedes=None,
     t=10.0,
     severity: str = "high",
+    phase: str = "active",
 ):
     return EventDraft(
         event_id=alert_id,
@@ -27,7 +28,7 @@ def alert(
             "alert_id": alert_id, "detection_ids": detections, "cause": cause, "severity": severity,
             "confidence": 0.8, "summary": "resumen", "explanation": "x", "recommendation": "y",
             "evidence_event_ids": ["gps-000001"], "supersedes": supersedes, "as_of_sim_time": t,
-            "fallback": False,
+            "fallback": False, "phase": phase,
         },
     )  # fmt: skip
 
@@ -163,4 +164,5 @@ def test_gps_alert_line_data_style_has_no_sentence_to_copy() -> None:
     s.apply(closed("ai-0008", t=50.0))
     assert s.describe_gps_alert(60.0, "data") == "yes — ai-0008 GPS_SPOOFING (closed 10 s ago)"
     assert "If this warning" in s.describe_gps_alert(60.0)  # `legacy`, por defecto
-    assert Assets().agent("monitor").state_line == "legacy"  # lo que se adoptó en la Fase 14.1
+    # la 14.1 adoptó `legacy`; la 14.2 lo amplía con la fase de la alerta (`phase`)
+    assert Assets().agent("monitor").state_line == "phase"

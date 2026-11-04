@@ -10,11 +10,12 @@ The drone's GPS is far from the route. Follow the steps **in order** and stop at
 Call `get_track_metrics` with `since` = sim_time of the detection − 30 and `until` = now.
 
 ## Window or now
-Decide (steps 2 to 6) and fill in `checks` with the facts of the window. To say how things are **at this moment** (in a recovery, in an update, when you explain that the drone is back or still off route), use the `now` block of the same result: the last sample of the last 10 seconds (current GPS–radar distance and whether they agree, current deviation of the GPS and of the radar, current wind already interpreted). Do not present the mean or the maximum of the window as the present.
+Decide (steps 2 to 6) and fill in `checks` with the facts of the window. To say how things are **at this moment** (in a recovery, in an update, when you explain that the drone is back or still off route), use the `now` block of the same result: the last sample of the last 10 seconds (current GPS–radar distance and whether they agree, current deviation of the GPS and of the radar, current wind already interpreted). Do not present the mean or the maximum of the window as the present: the window is for deciding and for telling what happened, in the past tense; the present comes from `now`. Never write that GPS and radar disagree by the distance of `now`.
 
 ## 2. GPS recovery after a spoofing or a loss? (it takes precedence over everything else)
-It is a recovery if **both**: the "Recent GPS alert" line of the state says **yes** **and** `gps_radar.disagreed` is `true` or `gps_max_step_m` ≥ 30 (the GPS has just jumped to the real position).
-- **The only valid cause is that of that alert** (the state line gives its id and cause), with `severity: medium` (the situation is improving). `supersedes` = that alert if the state says it is still open. It is not wind or hijacking even if the deviation is large. Describe what changed: the GPS is back and, according to `now`, how far the drone is from the route.
+It belongs to the GPS alert if **both**: the "Recent GPS alert" line of the state says **yes** **and** `gps_radar.disagreed` is `true` or `gps_max_step_m` ≥ 30. **The only valid cause is that of that alert** (the state line gives its id and cause); `supersedes` = that alert if the state says it is still open. It is not wind or hijacking even if the deviation is large.
+- **The GPS is back** if `gps_max_step_m` ≥ 30 (the GPS has just jumped to the real position): the alert goes to `phase: recovering` and you choose its severity by the operational risk now, `low` or `medium` (`high` is not valid once the GPS is back). What to tell: that the GPS is back (the jump), whether GPS and radar agree **now** (`now`), how far from the route the drone is now and whether it is getting closer. The disagreement of the window is the sign of the jump, not a present problem: do not write the recovery as if the deception or the loss continued.
+- If GPS and radar disagree but the GPS has not jumped, the problem goes on: `phase: active`, with the severity that the risk deserves.
 
 ## 3. Do GPS and radar disagree?
 If `gps_radar.disagreed` is `true` (and it is not step 2), load the skill `source-discrepancy`.
@@ -32,4 +33,4 @@ Call `get_events` with `source` = `link` and `last_n` = 6. The link is anomalous
 `UNKNOWN` with `confidence` ≤ 0.4; say what you have checked.
 
 ## When publishing
-Fill in `checks` with what you have seen (do not invent: it is checked against the tools): `gps_alert_recent` (the "Recent GPS alert" line of the state: yes = `true`), `gps_radar_disagreed`, `wind_notable` and `wind_with_drift` (from `get_track_metrics`), `link_checked` and `link_anomalous` (`null` if you did not look at the link).
+Fill in `checks` with what you have seen (do not invent: it is checked against the tools): `gps_alert_recent` (the "Recent GPS alert" line of the state: yes = `true`), `gps_radar_disagreed`, `wind_notable` and `wind_with_drift` (from `get_track_metrics`), `link_checked` and `link_anomalous` (`null` if you did not look at the link). `phase` is `recovering` only in the recovery of step 2.

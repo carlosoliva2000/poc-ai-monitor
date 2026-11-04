@@ -64,9 +64,12 @@ agents:
     # recovery: cause X, supersedes Y»; `data` = solo alerta, causa y estado («yes — ai-0008
     # GPS_SPOOFING (open)»). Medido en la Fase 14.1: con `data`, el modelo dejó de publicar la
     # alerta de recuperación en `demo`; con `legacy` vuelve y los textos no empeoran.
-    state_line: legacy
+    # `phase` (Fase 14.2) es `legacy` más la fase de la alerta («phase recovering» en la frase y
+    # «open, recovering» en el estado cuando ya está en recuperación).
+    state_line: phase
     source_silent_own_alert: true   # un SOURCE_SILENT nuevo lleva alerta propia (SENSOR_FAULT, sin supersedes)
     no_duplicate_cause: true    # no se abre una alerta con la causa de otra abierta sin `supersedes`
+    recovery_ack_veto: true     # no se puede reconocer la recuperación del GPS con la alerta aún `active` (Fase 14.2)
     # Modo guiado (ayuda): true = el módulo mete en el primer mensaje de usuario la skill que
     # corresponde a la regla de cada aviso (sección `guided_skill` de monitor_objective.md).
     guided_skills: false

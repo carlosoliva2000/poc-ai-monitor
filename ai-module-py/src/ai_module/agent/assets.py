@@ -18,6 +18,9 @@ from .profiles import DEFAULT_WAIT_S, Profile, assets_fingerprint
 # agent-assets/ junto al código del repositorio (ai-module-py/src/ai_module/agent/assets.py)
 DEFAULT_ASSETS = Path(__file__).resolve().parents[4] / "agent-assets"
 MARKER_RE = re.compile(r"<<(\w+)>>")
+OPERATIONAL_KNOWLEDGE = "prompts/operational_knowledge.md"
+"""Conocimiento operativo por causa (Fase 14.2): el marcador `<<operational_knowledge>>` del prompt
+de salida del monitor y del sistema del informe lo sustituye por este fichero."""
 SECTION_RE = re.compile(r"^## (\w+)\s*$", re.M)
 
 
@@ -86,6 +89,10 @@ class AgentConfig:
     no_duplicate_cause: bool = True
     """Interruptor del monitor: un aviso `SOURCE_SILENT` nuevo lleva alerta propia (ni se
     reconoce ni sustituye a una alerta de otra causa)."""
+    recovery_ack_veto: bool = False
+    """Interruptor del monitor (Fase 14.2): no se puede reconocer la recuperación del GPS mientras
+    la alerta del GPS sigue en fase `active`; hay que publicar la recuperación. Sin la clave (los
+    assets anteriores) está apagado."""
     guided_skills: bool = False
     """Interruptor del monitor (modo guiado): el módulo mete en el primer mensaje de usuario la
     skill de la regla de cada aviso, sin que el modelo tenga que pedirla."""
@@ -126,6 +133,7 @@ class AgentConfig:
             "computed_facts": self.computed_facts,
             "source_silent_own_alert": self.source_silent_own_alert,
             "no_duplicate_cause": self.no_duplicate_cause,
+            "recovery_ack_veto": self.recovery_ack_veto,
             "guided_skills": self.guided_skills,
         }
 
@@ -372,6 +380,7 @@ class Assets:
             reasoning_field=str(pick("reasoning_field", "reasoning_content")),
             max_tokens=int(pick("max_tokens")),
             tool_choice=str(pick("tool_choice", "auto")),
+            recovery_ack_veto=bool(spec.get("recovery_ack_veto", False)),
             guided_skills=bool(spec.get("guided_skills", False)),
             guided_skill_by_rule=dict(spec.get("guided_skill_by_rule", {})),
             last_decisions_in_state=int(spec.get("last_decisions_in_state", 3)),
@@ -391,9 +400,12 @@ class Assets:
         parts = [self.prompt(path)]
         if agent.output_prompt:
             parts.append(self.prompt(agent.output_prompt))
+        text = "\n\n".join(p.strip() for p in parts)
         values = {
             "skills_index": self.skills_index(agent.skills),
             "max_iterations": agent.max_iterations,
             **values,
         }
-        return render("\n\n".join(p.strip() for p in parts), **values)
+        if "<<operational_knowledge>>" in text and "operational_knowledge" not in values:
+            values["operational_knowledge"] = self.prompt(OPERATIONAL_KNOWLEDGE).strip()
+        return render(text, **values)

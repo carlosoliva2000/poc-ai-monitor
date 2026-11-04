@@ -133,17 +133,19 @@ def test_publish_alert_schema_puts_the_evidence_right_after_the_confidence() -> 
     [schema] = ASSETS.tool_schemas(["publish_alert"])
     parameters = schema["function"]["parameters"]
     props = list(parameters["properties"])
-    assert props[:6] == [
+    # Fase 14.2: `phase` se decide antes de escribir los textos (y es obligatoria en el esquema)
+    assert props[:7] == [
         "detection_ids",
         "checks",
         "cause",
         "severity",
+        "phase",
         "confidence",
         "evidence_event_ids",
     ]
-    assert props[6:9] == ["summary", "explanation", "recommendation"]
+    assert props[7:10] == ["summary", "explanation", "recommendation"]
     # los obligatorios, en el orden de las propiedades (`detection_ids` lo puede poner el módulo)
-    assert parameters["required"] == props[1:9]
+    assert parameters["required"] == props[1:10]
 
 
 # --- 4. rechazos en español y accionables -------------------------------------------------------

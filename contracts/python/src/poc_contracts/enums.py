@@ -76,6 +76,14 @@ class Severity(StrEnum):
     HIGH = "high"
 
 
+class AlertPhase(StrEnum):
+    """Fase de una alerta (v0.14): `active` mientras el problema sigue; `recovering` cuando el
+    GPS ha vuelto tras un engaño o una pérdida y el dron corrige hacia la ruta."""
+
+    ACTIVE = "active"
+    RECOVERING = "recovering"
+
+
 class Cause(StrEnum):
     """Causas del diagnóstico (`REPLAY` queda reservada para el futuro)."""
 

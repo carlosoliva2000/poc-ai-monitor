@@ -22,7 +22,7 @@ Respond with **only** these three sections, with these exact headings and in thi
 
 ```markdown
 ## Summary
-3–5 sentences: what happened to the drone, how many anomalies there were, which was the most serious and whether any is still open.
+3–5 sentences: each anomaly with its type, when it happened and how it ended (closed, in recovery or still open), and which was the most serious and why.
 
 ## What was seen
 ### A1
@@ -31,7 +31,7 @@ Respond with **only** these three sections, with these exact headings and in thi
 …
 
 ## Recommendations
-1. …
+1. What to do or check about the drone, the route, the link, the radar or the GPS, and why.
 2. …
 ```
 

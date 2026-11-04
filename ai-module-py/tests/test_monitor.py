@@ -142,7 +142,7 @@ def test_updated_acknowledge_with_the_open_alert(tmp_path: Path) -> None:
                            reason="sigue igual")))  # fmt: skip
     rt, published, monitor, _ = setup(tmp_path, script)
     rt.state.apply(raised("det-0001", 5.0))
-    rt.state.apply(alert("ai-0001", ["det-0001"]))
+    rt.state.apply(alert("ai-0001", ["det-0001"], cause="WIND"))
     event = detection_event("updated", "det-0001", 20.0, severity="high")
     run(monitor.handle_batch([event]))
     [response] = responses(published)

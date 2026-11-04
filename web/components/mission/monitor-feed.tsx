@@ -13,7 +13,7 @@ import type {
 } from '@/lib/contracts'
 import { callsByCause, type Derived, type ToolCallEvent } from '@/lib/derive'
 import { stripFieldValues } from '@/lib/clean-text'
-import { CAUSE_LABEL, CHECK_LABEL, formatT, SEVERITY_LABEL, SOURCE_LABEL } from '@/lib/format'
+import { CAUSE_LABEL, CHECK_LABEL, episodePath, formatT, PHASE_LABEL, phaseOf, SEVERITY_LABEL, SOURCE_LABEL } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { TypingDots } from './chat-panel'
 import { ToolCallList } from './tool-calls'
@@ -91,16 +91,20 @@ function Episodes({ data }: { data: Derived }) {
     <ul className="flex flex-wrap gap-1.5 border-b border-border px-4 py-2 text-xs" aria-label="Alerts (one per episode)">
       {data.episodes.map((ep) => {
         const a = ep.head.event.payload
+        const path = episodePath(ep.chain.map((x) => x.event.payload), !ep.open)
         return (
           <li
             key={ep.label}
             className={cn('flex items-center gap-1.5 rounded-full border px-2 py-0.5', ep.open ? 'border-destructive/50 bg-destructive/5' : 'border-border text-muted-foreground')}
             title={`${a.alert_id} · ${a.summary}`}
+            data-testid="episode-chip"
           >
             <span className="font-mono font-medium">{ep.label}</span>
             <span>{CAUSE_LABEL[a.cause]}</span>
             <span className={cn('rounded-sm px-1 text-[10px] font-medium', SEVERITY_CLASS[a.severity])}>{SEVERITY_LABEL[a.severity]}</span>
+            {phaseOf(a) === 'recovering' && <span className="rounded-sm bg-primary/10 px-1 text-[10px] font-medium text-primary" data-testid="phase-chip">{PHASE_LABEL.recovering}</span>}
             <span>{ep.open ? 'open' : 'closed'}</span>
+            {ep.chain.length > 1 && <span className="text-muted-foreground" data-testid="episode-path">· {path.join(' → ')}</span>}
             {ep.chain.length > 1 && <span className="text-muted-foreground">· {ep.chain.length} alerts</span>}
           </li>
         )
@@ -210,13 +214,16 @@ function AlertCard({ event, data, byId }: { event: Envelope<Anomaly>; data: Deri
         <span className="font-mono text-xs">{a.alert_id}</span>
         <strong className="font-medium">{CAUSE_LABEL[a.cause]}</strong>
         <span className={cn('rounded-sm px-1.5 py-px text-[10px] font-medium', SEVERITY_CLASS[a.severity])}>{SEVERITY_LABEL[a.severity]}</span>
+        {phaseOf(a) === 'recovering' && <span className="rounded-sm bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary" data-testid="phase-chip">{PHASE_LABEL.recovering}</span>}
         <span className="text-xs text-muted-foreground">confidence {(a.confidence * 100).toFixed(0)} %</span>
         {a.fallback && <span className="rounded-sm bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">fallback: no diagnosis</span>}
       </div>
       {a.supersedes && (
         <p className="flex items-center gap-1 text-xs font-medium text-primary" data-testid="supersedes">
           <Repeat2 className="size-3.5" aria-hidden="true" />
-          Supersedes {a.supersedes} (same alert, {view?.episode})
+          {phaseOf(a) === 'recovering'
+            ? `Now recovering: replaces ${a.supersedes} (same alert, ${view?.episode})`
+            : `Supersedes ${a.supersedes} (same alert, ${view?.episode})`}
         </p>
       )}
       <p className="text-sm leading-relaxed text-foreground text-pretty">{a.summary}</p>

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 from .enums import (
     ActivityState,
     AgentName,
+    AlertPhase,
     Cause,
     CompletionReason,
     ConversationId,
@@ -238,6 +239,8 @@ class AnomalyDetected(Payload):
     as_of_sim_time: float
     fallback: bool
     checks: AlertChecks | None = None
+    phase: AlertPhase = AlertPhase.ACTIVE
+    """Fase de la alerta (v0.14): `active` por defecto; `recovering` en la recuperación del GPS."""
 
 
 class AlertClosed(Payload):

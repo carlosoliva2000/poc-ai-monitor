@@ -8,7 +8,16 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
-from .enums import AlertStatus, Cause, CompletionReason, EventType, Severity, ToolSource, Trend
+from .enums import (
+    AlertPhase,
+    AlertStatus,
+    Cause,
+    CompletionReason,
+    EventType,
+    Severity,
+    ToolSource,
+    Trend,
+)
 from .payloads import AlertChecks, MissionPlanned, Summary
 
 
@@ -59,6 +68,9 @@ class PublishAlertArgs(_Model):
     explanation: str
     recommendation: str
     supersedes: str | None = None
+    phase: AlertPhase | None = None
+    """Fase de la alerta (v0.14). Opcional: si falta, la pone el módulo (`recovering` en la
+    recuperación del GPS, `active` en el resto)."""
     checks: AlertChecks | None = None
     """En `tools.json` es obligatorio (va antes de `cause`); aquí es opcional porque el
     interruptor `require_checks` del monitor puede quitar la obligación."""
@@ -219,6 +231,7 @@ class AlertSummary(_Model):
     summary: str
     status: AlertStatus
     sim_time: float
+    phase: AlertPhase = AlertPhase.ACTIVE
 
 
 class MyAlertsResult(_Model):

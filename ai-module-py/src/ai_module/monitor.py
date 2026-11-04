@@ -529,7 +529,10 @@ class Monitor:
             errors = ["This is the same call as before; change what I told you.", *verdict.errors]
         else:
             inv.rejected.add(key)
-        inv.trace.guardrail_rejections.append({"tool": tool, "errors": errors})
+        entry: dict[str, Any] = {"tool": tool, "errors": errors}
+        if verdict.tag:
+            entry["tag"] = verdict.tag  # p. ej. `recovery_ack_veto`: se cuenta en la evaluación
+        inv.trace.guardrail_rejections.append(entry)
         return {"ok": False, "errors": errors}
 
     async def _publish_alert(self, inv: Invocation, raw: dict[str, Any]) -> dict[str, Any]:
@@ -556,7 +559,9 @@ class Monitor:
         covered = inv.take(args.detection_ids)
         expected = expected_checks(inv.facts, rt.state, inv.as_of)  # antes de emitir: estado previo
         alert_id = await self._emit_alert(
-            inv, args.model_dump(mode="json"), covered[0].event_id if covered else None
+            inv,
+            {**args.model_dump(mode="json"), "phase": verdict.phase},
+            covered[0].event_id if covered else None,
         )
         inv.trace.expected_checks[alert_id] = expected
         inv.alerts[alert_id] = list(args.detection_ids)
@@ -576,7 +581,8 @@ class Monitor:
         rt = self.rt
         alert_id = rt.ids.next("ai")
         payload = {**fields, "alert_id": alert_id, "as_of_sim_time": inv.as_of,
-                   "fallback": fallback, "supersedes": fields.get("supersedes")}  # fmt: skip
+                   "fallback": fallback, "supersedes": fields.get("supersedes"),
+                   "phase": fields.get("phase") or "active"}  # fmt: skip
         event = await rt.emit(
             EventType.ANOMALY_DETECTED,
             payload,
@@ -596,6 +602,9 @@ class Monitor:
             unanswered=unanswered,
             pending=pending,
             source_silent_own_alert=self.config.source_silent_own_alert,
+            facts=inv.facts,
+            as_of=inv.as_of,
+            recovery_ack_veto=self.config.recovery_ack_veto,
         )
         if not verdict.ok:
             return self._reject(inv, "acknowledge_detection", raw, verdict)

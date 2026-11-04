@@ -76,6 +76,8 @@ class AlertRecord:
     recommendation: str = ""
     evidence_ids: list[str] = field(default_factory=list)
     checks: dict | None = None
+    phase: str = "active"
+    """Fase de la alerta (v0.14): `active` o `recovering`."""
 
 
 class MonitorState:
@@ -154,6 +156,7 @@ class MonitorState:
             recommendation=p.recommendation,
             evidence_ids=list(p.evidence_event_ids),
             checks=p.checks.model_dump() if p.checks else None,
+            phase=p.phase.value,
         )
         previous = self.alerts.get(p.supersedes) if p.supersedes else None
         if previous is not None:
@@ -171,6 +174,7 @@ class MonitorState:
             event.sim_time,
             f"{', '.join(p.detection_ids)} → alert {p.alert_id} {p.cause.value} "
             f"({p.severity.value}, confidence {p.confidence:g})"
+            + (f", {p.phase.value}" if p.phase.value != "active" else "")
             + (f", supersedes {p.supersedes}" if p.supersedes else ""),
         )
 
@@ -243,7 +247,9 @@ class MonitorState:
     def describe_gps_alert(self, now: float, style: str = "legacy") -> str:
         """La línea fija del estado del prompt. Estilo `data`: «yes — ai-0008 GPS_SPOOFING (open)»
         o «no». Estilo `legacy` (assets anteriores a la Fase 14.1): añade «If this warning is the
-        GPS recovery: cause GPS_SPOOFING, supersedes ai-0008»."""
+        GPS recovery: cause GPS_SPOOFING, supersedes ai-0008». Estilo `phase` (Fase 14.2): como
+        `legacy`, pero con la fase de la alerta y «phase recovering» en la frase; una alerta que
+        ya está en recuperación no la lleva."""
         alert = self.recent_gps_alert(now)
         if alert is None:
             return "no"
@@ -252,8 +258,13 @@ class MonitorState:
         else:
             ago = now - (alert.closed_at or now)
             state, supersedes = f"closed {ago:.0f} s ago", "no supersedes (already closed)"
-        if style == "data":
+        with_phase = style == "phase"
+        if with_phase and alert.phase != "active":
+            state += f", {alert.phase}"
+        if style == "data" or (with_phase and alert.phase != "active"):
             return f"yes — {alert.alert_id} {alert.cause} ({state})"
+        if with_phase:
+            supersedes += ", phase recovering"
         return (
             f"yes — {alert.alert_id} {alert.cause} ({state}). If this warning is the GPS "
             f"recovery: cause {alert.cause}, {supersedes}"
@@ -287,7 +298,8 @@ class MonitorState:
                 for d in self.detections_of(a.alert_id)
             )
             parts.append(
-                f"{a.alert_id} {a.cause} ({a.severity}, confidence {a.confidence:g}) "
+                f"{a.alert_id} {a.cause} ({a.severity}"
+                f"{'' if a.phase == 'active' else ', ' + a.phase}, confidence {a.confidence:g}) "
                 f'"{a.summary}" · detections: {members or "none"}'
             )
         return "; ".join(parts)
@@ -382,7 +394,8 @@ class MonitorState:
                 else "no checks (fallback alert)"
             )
             lines.append(
-                f"- {a.alert_id} {a.cause} ({a.severity}, confidence {a.confidence:g}) at "
+                f"- {a.alert_id} {a.cause} ({a.severity}"
+                f"{'' if a.phase == 'active' else ', ' + a.phase}, confidence {a.confidence:g}) at "
                 f'{format_t(a.sim_time)}, {state}: "{a.summary}". '
                 f"{f'Explanation: {prose} ' if explanation else ''}"
                 f"Recommendation: {a.recommendation} Checks: {checks}. "
@@ -394,7 +407,8 @@ class MonitorState:
         alert = self.alert_of(detection_id)
         if alert is None:
             return "none"
-        return f"{alert.alert_id} ({alert.cause}, {alert.severity}, {alert.status.value})"
+        phase = "" if alert.phase == "active" else f", {alert.phase}"
+        return f"{alert.alert_id} ({alert.cause}, {alert.severity}{phase}, {alert.status.value})"
 
 
 _HANDLED = frozenset(
