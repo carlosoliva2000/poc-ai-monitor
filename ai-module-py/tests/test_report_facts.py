@@ -13,6 +13,7 @@ from ai_module.report_facts import (
     build_facts,
     figures_line,
     monitor_stats,
+    parse_annex,
     parse_narrative,
     timeline_table,
 )
@@ -241,3 +242,44 @@ def test_parse_narrative_reads_the_english_titles() -> None:
         "Supported.",
         "1. One.",
     )
+
+
+def test_annex_layout_has_no_delay_and_ends_with_the_self_assessment() -> None:
+    state = spoofing_state()
+    facts = build_facts(state)
+    narrative = Narrative(
+        summary="R",
+        recommendations="1. Uno.",
+        assessment="- **Support:** bien.",
+        technical_recommendations="1. Técnica.",
+        annex=True,
+    )
+    text = assemble("demo", SUMMARY, state, facts, narrative, figures="**Monitor figures** x.")
+    assert "diagnosis delay" not in text and "## Monitor assessment" not in text
+    assert text.index("## Recommendations") < text.index("## Limitations")
+    assert text.index("## Limitations") < text.index("## Annex: monitor self-assessment")
+    annex = text.split("## Annex: monitor self-assessment\n\n")[1]
+    assert annex.startswith("**Monitor figures** x.\n\n### Assessment\n\n- **Support:** bien.")
+    assert annex.endswith("### Technical recommendations\n\n1. Técnica.")
+    assert "The annex is the technical self-assessment" in text
+
+
+def test_the_mission_prompt_data_has_no_monitor_times() -> None:
+    facts = build_facts(spoofing_state())
+    mission = anomalies_for_llm(facts, mission=True)
+    full = anomalies_for_llm(facts)
+    assert "detection at T+01:40, closed by the monitor" in mission
+    assert "first alert at" not in mission and "- Monitor ai-0006: GPS spoofing" in mission
+    assert "first alert at T+01:41" in full and "- Monitor ai-0006 at T+02:11" in full
+
+
+def test_parse_annex_reads_the_assessment_and_the_technical_recommendations() -> None:
+    text = (
+        "## Assessment\n- **Support:** bien.\n\n## Technical recommendations\n1. Uno.\n\n"
+        "## Otro\nignorado"
+    )
+    assert parse_annex(text) == ("- **Support:** bien.", "1. Uno.")
+    assert parse_annex("## Monitor assessment\nA\n## Recommendations\n1. B") == ("A", "1. B")
+    assert parse_annex("sin títulos") == ("", "")
+    # el apartado del anexo no cuenta como informe de misión
+    assert Narrative(assessment="a", annex=True).empty and not Narrative(assessment="a").empty

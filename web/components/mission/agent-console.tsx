@@ -9,6 +9,7 @@ import type { ReportPhase } from '@/hooks/use-platform'
 import type { AgentActivity, Conversation, Envelope } from '@/lib/contracts'
 import { chatEntries, type Derived, type ToolCallEvent } from '@/lib/derive'
 import { formatT } from '@/lib/format'
+import { splitReport } from '@/lib/report'
 import { cn } from '@/lib/utils'
 import { ChatPanel, TypingDots } from './chat-panel'
 import { MonitorFeed } from './monitor-feed'
@@ -109,9 +110,7 @@ export function AgentConsole({ events, data, chunks, activity, toolCalls, report
                 >
                   Report generated · {formatT(data.report.sim_time)} · {data.report.payload.alerts_count} {data.report.payload.alerts_count === 1 ? 'alert' : 'alerts'}
                 </p>
-                <div className="md-body">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.report.payload.markdown}</ReactMarkdown>
-                </div>
+                <ReportBody markdown={data.report.payload.markdown} />
               </div>
             ) : (
               <ReportNotice phase={reportPhase} finished={finished} />
@@ -136,6 +135,26 @@ export function AgentConsole({ events, data, chunks, activity, toolCalls, report
 }
 
 /** Qué decir en la pestaña Informe mientras no hay informe. */
+/** Informe de misión y, plegada, la autoevaluación técnica del monitor (anexo). */
+function ReportBody({ markdown }: { markdown: string }) {
+  const { mission, annex, annexTitle } = splitReport(markdown)
+  return (
+    <>
+      <div className="md-body">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{mission}</ReactMarkdown>
+      </div>
+      {annex && (
+        <details className="rounded-md border border-border bg-muted/30 px-3 py-2" data-testid="report-annex">
+          <summary className="cursor-pointer select-none font-mono text-xs text-muted-foreground">{annexTitle}</summary>
+          <div className="md-body mt-2">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{annex}</ReactMarkdown>
+          </div>
+        </details>
+      )}
+    </>
+  )
+}
+
 function ReportNotice({ phase, finished }: { phase: ReportPhase; finished: boolean }) {
   if (phase === 'writing') {
     return (

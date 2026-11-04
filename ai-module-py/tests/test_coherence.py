@@ -228,7 +228,7 @@ def test_gps_recovery_is_exclusive_to_the_cause_of_the_recent_gps_alert(
     )
     assert check(jump, state, InvocationFacts(metrics=metrics(disagreed=False, step=68.0))).ok
     expected = (
-        "This is the recovery from the GPS_SPOOFING of ai-1: publish cause GPS_SPOOFING, "
+        "GPS recovery of ai-1 (GPS_SPOOFING): expected cause GPS_SPOOFING, "
         "severity medium and supersedes ai-1"
     )
     for cause in ("GPS_JAMMING", "SENSOR_FAULT", "HIJACK", "WIND", "UNKNOWN"):
@@ -265,7 +265,7 @@ def test_gps_recovery_must_be_published_with_severity_medium(state: MonitorState
     facts = InvocationFacts(metrics=metrics(disagreed=True))
     both = checks(gps_alert_recent=True, gps_radar_disagreed=True)
     expected = (
-        "This is the recovery from the GPS_SPOOFING of ai-1: publish cause GPS_SPOOFING, "
+        "GPS recovery of ai-1 (GPS_SPOOFING): expected cause GPS_SPOOFING, "
         "severity medium and supersedes ai-1"
     )
     for severity in ("high", "low"):
@@ -291,7 +291,7 @@ def test_gps_recovery_with_a_closed_alert_also_needs_severity_medium(state: Moni
         ["det-2"], cause="GPS_JAMMING", severity="high", checks=checks(gps_alert_recent=True)
     )
     assert check(high, state, facts).errors == [
-        "This is the recovery from the GPS_JAMMING of ai-1: publish cause GPS_JAMMING, "
+        "GPS recovery of ai-1 (GPS_JAMMING): expected cause GPS_JAMMING, "
         "severity medium and no supersedes (ai-1 is already closed)"
     ]
 
@@ -309,12 +309,12 @@ def test_recovery_of_a_gps_alert_that_is_already_medium_is_an_acknowledgement(
         ["det-2"], cause="GPS_SPOOFING", supersedes="ai-1", severity="medium", checks=both
     )
     assert check(same, state, facts).errors == [
-        "This is the recovery from the GPS_SPOOFING of ai-1, which is already medium: nothing "
+        "GPS recovery of ai-1 (GPS_SPOOFING), which is already medium: nothing "
         "changes, use acknowledge_detection with alert_id ai-1"
     ]
     other = alert_args(["det-2"], cause="SENSOR_FAULT", supersedes="ai-1", checks=both)
     assert check(other, state, facts).errors == [
-        "This is the recovery from the GPS_SPOOFING of ai-1, which is already medium: nothing "
+        "GPS recovery of ai-1 (GPS_SPOOFING), which is already medium: nothing "
         "changes, use acknowledge_detection with alert_id ai-1"
     ]
 
@@ -610,7 +610,7 @@ def test_a_wrong_cause_on_a_recovery_with_a_closed_gps_alert_says_there_is_no_su
     facts = InvocationFacts(metrics=metrics(step=90.0))
     wrong = alert_args(["det-2"], cause="HIJACK", checks=checks(gps_alert_recent=True))
     assert (
-        "This is the recovery from the GPS_JAMMING of ai-1: publish cause GPS_JAMMING, "
+        "GPS recovery of ai-1 (GPS_JAMMING): expected cause GPS_JAMMING, "
         "severity medium and no supersedes (ai-1 is already closed)"
     ) in check(wrong, state, facts).errors
 

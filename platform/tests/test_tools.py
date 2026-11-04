@@ -372,3 +372,67 @@ def test_computed_facts_are_null_without_data(runs_dir: Path) -> None:
         call_tool(ctx, "get_track_metrics", {"since": 305, "until": 311})
     )
     assert silent.gps_max_step_m is None and silent.gps_radar is None
+
+
+def test_now_block_is_the_last_sample_not_the_window_aggregate(runs_dir: Path) -> None:
+    """`now` (v0.13): la última muestra de los últimos 10 s, aunque la ventana pedida sea larga."""
+    _, ctx = at(runs_dir, "wind", 150.0)
+    short = TrackMetrics.model_validate(
+        call_tool(ctx, "get_track_metrics", {"since": 140, "until": 150})
+    )
+    long = TrackMetrics.model_validate(
+        call_tool(ctx, "get_track_metrics", {"since": 0, "until": 150})
+    )
+    assert short.now is not None and short.now == long.now  # no depende de la ventana
+    now = short.now
+    assert now.as_of == 150.0 and now.window_s == 10.0
+    assert now.gps_radar_distance_m is not None and now.gps_radar_agree is True
+    gps_last = call_tool(ctx, "get_events", {"source": "gps", "last_n": 1})["events"][0]
+    assert gps_last["sim_time"] >= 149.0
+    assert now.gps_deviation_from_plan_m is not None and now.gps_deviation_from_plan_m > 10
+    wind = call_tool(ctx, "get_events", {"source": "meteo", "last_n": 1})["events"][0]
+    assert now.wind_speed_mps == pytest.approx(wind["speed_mps"], abs=0.05)
+    assert now.wind_gust_mps == pytest.approx(wind["gust_mps"], abs=0.05)
+    assert now.wind_from_deg == pytest.approx(wind["from_deg"], abs=0.05)
+    assert now.wind is not None and now.wind.startswith("from ") and ", pushing " in now.wind
+
+
+def test_now_block_respects_the_time_cut(runs_dir: Path) -> None:
+    player, ctx = at(runs_dir, "demo", 200.3)
+    metrics = TrackMetrics.model_validate(
+        call_tool(ctx, "get_track_metrics", {"since": 0, "until": 1e9})
+    )
+    assert metrics.now is not None and metrics.now.as_of == player.sim_time
+    earlier = TrackMetrics.model_validate(
+        call_tool(ctx, "get_track_metrics", {"since": 0, "until": 100})
+    )
+    assert earlier.now is not None and earlier.now.as_of == 100.0  # el pedido, si es anterior
+
+
+def test_now_block_with_the_sources_silenced(runs_dir: Path) -> None:
+    _, ctx = at(runs_dir, "faults", 175.2)  # el radar calla de 120 a 180 s
+    metrics = TrackMetrics.model_validate(
+        call_tool(ctx, "get_track_metrics", {"since": 150, "until": 175.2})
+    )
+    assert metrics.now is not None
+    assert metrics.now.gps_radar_distance_m is None and metrics.now.gps_radar_agree is None
+    assert metrics.now.radar_deviation_from_plan_m is None
+    assert metrics.now.gps_deviation_from_plan_m is not None
+
+
+def test_now_wind_text_is_interpreted() -> None:
+    from platform_app.tools.metrics import _wind_text
+
+    assert _wind_text(326.0, 7.2) == "from NW (326°), pushing SE"
+    assert _wind_text(352.0, 13.8) == "from N (352°), pushing S"
+    assert _wind_text(10.0, 0.0) == "calm"
+
+
+def test_now_shows_the_gps_back_on_the_radar_after_the_spoofing(runs_dir: Path) -> None:
+    """Tras la recuperación del GPS la ventana aún dice que discrepaban; `now`, que ya no."""
+    _, ctx = at(runs_dir, "spoofing", 232.0)  # el GPS vuelve a la posición real hacia 222 s
+    metrics = TrackMetrics.model_validate(
+        call_tool(ctx, "get_track_metrics", {"since": 200, "until": 232})
+    )
+    assert metrics.gps_radar is not None and metrics.gps_radar.disagreed is True
+    assert metrics.now is not None and metrics.now.gps_radar_agree is True

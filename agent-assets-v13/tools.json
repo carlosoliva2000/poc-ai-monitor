@@ -1,0 +1,150 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "get_events",
+      "description": "Returns events that have already happened from a source, from oldest to newest. It never returns events later than the current time. Use it to see specific data (positions, wind, link, detections, your own alerts or operator messages).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": ["gps", "radar", "meteo", "link", "battery", "mission", "detector", "monitor", "operator"],
+            "description": "gps = PositionUpdated of the drone; radar = TrackUpdated of the ground radar; meteo = WindReported; link = LinkStatus of the command link; battery = BatteryStatus; mission = mission events; detector = rule-based detections; monitor = alerts published by the monitor; operator = operator messages"
+          },
+          "type": {"type": "string", "description": "Optional: filter by event type, e.g. WindReported"},
+          "last_n": {"type": "integer", "description": "How many events (the most recent). Default 10, maximum 50"},
+          "since": {"type": "number", "description": "Optional: start sim_time in seconds"},
+          "until": {"type": "number", "description": "Optional: end sim_time in seconds (clipped to the current time)"}
+        },
+        "required": ["source"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_mission_plan",
+      "description": "Returns the flight plan: waypoints with x,y coordinates in metres (x east, y north), cruise speed, estimated passing time and next pending waypoint.",
+      "parameters": {"type": "object", "properties": {}, "required": []}
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_track_metrics",
+      "description": "Computes trajectory metrics between two instants from the GPS and the radar: deviation of each source from the planned route, distance between GPS and radar, drift direction, course of travel versus the bearing to the next waypoint, mean speed and the wind of the same window (mean speed, maximum gust, where it pushes and difference with the drift). It also returns the ids of the events used, to cite them as evidence.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "since": {"type": "number", "description": "start sim_time in seconds"},
+          "until": {"type": "number", "description": "end sim_time in seconds (clipped to the current time)"}
+        },
+        "required": ["since", "until"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_my_alerts",
+      "description": "Returns the alerts published by the monitor agent, with their status (open, closed or superseded).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "only_open": {"type": "boolean", "description": "true to see only the open ones. Default false"}
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_flight_summary",
+      "description": "Summary of the whole flight: duration, distance according to GPS and to radar, waypoints reached, whether the mission was completed, detections per rule and alerts per cause.",
+      "parameters": {"type": "object", "properties": {}, "required": []}
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "publish_alert",
+      "description": "Publishes an anomaly alert (AnomalyDetected event) with your diagnosis on the bus. It is your only way to act. If the data does not meet the format, it returns the errors so you can fix them.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "detection_ids": {"type": "array", "items": {"type": "string"}, "description": "Ids of the detections that motivate the alert (det-…). Optional if there is only one pending detection: the module fills it in"},
+          "checks": {
+            "type": "object",
+            "description": "Checks you made before choosing the cause; they are checked against the results of the tools. Fill them in BEFORE choosing cause",
+            "properties": {
+              "gps_alert_recent": {"type": "boolean", "description": "The \"Recent GPS alert\" line of the state says yes"},
+              "gps_radar_disagreed": {"type": "boolean", "description": "gps_radar.disagreed from get_track_metrics (false if you did not call it)"},
+              "wind_notable": {"type": "boolean", "description": "wind.notable from get_track_metrics (false if there is no wind or you did not call it)"},
+              "wind_with_drift": {"type": "boolean", "description": "wind.with_drift from get_track_metrics (false if there is no wind or you did not call it)"},
+              "link_checked": {"type": "boolean", "description": "You called get_events with source link"},
+              "link_anomalous": {"type": ["boolean", "null"], "description": "The link is anomalous (another controller_id, RSSI jump of more than 10 dB or much higher latency); null if you did not look at it"}
+            },
+            "required": ["gps_alert_recent", "gps_radar_disagreed", "wind_notable", "wind_with_drift", "link_checked", "link_anomalous"],
+            "additionalProperties": false
+          },
+          "cause": {"type": "string", "enum": ["WIND", "HIJACK", "GPS_SPOOFING", "SENSOR_FAULT", "GPS_JAMMING", "UNKNOWN"], "description": "Most probable cause"},
+          "severity": {"type": "string", "enum": ["low", "medium", "high"]},
+          "confidence": {"type": "number", "description": "Confidence in the cause, from 0 to 1"},
+          "evidence_event_ids": {"type": "array", "items": {"type": "string"}, "description": "2 to 6 ids of events you have seen in the tools (e.g. met-0010, gps-000106) that support the diagnosis; they go here, not in the explanation"},
+          "summary": {"type": "string", "description": "One sentence, at most 160 characters"},
+          "explanation": {"type": "string", "description": "Reasoning with concrete data and times (T+mm:ss)"},
+          "recommendation": {"type": "string", "description": "What you recommend to the person in charge of the drone. Recommend only: you cannot act"},
+          "supersedes": {"type": "string", "description": "Optional: alert_id of an earlier alert of yours that this one replaces"}
+        },
+        "required": ["checks", "cause", "severity", "confidence", "evidence_event_ids", "summary", "explanation", "recommendation"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "acknowledge_detection",
+      "description": "Responds to one or several detections without creating a new alert (publishes a DetectionAcknowledged event). Use it when the detection belongs to an alert of yours that is already open and neither its cause nor its severity changes (pass alert_id), or when you decide no alert is needed (do not pass alert_id).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "detection_ids": {"type": "array", "items": {"type": "string"}, "description": "Ids of the detections you respond to (det-…); they must be among those you were given. Optional if there is only one pending detection: the module fills it in"},
+          "alert_id": {"type": "string", "description": "Optional: alert_id of the open alert they belong to. If no alert is needed, do not pass it. On a closing warning for an alert, the module fills it in"},
+          "reason": {"type": "string", "description": "Why, with data"}
+        },
+        "required": ["reason"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "close_alert",
+      "description": "Closes an alert of yours that no longer applies (publishes an AlertClosed event; alerts are not modified).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "alert_id": {"type": "string", "description": "The alert you close. Optional on a closing warning: the module fills in that warning's alert"},
+          "reason": {"type": "string", "description": "Why it is closed, with data"}
+        },
+        "required": ["reason"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "load_skill",
+      "description": "Loads a skill (diagnosis or format procedure) from those listed in the index of the system prompt and returns its content.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string", "description": "Exact name of the skill, e.g. route-deviation"}
+        },
+        "required": ["name"]
+      }
+    }
+  }
+]

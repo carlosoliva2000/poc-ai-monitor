@@ -41,6 +41,14 @@ AID_NAMES = {
 }
 CLOSE_GAP_S = 5.0  # desfase entre el fin de la detección y el cierre a partir del cual se explica
 MISSING = "Not available: the agent did not write this section."
+ANNEX_TITLE = "Annex: monitor self-assessment"
+MISSION_LIMITATIONS = (
+    "The data is simulated and the monitoring system only saw what had happened up to each "
+    "instant. The times, severities, statuses and evidence in this report are written by the "
+    'module from the events; the summary, "what was seen" and the recommendations are written by '
+    "a language model with that same data, without knowing what the simulator really did. The "
+    "annex is the technical self-assessment of the monitor, for whoever evaluates the exercise."
+)
 LIMITATIONS = (
     "The data is simulated and the monitor only saw what had happened up to each instant. The "
     "times, severities, statuses and evidence in this report are written by the module from the "
@@ -221,15 +229,22 @@ def timeline_table(state: MonitorState, facts: ReportFacts, summary: dict[str, A
     return "\n".join(lines)
 
 
-def anomaly_section(anomaly: Anomaly, seen: str) -> str:
+def anomaly_section(anomaly: Anomaly, seen: str, mission: bool = False) -> str:
+    """Una anomalía del informe. En el de misión (`mission`) no se habla del retraso del
+    diagnóstico: eso es de la autoevaluación del monitor."""
     first, last = anomaly.first, anomaly.last
     rules = ", ".join(dict.fromkeys(d.rule for d in anomaly.detections)) or "no detection"
+    when = f"- **When:** detection at {format_t(anomaly.detected_at)} ({rules}), first alert at "
+    if mission:
+        when += f"{format_t(first.sim_time)}."
+    else:
+        when += (
+            f"{format_t(first.sim_time)} (diagnosis delay: {num(anomaly.delay_s)} s of simulation)."
+        )
     lines = [
         f"### {anomaly.label} · {cause_name(first.cause)} "
         f"({severity_name(first.severity)}, confidence {first.confidence:g})",
-        f"- **When:** detection at {format_t(anomaly.detected_at)} ({rules}), first alert at "
-        f"{format_t(first.sim_time)} (diagnosis delay: {num(anomaly.delay_s)} s of "
-        "simulation).",
+        when,
     ]
     if last is not first:
         lines.append(
@@ -269,7 +284,10 @@ def assemble(
     note: str = "",
     figures: str = "",
 ) -> str:
-    """El informe completo: los hechos del módulo con la narrativa del LLM en su sitio."""
+    """El informe completo: los hechos del módulo con la narrativa del LLM en su sitio. Con
+    `narrative.annex` (Fase 14.1) es el informe de misión (resumen, cronología, anomalías,
+    recomendaciones operativas y limitaciones) más la autoevaluación del monitor como último
+    apartado; sin él, el formato anterior, con la valoración del monitor en medio."""
     blocks = [header(scenario, summary, facts)]
     if note:
         blocks.append(f"> {note}")
@@ -277,33 +295,44 @@ def assemble(
     blocks += ["## Timeline\n\n" + timeline_table(state, facts, summary)]
     if facts.anomalies:
         sections = [
-            anomaly_section(a, narrative.seen.get(a.label) or MISSING) for a in facts.anomalies
+            anomaly_section(a, narrative.seen.get(a.label) or MISSING, narrative.annex)
+            for a in facts.anomalies
         ]
         blocks.append("## Anomalies\n\n" + "\n\n".join(sections))
     else:
         blocks.append("## Anomalies\n\nThe monitor published no alerts.")
     if (orphans := without_alert_section(facts)) != "":
         blocks.append(orphans)
-    assessment = (figures + "\n\n" if figures else "") + (narrative.assessment or MISSING)
-    blocks += ["## Monitor assessment\n\n" + assessment]
+    if not narrative.annex:
+        assessment = (figures + "\n\n" if figures else "") + (narrative.assessment or MISSING)
+        blocks += ["## Monitor assessment\n\n" + assessment]
+        blocks += ["## Recommendations\n\n" + (narrative.recommendations or MISSING)]
+        blocks += ["## Limitations\n\n" + LIMITATIONS]
+        return "\n\n".join(blocks)
     blocks += ["## Recommendations\n\n" + (narrative.recommendations or MISSING)]
-    blocks += ["## Limitations\n\n" + LIMITATIONS]
+    blocks += ["## Limitations\n\n" + MISSION_LIMITATIONS]
+    annex = (figures + "\n\n" if figures else "") + "### Assessment\n\n"
+    annex += (narrative.assessment or MISSING) + "\n\n### Technical recommendations\n\n"
+    annex += narrative.technical_recommendations or MISSING
+    blocks += [f"## {ANNEX_TITLE}\n\n" + annex]
     return "\n\n".join(blocks)
 
 
 # --- Lo que se le entrega al LLM ---------------------------------------------------------------
 
 
-def anomalies_for_llm(facts: ReportFacts) -> str:
-    """Cada anomalía con lo que dijo el monitor y lo que vio el detector, para «qué se vio»."""
+def anomalies_for_llm(facts: ReportFacts, mission: bool = False) -> str:
+    """Cada anomalía con lo que dijo el monitor y lo que vio el detector, para «qué se vio».
+    Para el informe de misión (`mission`) sin la hora de la primera alerta ni las de la cadena:
+    no hay retrasos que comentar."""
     if not facts.anomalies:
         return "There were no alerts."
     blocks = []
     for anomaly in facts.anomalies:
+        first_alert = "" if mission else f", first alert at {format_t(anomaly.first.sim_time)}"
         lines = [
             f"### {anomaly.label} · {cause_name(anomaly.first.cause)} — detection at "
-            f"{format_t(anomaly.detected_at)}, first alert at "
-            f"{format_t(anomaly.first.sim_time)}, {anomaly.status}"
+            f"{format_t(anomaly.detected_at)}{first_alert}, {anomaly.status}"
         ]
         for d in anomaly.detections:
             peak = f", maximum {num(d.max_value)} {d.unit}" if d.max_value is not None else ""
@@ -319,14 +348,14 @@ def anomalies_for_llm(facts: ReportFacts) -> str:
                     f"(value {num(value)} {d.unit})"
                 )
         for alert in anomaly.chain:
-            lines.append(_alert_line(alert))
+            lines.append(_alert_line(alert, mission=mission))
         if len(anomaly.chain) > 1:
             lines.append(f"- Changes from the first alert to the last: {anomaly.changes}")
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
 
 
-def _alert_line(alert: AlertRecord, max_chars: int = 600) -> str:
+def _alert_line(alert: AlertRecord, max_chars: int = 600, mission: bool = False) -> str:
     explanation = alert.explanation
     if len(explanation) > max_chars:
         explanation = explanation[:max_chars] + "…"
@@ -337,8 +366,9 @@ def _alert_line(alert: AlertRecord, max_chars: int = 600) -> str:
         )
     else:
         checks = "no checks (fallback alert)"
+    at = "" if mission else f" at {format_t(alert.sim_time)}"
     return (
-        f"- Monitor {alert.alert_id} at {format_t(alert.sim_time)}: {cause_name(alert.cause)} "
+        f"- Monitor {alert.alert_id}{at}: {cause_name(alert.cause)} "
         f'({severity_name(alert.severity)}, confidence {alert.confidence:g}) "{alert.summary}". '
         f"Explanation: {explanation} Checks: {checks}."
     )
@@ -459,16 +489,29 @@ class Narrative:
     seen: dict[str, str] = field(default_factory=dict)
     assessment: str = ""
     recommendations: str = ""
+    technical_recommendations: str = ""
+    """Recomendaciones técnicas del anexo (solo con `annex`)."""
+    annex: bool = False
+    """Informe de misión con la autoevaluación del monitor en un anexo (Fase 14.1)."""
 
     @property
     def empty(self) -> bool:
-        return not (self.summary or self.seen or self.assessment or self.recommendations)
+        """Sin nada de la misión (el anexo, aparte, no cuenta)."""
+        return not (self.summary or self.seen or self.recommendations) and not (
+            self.assessment and not self.annex
+        )
 
 
 HEADING_RE = re.compile(r"^\s*(#{1,6})\s+(.+?)\s*#*\s*$")
 LABEL_RE = re.compile(r"^\s*(?:#{1,6}\s*|\*\*|[-*]\s+)?(A\d+)\b[\s:.·\-—*]*(.*)$")
 # Prefijos de los títulos (sin acentos, en minúsculas): inglés y, para las ejecuciones antiguas,
 # castellano.
+ANNEX_SECTIONS = (
+    ("assessment", "monitor assessment"),
+    ("assessment", "assessment"),
+    ("technical", "technical recommendations"),
+    ("technical", "recommendations"),
+)
 SECTIONS = (
     ("summary", "summary"),
     ("summary", "resumen"),
@@ -500,22 +543,28 @@ def _unfence(text: str) -> str:
     return "\n".join(body)
 
 
-def parse_narrative(text: str, labels: list[str]) -> Narrative:
-    """Lee los cuatro apartados de la respuesta del LLM por sus títulos (`## Summary`,
-    `## What was seen` con un `### A1` por anomalía, `## Monitor assessment` y
-    `## Recommendations`). Lo que falte queda vacío; cualquier otro apartado que escriba se
-    ignora."""
+def _read_sections(text: str, sections: tuple[tuple[str, str], ...]) -> dict[str, list[str]]:
+    """Trozos de la respuesta por sus títulos de apartado (`#` o `##`); lo demás se ignora."""
     parts: dict[str, list[str]] = {}
     current: str | None = None
     for line in _unfence(text).splitlines():
         heading = HEADING_RE.match(line)
         if heading is not None and len(heading.group(1)) <= 2:  # título de apartado
             title = _plain(heading.group(2))
-            current = next((key for key, prefix in SECTIONS if title.startswith(prefix)), None)
+            current = next((key for key, prefix in sections if title.startswith(prefix)), None)
             if current is not None:
                 parts.setdefault(current, [])
         elif current is not None:
             parts[current].append(line)
+    return parts
+
+
+def parse_narrative(text: str, labels: list[str]) -> Narrative:
+    """Lee los apartados de la respuesta del LLM por sus títulos (`## Summary`,
+    `## What was seen` con un `### A1` por anomalía, `## Recommendations` y, en el formato
+    anterior, `## Monitor assessment`). Lo que falte queda vacío; cualquier otro apartado que
+    escriba se ignora."""
+    parts = _read_sections(text, SECTIONS)
     narrative = Narrative(
         summary="\n".join(parts.get("summary", [])).strip(),
         assessment="\n".join(parts.get("assessment", [])).strip(),
@@ -523,6 +572,15 @@ def parse_narrative(text: str, labels: list[str]) -> Narrative:
     )
     narrative.seen = _split_seen(parts.get("seen", []), labels)
     return narrative
+
+
+def parse_annex(text: str) -> tuple[str, str]:
+    """(valoración, recomendaciones técnicas) de la segunda llamada del informe."""
+    parts = _read_sections(text, ANNEX_SECTIONS)
+    return (
+        "\n".join(parts.get("assessment", [])).strip(),
+        "\n".join(parts.get("technical", [])).strip(),
+    )
 
 
 def _split_seen(lines: list[str], labels: list[str]) -> dict[str, str]:

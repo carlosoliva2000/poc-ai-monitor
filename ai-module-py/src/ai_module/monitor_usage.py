@@ -171,7 +171,7 @@ def expected_decision(
             return "cause GPS_SPOOFING", {"cause:GPS_SPOOFING"}
         return "cause SENSOR_FAULT/UNKNOWN", {"cause:SENSOR_FAULT", "cause:UNKNOWN"}
     if rule == "ROUTE_DEVIATION":
-        recent = re.search(r"Recent GPS alert[^:]*: yes.*?cause (\w+)", objective)
+        recent = re.search(r"Recent GPS alert[^:]*: yes.*?(?:cause|ai-\d+) (\w+)", objective)
         if recent and (facts["gps_radar_disagreed"] or facts["gps_jump"]):
             return f"recovery: cause {recent.group(1)}", {f"cause:{recent.group(1)}"}
         if facts["wind_notable"] and facts["wind_with_drift"]:

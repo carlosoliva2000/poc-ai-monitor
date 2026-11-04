@@ -285,3 +285,43 @@ def test_server_env_is_validated_and_part_of_the_server_signature(tmp_path: Path
         folder = write_profile(tmp_path, "bad", {"server": {**server, "env": bad}})
         with pytest.raises(ProfileError):
             load_profile("bad", folder)
+
+
+def test_assets_key_picks_a_frozen_copy_and_keeps_its_fingerprint() -> None:
+    """`assets: agent-assets-v13` (Fase 14.1): textos de la Fase 13 con su huella de entonces."""
+    profile = load_profile("actual-textos-v13")
+    assert profile.assets_dir == REPO / "agent-assets-v13"
+    assert assets_fingerprint(profile.assets_dir)[:16] == "293927dd0c038af5"
+    assets = Assets(profile.assets_dir, profile)
+    assert assets.profile_info()["assets"] == "agent-assets-v13"
+    # la copia congelada no lleva la clave nueva: sin ella el bloque `now` no llega al modelo
+    assert assets.agent("monitor").now_facts is False
+    assert Assets().agent("monitor").now_facts is True
+    assert load_profile("actual").assets_dir == REPO / "agent-assets"
+
+
+@pytest.mark.parametrize("value", ["../agent-assets", "other", "agent-assets/x", 3])
+def test_assets_key_only_accepts_agent_assets_folders(tmp_path: Path, value: object) -> None:
+    directory = write_profile(tmp_path, "p", {"assets": value})
+    with pytest.raises(ProfileError, match="assets"):
+        load_profile("p", directory)
+
+
+def test_assets_key_needs_an_existing_folder(tmp_path: Path) -> None:
+    directory = write_profile(tmp_path, "p", {"assets": "agent-assets-does-not-exist"})
+    with pytest.raises(ProfileError, match="does not exist"):
+        load_profile("p", directory)
+
+
+def test_the_now_block_is_stripped_when_now_facts_is_off() -> None:
+    from ai_module.agent.tools import strip_computed_facts, strip_now_facts
+
+    result = {
+        "since": 0,
+        "wind": {"notable": True},
+        "gps_radar": {"disagreed": False},
+        "now": {"x": 1},
+    }
+    assert "now" not in strip_now_facts(result) and "gps_radar" in strip_now_facts(result)
+    assert "now" not in strip_computed_facts(result)  # sin hechos calculados tampoco hay `now`
+    assert strip_now_facts("text") == "text"

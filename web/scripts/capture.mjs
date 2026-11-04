@@ -21,6 +21,8 @@
 //   node scripts/capture.mjs chattools <carpeta> chat del monitor con tools (módulo con el perfil qwen3-14b-t0-chat-tools)
 //   node scripts/capture.mjs fase10 <carpeta> demo a 4× con «esperar al agente» a 1920×1080: alerta de viento con sus checks, spoofing y su recuperación,
 //                                              secuestro, chat del monitor, informe y chat del informe (módulo de IA con la configuración por defecto)
+//   node scripts/capture.mjs fase14_1 <carpeta> demo a 16× con «esperar al agente» a 1920×1080: informe de misión con el anexo
+//                                              (autoevaluación del monitor) plegado y desplegado (módulo de IA con la configuración por defecto)
 // Requiere plataforma (8100), módulo de IA y web (3000) en marcha. Una sola pestaña: los ids
 // `ops-` los calcula la web y con dos pestañas podrían repetirse.
 import { chromium } from 'playwright'
@@ -362,6 +364,32 @@ async function runFase9() {
   await shot('16_informe_final')
   await ask('report', 'What do you recommend?', '17_chat_informe')
   await page.getByRole('tab', { name: 'Monitor' }).click()
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
+async function runFase14_1() {
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await setup('demo', { waitAgent: true, interactive: false, speed: 16 })
+  await page.getByRole('button', { name: 'Start', exact: true }).click()
+  note('play')
+  while (!(await headerText()).includes('Finished')) await sleep(500)
+  note('simulación terminada')
+  await page.getByRole('tab', { name: 'Report' }).click()
+  const lim = Date.now() + 240000
+  while (Date.now() < lim && (await count('[data-testid=report-done]')) === 0) await sleep(400)
+  await sleep(500)
+  note(`informe publicado: ${(await count('[data-testid=report-done]')) > 0}`)
+  const annex = page.locator('[data-testid=report-annex]')
+  note(`anexo presente: ${(await annex.count()) > 0}, plegado: ${!(await annex.evaluate((d) => d.open))}`)
+  await annex.scrollIntoViewIfNeeded()
+  await shot('01_informe_de_mision_anexo_plegado')
+  await annex.evaluate((d) => (d.open = true))
+  await sleep(300)
+  await annex.scrollIntoViewIfNeeded()
+  await shot('02_anexo_autoevaluacion_desplegado')
+  await page.locator('[data-testid=report-view]').evaluate((el) => (el.scrollTop = 0))
+  await sleep(200)
+  await shot('03_informe_de_mision_inicio')
   writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
 }
 
@@ -1175,6 +1203,7 @@ try {
   else if (mode === 'smooth') await runSmooth()
   else if (mode === 'fase9_2') await runFase9_2()
   else if (mode === 'fase10') await runFase10()
+  else if (mode === 'fase14_1') await runFase14_1()
   else if (mode === 'followcheck') await runFollowCheck()
   else if (mode === 'telemetry') await runTelemetry()
   else if (mode === 'highlight') await runHighlight()

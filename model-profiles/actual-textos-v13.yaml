@@ -1,0 +1,12 @@
+# Fase 14.1: Qwen3-14B-AWQ con los prompts, skills y tools de antes de la Fase 14.1 (copia
+# congelada `agent-assets-v13/`, huella 293927dd0c038af5), para comparar los textos nuevos con los
+# de la Fase 13. Mismo servidor y muestreo que `actual`.
+# Ficha: https://huggingface.co/Qwen/Qwen3-14B-AWQ
+description: Qwen/Qwen3-14B-AWQ con los textos congelados de la Fase 13 (agent-assets-v13)
+assets: agent-assets-v13
+server:
+  model: Qwen/Qwen3-14B-AWQ
+  tool_call_parser: hermes
+  reasoning_parser: qwen3
+  max_model_len: 32768
+  extra_args: []

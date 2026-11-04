@@ -24,12 +24,14 @@ from .monitor import Monitor
 from .outbox import format_t
 from .report_facts import (
     Narrative,
+    ReportFacts,
     anomalies_for_llm,
     assemble,
     assessment_facts,
     build_facts,
     figures_line,
     monitor_stats,
+    parse_annex,
     parse_narrative,
 )
 from .runtime import Runtime
@@ -66,27 +68,27 @@ class ReportAgent:
         summary: dict[str, Any] | None = None
         facts = build_facts(rt.state)
         aids = rt.assets.agent("monitor").aids()
-        narrative = Narrative()
+        narrative = Narrative(annex=bool(cfg.annex_system_prompt and cfg.annex_objective_prompt))
         try:
             summary = await rt.platform_call(rt.platform_url, "get_flight_summary", {})
             if not summary or "mission_id" not in summary:
                 summary = None
         except Exception as exc:
             log.error("cannot get the flight summary: %s", exc)
+        values: dict[str, Any] = {
+            "scenario": scenario,
+            "run_id": run_id,
+            "t_label": format_t(now),
+            "sim_time": f"{now:g}",
+            "flight_summary": compact_json(summary) if summary else "not available",
+            "labels": ", ".join(a.label for a in facts.anomalies) or "none",
+            "anomalies": anomalies_for_llm(facts, mission=narrative.annex),
+            "assessment_facts": assessment_facts(facts, rt.trace.records, aids),
+        }
+        labels = [a.label for a in facts.anomalies]
         try:
             # sin tools: el módulo entrega los datos en el prompt y hace una sola llamada
-            labels = [a.label for a in facts.anomalies]
-            objective = render(
-                rt.assets.prompt(cfg.objective_prompt or ""),
-                scenario=scenario,
-                run_id=run_id,
-                t_label=format_t(now),
-                sim_time=f"{now:g}",
-                flight_summary=compact_json(summary) if summary else "not available",
-                labels=", ".join(labels) or "none",
-                anomalies=anomalies_for_llm(facts),
-                assessment_facts=assessment_facts(facts, rt.trace.records, aids),
-            )
+            objective = render(rt.assets.prompt(cfg.objective_prompt or ""), **values)
             system = rt.assets.system_prompt(
                 cfg, report_format=rt.assets.skill_body("report-format")
             )
@@ -97,7 +99,9 @@ class ReportAgent:
             engine = AgentEngine(rt.llm, cfg, [], _no_tools)
             result = await engine.run(messages, trace)
             if result.end_reason == "final":
-                narrative = parse_narrative(result.text, labels)
+                parsed = parse_narrative(result.text, labels)
+                parsed.annex = narrative.annex
+                narrative = parsed
         except Exception:
             log.exception("report agent failed")
             trace.end_reason = "error"
@@ -108,11 +112,14 @@ class ReportAgent:
                 "Report with the module's facts and without narrative: the agent did not conclude "
                 f"({trace.end_reason})."
             )
-        figures = figures_line(monitor_stats(rt.trace.records, aids), facts)
-        markdown = assemble(scenario, summary, rt.state, facts, narrative, note, figures)
         trace.sim_time_end = rt.clock.now()
         trace.wall_end = _wall_iso()
-        trace.duration_s = time.monotonic() - started
+        trace.duration_s = time.monotonic() - started  # el informe de misión, sin el anexo
+        annex_trace = (
+            await self._annex(narrative, values, facts, finished_id) if narrative.annex else None
+        )
+        figures = figures_line(monitor_stats(rt.trace.records, aids), facts)
+        markdown = assemble(scenario, summary, rt.state, facts, narrative, note, figures)
         self.markdown = markdown
         run_dir = rt.run_dir
         if run_dir is not None:
@@ -131,8 +138,51 @@ class ReportAgent:
             }
         )
         rt.trace.write(trace)
+        if annex_trace is not None:
+            rt.trace.write(annex_trace)  # después de la del informe de misión, que va antes
         await rt.activity(AgentName.REPORT, ActivityState.FINISHED, invocation_id, finished_id)
         return markdown
+
+    async def _annex(
+        self,
+        narrative: Narrative,
+        values: dict[str, Any],
+        facts: ReportFacts,
+        finished_id: str | None,
+    ) -> InvocationTrace:
+        """Segunda llamada: la autoevaluación técnica del monitor, aparte del informe de misión
+        (con los retrasos, fallbacks, rechazos y ayudas, que la misión no cuenta). Si falla, el
+        anexo sale como no disponible y el informe de misión se publica igual."""
+        rt, cfg = self.rt, self.config
+        trace = InvocationTrace(
+            invocation_id=rt.ids.next("inv"),
+            agent="report",
+            causation_ids=[finished_id] if finished_id else [],
+            as_of=rt.clock.now(),
+            wall_start=_wall_iso(),
+        )
+        started = time.monotonic()
+        try:
+            annex_values = {**values, "anomalies": anomalies_for_llm(facts)}
+            system = render(rt.assets.prompt(cfg.annex_system_prompt or ""))
+            objective = render(rt.assets.prompt(cfg.annex_objective_prompt or ""), **annex_values)
+            messages: Messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": objective},
+            ]
+            engine = AgentEngine(rt.llm, cfg, [], _no_tools)
+            result = await engine.run(messages, trace)
+            if result.end_reason == "final":
+                narrative.assessment, narrative.technical_recommendations = parse_annex(result.text)
+        except Exception:
+            log.exception("report annex failed")
+            trace.end_reason = "error"
+        if not (narrative.assessment or narrative.technical_recommendations):
+            trace.fallback = True
+        trace.sim_time_end = rt.clock.now()
+        trace.wall_end = _wall_iso()
+        trace.duration_s = time.monotonic() - started
+        return trace
 
 
 async def _no_tools(name: str, args: dict[str, Any]) -> Any:

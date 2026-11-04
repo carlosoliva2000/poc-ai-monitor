@@ -260,12 +260,18 @@ def build_manifest(
                 "model": p.server.get("model"),
                 "server": p.server_signature(),
                 "wait_agent_timeout_s": p.wait_agent_timeout_s,
+                "assets": p.assets_dir.name,
+                "assets_fingerprint": assets_fingerprint(p.assets_dir)[:16],
             }
             for name, p in profiles.items()
         },
         "scenarios": args.scenario_list,
         "reps": args.reps,
-        "assets_fingerprint": assets_fingerprint(DEFAULT_ASSETS),
+        "assets_fingerprint": assets_fingerprint(
+            next(iter({p.assets_dir for p in profiles.values()}))
+            if len({p.assets_dir for p in profiles.values()}) == 1
+            else DEFAULT_ASSETS
+        ),
         "vllm_version": "n/d",
         "openai_sdk": importlib.metadata.version("openai"),
         "git": git_info(),
@@ -421,7 +427,7 @@ def main(argv: list[str] | None = None) -> int:
                 profile = profiles[spec.profile]
                 print(f"server: start {profile.server['model']}")
                 print(f"  vllm {shlex.join(profile.serve_args())}")
-                info = Assets(DEFAULT_ASSETS, profile).profile_info()
+                info = Assets(profile.assets_dir, profile).profile_info()
                 print(f"  llm model: {info['model']} · wait {info['wait_agent_timeout_s']:g} s")
                 for agent, effective in info["agents"].items():
                     print(f"  {agent}: {json.dumps(effective, sort_keys=True)}")

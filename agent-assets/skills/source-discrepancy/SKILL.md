@@ -8,11 +8,13 @@ description: Use it when the detector raises SOURCE_DISCREPANCY (GPS and radar d
 
 Context: the radar has no bias (it says where the drone really is); the drone navigates with its GPS, so if the GPS lies the drone **really drifts off** while the GPS looks perfect. A spoofing does not degrade the fix (`3d`, ~14 satellites, `hdop` ~1); a GPS loss does (`fix: none`, `sats` 0, `hdop` 99.9).
 
+Window or now: decide and fill in `checks` with the facts of the window of `get_track_metrics`; to say how things are at this moment (do GPS and radar agree now, how far off the route each one is now), use its `now` block, not the mean or the maximum of the window.
+
 ## 0. Is there already an open GPS alert that explains it?
 If a `GPS_JAMMING` or `SENSOR_FAULT` alert of the GPS is open and the `GPS_DEGRADED` detection is still open, this discrepancy is a consequence of the GPS loss, not a new problem.
-- `SENSOR_FAULT` alert: publish `GPS_JAMMING`, `severity: high`, with `supersedes` pointing to it.
-- `GPS_JAMMING` alert with `severity: medium` and `gps_radar.disagreed` is now `true` (the drone already drifts): publish `GPS_JAMMING`, `severity: high`, with `supersedes` pointing to it.
-- Alert already `GPS_JAMMING` with `severity: high`, or `medium` while `gps_radar.disagreed` is still `false`: `acknowledge_detection` with its `alert_id`.
+- `SENSOR_FAULT` alert: publish `GPS_JAMMING` with `supersedes` pointing to it; the loss is now confirmed.
+- `GPS_JAMMING` alert with `severity: medium` and `gps_radar.disagreed` is now `true` (the drone already drifts): publish `GPS_JAMMING` with `supersedes` pointing to it and the severity that the drift now deserves.
+- `GPS_JAMMING` alert that already has the severity the situation deserves, or `medium` while `gps_radar.disagreed` is still `false`: `acknowledge_detection` with its `alert_id`.
 Otherwise, continue.
 
 ## 1. Metrics
@@ -20,18 +22,17 @@ Call `get_track_metrics` with `since` = sim_time of the detection − 40 and `un
 
 ## 2. Spoofing or GPS loss?
 Conditions for the deception: `gps_radar.disagreed` is `true`, the GPS is on the plan (`gps_deviation_from_plan_m.mean` < 15) and the radar is outside and moving away.
-**Before concluding spoofing**, call `get_events` with `source` = `gps` and `last_n` = 5: if there is `fix: none`, `sats: 0` or `hdop` 99.9 it is a GPS loss (step 4); if the fix is normal, it is spoofing.
-- **`GPS_SPOOFING`**, `severity: high`, `confidence` 0.8–0.9. Recommendation: do not trust the GPS, use the radar as reference and notify the person in charge.
+**Before concluding spoofing**, call `get_events` with `source` = `gps` and `last_n` = 5: if there is `fix: none`, `sats: 0` or `hdop` 99.9 it is a GPS loss (step 4); if the fix is normal, it is spoofing: **`GPS_SPOOFING`**.
 
 ## 3. Sensor fault?
-A discrepancy that appears suddenly and disappears without a pattern, radar with `quality` < 0.5, or degraded GPS without discrepancy: **`SENSOR_FAULT`**, `severity: medium`, `confidence` 0.5–0.7; say which sensor fails. If nothing fits: `UNKNOWN`, `confidence` ≤ 0.4.
+A discrepancy that appears suddenly and disappears without a pattern, radar with `quality` < 0.5, or degraded GPS without discrepancy: **`SENSOR_FAULT`**; say which sensor fails. If nothing fits: `UNKNOWN` with `confidence` ≤ 0.4.
 If the discrepancy disappears suddenly because the GPS jumps to the radar, the deception has ended: the deviation that follows is real (step 2 of `route-deviation`).
 
 ## 4. Degraded GPS (`GPS_DEGRADED`)
 Call `get_events` with `source` = `gps` and `last_n` = 5 (`fix`, `sats`, `hdop`) and `get_track_metrics` with `since` = sim_time of the detection − 20.
-- Bad fix (`fix: none`, `sats` 0 or `hdop` 20 or more): **`GPS_JAMMING`** (loss or interference of the GPS), `confidence` 0.8–0.9. `severity: high` if `gps_radar.disagreed` is `true` (the drone navigates by dead reckoning and drifts off), `medium` if it is not yet. Recommendation: do not trust the GPS, radar as reference.
-- Only a somewhat high `hdop` or few satellites, with a fix and `gps_radar.disagreed` `false`: **`SENSOR_FAULT`**, `severity: medium`, `confidence` 0.5–0.7.
-- If the radar goes silent at the same time, the deviation cannot be confirmed: lower `confidence` to 0.7 at most (the `fix: none` is enough).
+- Bad fix (`fix: none`, `sats` 0 or `hdop` 20 or more): **`GPS_JAMMING`** (loss or interference of the GPS). The risk is higher if `gps_radar.disagreed` is `true` (the drone navigates by dead reckoning and drifts off) than if it is not yet.
+- Only a somewhat high `hdop` or few satellites, with a fix and `gps_radar.disagreed` `false`: **`SENSOR_FAULT`**.
+- If the radar goes silent at the same time, the deviation cannot be confirmed: `confidence` 0.7 at most (the `fix: none` is enough).
 - When `GPS_DEGRADED` is cleared, the position jumps to the real one and it is normal for `ROUTE_DEVIATION` to be raised (step 2 of `route-deviation`).
 
 ## 5. Silent source (`SOURCE_SILENT`)
@@ -40,7 +41,7 @@ The detection carries `source` and `value` (seconds). **It is always a different
 - Only the GPS goes silent and the link continues: receiver fault; the position is only known through the radar.
 - GPS and link go silent: loss of communications with the drone.
 - Weather or battery goes silent: minor fault (without weather the wind cannot be confirmed).
-**`SENSOR_FAULT`** (`UNKNOWN` if several go silent for no clear reason), `severity: medium` (`high` if the GPS or the radar goes silent with another detection open), `confidence` 0.7–0.9. `summary` says which source is silent. When it is cleared, `close_alert` with how long it was silent.
+The cause is **`SENSOR_FAULT`** (`UNKNOWN` if several go silent for no clear reason). The risk is higher if the GPS or the radar goes silent while another detection is open (the position can no longer be checked). The summary says which source is silent. When it is cleared, `close_alert` with how long it was silent.
 
 ## When publishing
 Fill in `checks` with what you have seen (it is checked against the tools): `gps_alert_recent` (the "Recent GPS alert" line of the state: yes = `true`), `gps_radar_disagreed`, `wind_notable`, `wind_with_drift`, `link_checked` and `link_anomalous` (`null` if you did not look at the link). Evidence: ids from `first_event_ids`/`last_event_ids` and some `PositionUpdated`.

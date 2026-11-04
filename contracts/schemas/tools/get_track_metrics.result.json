@@ -45,6 +45,122 @@
       "title": "MetricStat",
       "type": "object"
     },
+    "NowFacts": {
+      "additionalProperties": false,
+      "description": "Hechos de «ahora» de `get_track_metrics` (v0.13): las últimas muestras de los últimos 10 s\nantes del instante efectivo, no agregados de la ventana. Cada valor es `None` si no hay\nmuestra de su fuente en ese tramo (el viento mira los últimos 30 s).",
+      "properties": {
+        "as_of": {
+          "title": "As Of",
+          "type": "number"
+        },
+        "window_s": {
+          "title": "Window S",
+          "type": "number"
+        },
+        "gps_radar_distance_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Gps Radar Distance M"
+        },
+        "gps_radar_agree": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Gps Radar Agree"
+        },
+        "gps_deviation_from_plan_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Gps Deviation From Plan M"
+        },
+        "radar_deviation_from_plan_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Radar Deviation From Plan M"
+        },
+        "wind_speed_mps": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wind Speed Mps"
+        },
+        "wind_gust_mps": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wind Gust Mps"
+        },
+        "wind_from_deg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wind From Deg"
+        },
+        "wind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wind"
+        }
+      },
+      "required": [
+        "as_of",
+        "window_s",
+        "gps_radar_distance_m",
+        "gps_radar_agree",
+        "gps_deviation_from_plan_m",
+        "radar_deviation_from_plan_m",
+        "wind_speed_mps",
+        "wind_gust_mps",
+        "wind_from_deg",
+        "wind"
+      ],
+      "title": "NowFacts",
+      "type": "object"
+    },
     "SampleCounts": {
       "additionalProperties": false,
       "properties": {
@@ -308,6 +424,17 @@
       },
       "title": "Last Event Ids",
       "type": "array"
+    },
+    "now": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NowFacts"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

@@ -35,6 +35,8 @@ async def run(
     tool_call_events: bool = True,
 ) -> None:
     chosen = load_profile(profile, DEFAULT_PROFILES) if profile else None
+    if chosen is not None and assets_dir == DEFAULT_ASSETS:
+        assets_dir = chosen.assets_dir  # un perfil puede pedir una copia congelada de los assets
     assets = Assets(assets_dir, chosen)
     url = llm_url or assets.llm.base_url
     if not detector_only:

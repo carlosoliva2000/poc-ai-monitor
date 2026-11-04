@@ -13,7 +13,7 @@ Cada fuente es `nombre=carpeta_del_experimento[:perfil]` (el perfil se puede omi
   reconocimientos (`reason`);
 - por pregunta, las respuestas completas de los chats;
 - del informe, las secciones que escribe el modelo (Summary, What was seen, Monitor assessment,
-  Recommendations).
+  Recommendations y, desde la Fase 14.1, las Technical recommendations del anexo).
 """
 
 import argparse
@@ -109,7 +109,10 @@ def split_sections(markdown: str, prefix: str) -> dict[str, str]:
 def model_report_sections(
     markdown: str,
 ) -> tuple[dict[str, str], dict[str, tuple[str, str]]]:
-    """Secciones del informe escritas por el modelo: (por título, «What was seen» por etiqueta)."""
+    """Secciones del informe escritas por el modelo: (por título, «What was seen» por etiqueta).
+    Formato anterior a la Fase 14.1: Summary, Monitor assessment y Recommendations. Desde la 14.1
+    (informe de misión con anexo): Summary y Recommendations, y del anexo la valoración (como
+    «Monitor assessment») y las «Technical recommendations»."""
     top = split_sections(markdown, "## ")
     wanted: dict[str, str] = {}
     if "Summary" in top:
@@ -121,6 +124,13 @@ def model_report_sections(
     ]
     if paragraphs:
         wanted["Monitor assessment"] = "\n\n".join(paragraphs).strip()
+    annex = next((v for k, v in top.items() if k.startswith("Annex")), "")
+    if annex:
+        parts = split_sections(annex, "### ")
+        if "Assessment" in parts:
+            wanted["Monitor assessment"] = parts["Assessment"]
+        if "Technical recommendations" in parts:
+            wanted["Technical recommendations"] = parts["Technical recommendations"]
     if "Recommendations" in top:
         wanted["Recommendations"] = top["Recommendations"]
     seen: dict[str, tuple[str, str]] = {}
@@ -250,7 +260,14 @@ def render(scenarios: list[str], by_scenario: dict[str, list[Run]], missing: lis
                 answer = next((a for c, t, a in run.chats if (c, t) == (conv, text)), None)
                 out += [f"**{run.source}**", "", quote(answer) if answer else "_no answer_", ""]
         out += ["### Report (sections written by the model)", ""]
-        for title in ("Summary", "Monitor assessment", "Recommendations"):
+        for title in (
+            "Summary",
+            "Monitor assessment",
+            "Recommendations",
+            "Technical recommendations",
+        ):
+            if title == "Technical recommendations" and not any(title in r.report for r in runs):
+                continue  # solo los informes con anexo (Fase 14.1) lo tienen
             out += [f"#### {title}", ""]
             for run in runs:
                 out += [f"**{run.source}**", "", quote(run.report.get(title, "_missing_")), ""]

@@ -1,0 +1,129 @@
+# Configuración de cada instancia del motor de agente.
+# El código lee este fichero; los prompts y las skills están en ficheros aparte.
+# Marcadores que el código sustituye en los prompts: <<nombre>> (ver cada prompt).
+
+llm:
+  base_url: http://127.0.0.1:8000/v1
+  api_key: EMPTY            # vLLM local no la comprueba
+  model: Qwen/Qwen3-14B-AWQ   # el que sirve `serve.sh` sin perfil; el módulo comprueba al arrancar que vLLM lo sirve
+  # Muestreo por defecto; cada agente lo puede sobrescribir. Se envía SIEMPRE explícito:
+  # si no, vLLM aplica el generation_config.json del modelo (temperature 0.7, top_p 0.8,
+  # top_k 20, repetition_penalty 1.05).
+  temperature: 0
+  top_p: 1.0
+  max_tokens: 800
+  # Explícitos en cada petición, aunque coincidan con el generation_config.json del modelo
+  # (top_k 20 y repetition_penalty 1.05): así no dependen de cómo arranque el servidor. Van en
+  # `extra_body` porque no son parámetros de OpenAI. repetition_penalty 1.0 con temperature 0
+  # (decodificación voraz) degeneró en bucles de repetición; 1.05 es el valor del modelo.
+  top_k: 20
+  repetition_penalty: 1.05
+  # Qwen3 sin razonamiento: se envía `enable_thinking: false` en cada petición (el servidor arranca con
+  # el parser de razonamiento activo). Con un modelo que no razona (Qwen2.5), `reasoning: null`.
+  reasoning: false
+  # "auto" por defecto; "required" para un agente cuya respuesta es siempre una tool call (el
+  # monitor). Nunca por nombre (vLLM devuelve finish_reason "stop" aunque haya llamada).
+  tool_choice: auto
+
+# Chats. `tools_enabled: false` (el valor de la demo): los chats no reciben tools y su sistema lleva
+# el estado, las alertas (con recomendación, checks y evidencias; sin la explicación en prosa del
+# monitor, que puede contradecir sus propios checks) y los últimos hechos que consultó el monitor
+# (trayectoria y enlace), cada uno con su sí o no calculado. Con `true` mantienen sus tools (con tool_choice auto el 14B a veces escribe la
+# llamada como texto y contesta sin consultar nada).
+chat:
+  tools_enabled: false
+
+agents:
+  monitor:
+    system_prompt: prompts/monitor_system.md
+    objective_prompt: prompts/monitor_objective.md   # secciones: batch, raised, updated, cleared, reminder
+    output_prompt: prompts/monitor_output.md        # se añade al final del prompt de sistema
+    tools: [get_events, get_mission_plan, get_track_metrics, get_my_alerts, publish_alert, acknowledge_detection, close_alert, load_skill]
+    disabled_tools: []      # experimento: [get_track_metrics]
+    skills: [route-deviation, source-discrepancy]
+    max_iterations: 12
+    # Tiempos medidos con las invocaciones del monitor (ver docs de la fase). Condición:
+    # max_invocation_s + 15 < 90 (la plataforma espera al agente 90 s como mucho).
+    max_invocation_s: 60
+    llm_timeout_s: 30
+    temperature: 0          # decisiones reproducibles y evaluación comparable
+    top_k: -1               # sin límite: con temperature 0 no influye
+    # --- Ayudas al modelo (todas activadas). Cada una se puede apagar para probar otro modelo
+    # (de la más a la menos intrusiva: coherence_guardrail, require_checks, computed_facts,
+    # final_iteration_response_tools_only, tool_choice, source_silent_own_alert, no_duplicate_cause; el modo guiado es otra ayuda, apagada por defecto). Apagarlas no cambia nada más.
+    tool_choice: required   # "required" | "auto". El monitor siempre responde con una tool call
+    # En la última iteración permitida solo se ofrecen las tools de `final_tools` (sin forzar
+    # ninguna por nombre), para que el agente no se quede encadenando tools de datos.
+    final_iteration_response_tools_only: true
+    final_tools: [publish_alert, acknowledge_detection, close_alert]
+    require_checks: true        # `checks` obligatorio en publish_alert (si no, opcional en el esquema)
+    coherence_guardrail: true   # los checks deben coincidir con las tools y la causa ser coherente
+    computed_facts: true        # get_track_metrics entrega notable, with_drift, disagreed, etc.
+    source_silent_own_alert: true   # un SOURCE_SILENT nuevo lleva alerta propia (SENSOR_FAULT, sin supersedes)
+    no_duplicate_cause: true    # no se abre una alerta con la causa de otra abierta sin `supersedes`
+    # Modo guiado (ayuda): true = el módulo mete en el primer mensaje de usuario la skill que
+    # corresponde a la regla de cada aviso (sección `guided_skill` de monitor_objective.md).
+    guided_skills: false
+    guided_skill_by_rule:
+      ROUTE_DEVIATION: route-deviation
+      SOURCE_DISCREPANCY: source-discrepancy
+      SOURCE_SILENT: source-discrepancy
+      GPS_DEGRADED: source-discrepancy
+    # Memoria del monitor (no es una ayuda): `per_detection` = una conversación nueva por invocación
+    # (opción B); `per_run` = una sola durante la simulación (opción A), compactada por bloques
+    # cuando el historial pasa de `memory_budget_tokens` (hasta `memory_target_tokens`).
+    memory: per_detection
+    memory_prompt: prompts/monitor_memory.md
+    memory_budget_tokens: 26000
+    memory_target_tokens: 18000
+    last_decisions_in_state: 3
+
+  chat_monitor:
+    system_prompt: prompts/chat_monitor_system.md
+    system_prompt_notools: prompts/chat_monitor_system_notools.md
+    tools: [get_events, get_mission_plan, get_track_metrics, get_my_alerts, load_skill]
+    skills: [route-deviation, source-discrepancy]
+    max_iterations: 6
+    max_invocation_s: 120
+    llm_timeout_s: 60
+    # Los chats responden sobre hechos (cifras, causas, qué se vio): temperatura 0, como el
+    # monitor, para que la misma pregunta con los mismos datos dé la misma respuesta. Con 0,7 el
+    # chat llegó a decir que un viento a favor de la deriva soplaba «en dirección opuesta».
+    temperature: 0
+    top_p: 1.0
+    top_k: -1               # sin límite: con temperature 0 no influye
+    memory: conversation
+    max_history_messages: 12
+    stream: true
+
+  report:
+    system_prompt: prompts/report_system.md
+    objective_prompt: prompts/report_objective.md
+    # Sin tools: el módulo le inyecta el resumen del vuelo, las alertas y las detecciones en el
+    # prompt y hace una sola llamada (con tool_choice auto el 14B escribía las llamadas como texto).
+    tools: []
+    skills: []
+    max_iterations: 1
+    max_invocation_s: 240
+    llm_timeout_s: 120
+    temperature: 0.7
+    top_p: 0.8
+    max_tokens: 1800
+    memory: per_invocation
+
+  chat_report:
+    system_prompt: prompts/chat_report_system.md
+    system_prompt_notools: prompts/chat_report_system_notools.md
+    tools: [get_flight_summary, get_events, get_mission_plan, get_track_metrics, get_my_alerts, load_skill]
+    skills: [report-format, route-deviation, source-discrepancy]
+    max_iterations: 6
+    max_invocation_s: 120
+    llm_timeout_s: 60
+    temperature: 0          # sobre hechos (ver chat_monitor)
+    top_p: 1.0
+    top_k: -1
+    memory: conversation
+    max_history_messages: 12
+    stream: true
+    # Respuesta fija mientras aún no existe el informe (no se llama al LLM).
+    no_report_reply: "There is no report yet: the simulation has not finished. Ask me again once the exercise is over."

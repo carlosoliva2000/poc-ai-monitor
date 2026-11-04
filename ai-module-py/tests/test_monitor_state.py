@@ -148,3 +148,19 @@ def test_reset_clears_everything() -> None:
     state.apply(alert("ai-1", ["det-1"]))
     state.reset()
     assert not state.alerts and not state.decisions and state.chains_published == 0
+
+
+def test_gps_alert_line_data_style_has_no_sentence_to_copy() -> None:
+    """Estilo `data` (Fase 14.1): alerta, causa y estado; sin la frase de la recuperación."""
+    from ai_module.agent.assets import Assets
+
+    s = MonitorState()
+    assert s.describe_gps_alert(10.0, "data") == "no"
+    s.apply(detection_event("raised", "det-1", 5.0, rule="SOURCE_DISCREPANCY"))
+    s.apply(alert("ai-0008", ["det-1"], cause="GPS_SPOOFING"))
+    assert s.describe_gps_alert(10.0, "data") == "yes — ai-0008 GPS_SPOOFING (open)"
+    s.apply(detection_event("cleared", "det-1", 40.0))
+    s.apply(closed("ai-0008", t=50.0))
+    assert s.describe_gps_alert(60.0, "data") == "yes — ai-0008 GPS_SPOOFING (closed 10 s ago)"
+    assert "If this warning" in s.describe_gps_alert(60.0)  # `legacy`, por defecto
+    assert Assets().agent("monitor").state_line == "legacy"  # lo que se adoptó en la Fase 14.1

@@ -155,6 +155,29 @@ class GpsRadarFact(_Model):
     """GPS y radar discrepan en la ventana: `gps_radar_distance_m.max` ≥ 25 m."""
 
 
+class NowFacts(_Model):
+    """Hechos de «ahora» de `get_track_metrics` (v0.13): las últimas muestras de los últimos 10 s
+    antes del instante efectivo, no agregados de la ventana. Cada valor es `None` si no hay
+    muestra de su fuente en ese tramo (el viento mira los últimos 30 s)."""
+
+    as_of: float
+    """Instante efectivo (`until` recortado al instante actual de la simulación)."""
+    window_s: float
+    gps_radar_distance_m: float | None
+    """Distancia entre la última medida del radar y el GPS interpolado a su instante."""
+    gps_radar_agree: bool | None
+    """`gps_radar_distance_m` < 25 m. `None` si falta una de las dos fuentes."""
+    gps_deviation_from_plan_m: float | None
+    """Desviación respecto al plan de la última posición del GPS."""
+    radar_deviation_from_plan_m: float | None
+    wind_speed_mps: float | None
+    """Velocidad y racha del último `WindReported`."""
+    wind_gust_mps: float | None
+    wind_from_deg: float | None
+    wind: str | None
+    """El viento ya interpretado, p. ej. «from NW (326°), pushing SE» (o «calm»)."""
+
+
 class TrackMetrics(_Model):
     """Resultado de `get_track_metrics`. Sin datos de una fuente no se inventa nada: lo que
     depende de ella va a `None` y `samples` lleva el recuento real."""
@@ -184,6 +207,8 @@ class TrackMetrics(_Model):
     last_seen_sim_time: SourcePair
     first_event_ids: list[str]
     last_event_ids: list[str]
+    now: NowFacts | None = None
+    """Hechos de «ahora» (v0.13); la plataforma siempre lo devuelve."""
 
 
 class AlertSummary(_Model):

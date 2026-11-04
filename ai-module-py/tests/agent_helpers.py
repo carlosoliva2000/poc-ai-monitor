@@ -96,7 +96,10 @@ class FakePlatform:
 
 
 def make_runtime(
-    tmp_path: Path, llm: FakeLlm, platform: FakePlatform | None = None
+    tmp_path: Path,
+    llm: FakeLlm,
+    platform: FakePlatform | None = None,
+    assets: Assets | None = None,
 ) -> tuple[Runtime, list[Any]]:
     """Runtime con un bus falso: lo publicado se acumula en la lista devuelta."""
     published: list[Any] = []
@@ -105,7 +108,7 @@ def make_runtime(
         published.append(event)
 
     rt = Runtime(
-        Assets(),
+        assets or Assets(),
         llm,
         "http://platform",
         publish,

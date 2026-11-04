@@ -59,6 +59,12 @@ agents:
     require_checks: true        # `checks` obligatorio en publish_alert (si no, opcional en el esquema)
     coherence_guardrail: true   # los checks deben coincidir con las tools y la causa ser coherente
     computed_facts: true        # get_track_metrics entrega notable, with_drift, disagreed, etc.
+    now_facts: true             # get_track_metrics entrega el bloque `now` (hechos de «ahora»; Fase 14.1)
+    # Línea «Recent GPS alert» del estado: `legacy` = con la frase «If this warning is the GPS
+    # recovery: cause X, supersedes Y»; `data` = solo alerta, causa y estado («yes — ai-0008
+    # GPS_SPOOFING (open)»). Medido en la Fase 14.1: con `data`, el modelo dejó de publicar la
+    # alerta de recuperación en `demo`; con `legacy` vuelve y los textos no empeoran.
+    state_line: legacy
     source_silent_own_alert: true   # un SOURCE_SILENT nuevo lleva alerta propia (SENSOR_FAULT, sin supersedes)
     no_duplicate_cause: true    # no se abre una alerta con la causa de otra abierta sin `supersedes`
     # Modo guiado (ayuda): true = el módulo mete en el primer mensaje de usuario la skill que
@@ -99,6 +105,10 @@ agents:
   report:
     system_prompt: prompts/report_system.md
     objective_prompt: prompts/report_objective.md
+    # Segunda llamada (Fase 14.1): la autoevaluación técnica del monitor, aparte del informe de
+    # misión. Sin estas dos claves el informe es una sola llamada con la valoración en medio.
+    annex_system_prompt: prompts/report_annex_system.md
+    annex_objective_prompt: prompts/report_annex_objective.md
     # Sin tools: el módulo le inyecta el resumen del vuelo, las alertas y las detecciones en el
     # prompt y hace una sola llamada (con tool_choice auto el 14B escribía las llamadas como texto).
     tools: []

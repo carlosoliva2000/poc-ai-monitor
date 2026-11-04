@@ -194,8 +194,8 @@ def check_coherence(
             want_supersedes = recent.alert_id if still_open else None
             if still_open and recent.severity == RECOVERY_SEVERITY:
                 errors.append(
-                    f"This is the recovery from the {recent.cause} of {recent.alert_id}, which is "
-                    f"already {RECOVERY_SEVERITY}: nothing changes, use acknowledge_detection with "
+                    f"GPS recovery of {recent.alert_id} ({recent.cause}), which is already "
+                    f"{RECOVERY_SEVERITY}: nothing changes, use acknowledge_detection with "
                     f"alert_id {recent.alert_id}"
                 )
             elif (
@@ -209,8 +209,8 @@ def check_coherence(
                     else f"no supersedes ({recent.alert_id} is already closed)"
                 )
                 errors.append(
-                    f"This is the recovery from the {recent.cause} of {recent.alert_id}: publish "
-                    f"cause {recent.cause}, severity {RECOVERY_SEVERITY} and {how}"
+                    f"GPS recovery of {recent.alert_id} ({recent.cause}): expected cause "
+                    f"{recent.cause}, severity {RECOVERY_SEVERITY} and {how}"
                 )
         elif cause in RECOVERY_CAUSES:
             errors.append(

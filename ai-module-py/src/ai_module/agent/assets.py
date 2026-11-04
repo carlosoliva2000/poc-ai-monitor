@@ -61,6 +61,10 @@ class AgentConfig:
     output_prompt: str | None = None
     system_prompt_notools: str | None = None
     """Prompt de sistema del chat cuando `chat.tools_enabled` es falso (sin tools)."""
+    annex_system_prompt: str | None = None
+    annex_objective_prompt: str | None = None
+    """Informe (Fase 14.1): prompts de la segunda llamada, la autoevaluación del monitor. Sin
+    ellos (los assets anteriores) el informe es una sola llamada con la valoración en medio."""
     disabled_tools: list[str] = field(default_factory=list)
     final_tools: list[str] = field(default_factory=list)
     """Tools que se ofrecen en la última iteración permitida (vacío: las mismas de siempre)."""
@@ -72,6 +76,12 @@ class AgentConfig:
     """Interruptor del monitor: guardrail de coherencia de `publish_alert`."""
     computed_facts: bool = True
     """Interruptor del monitor: `get_track_metrics` entrega los campos calculados al modelo."""
+    now_facts: bool = False
+    """Interruptor del monitor (Fase 14.1): `get_track_metrics` entrega el bloque `now`. Sin la
+    clave (los assets anteriores a la 14.1) se quita del resultado que ve el modelo."""
+    state_line: str = "legacy"
+    """Forma de la línea «Recent GPS alert» del estado: `data` (alerta, causa y estado) o
+    `legacy` (con la frase de la recuperación; los assets anteriores a la Fase 14.1)."""
     source_silent_own_alert: bool = True
     no_duplicate_cause: bool = True
     """Interruptor del monitor: un aviso `SOURCE_SILENT` nuevo lleva alerta propia (ni se
@@ -161,6 +171,11 @@ class AgentConfig:
             "max_invocation_s": self.max_invocation_s,
             "llm_timeout_s": self.llm_timeout_s,
             "aids": self.aids() if self.name == "monitor" else None,
+            **(
+                {"now_facts": self.now_facts, "state_line": self.state_line}
+                if self.name == "monitor"
+                else {}
+            ),
         }
 
 
@@ -271,6 +286,7 @@ class Assets:
         return {
             "profile": profile.name if profile else None,
             "profile_fingerprint": profile.short if profile else None,
+            "assets": self.root.name,
             "assets_fingerprint": assets_fingerprint(self.root)[:16],
             "model": self.llm.model,
             "server": profile.server if profile else None,
@@ -327,6 +343,8 @@ class Assets:
             objective_prompt=spec.get("objective_prompt"),
             output_prompt=spec.get("output_prompt"),
             system_prompt_notools=spec.get("system_prompt_notools"),
+            annex_system_prompt=spec.get("annex_system_prompt"),
+            annex_objective_prompt=spec.get("annex_objective_prompt"),
             tools=list(spec["tools"]),
             skills=list(spec.get("skills", [])),
             disabled_tools=list(spec.get("disabled_tools", [])),
@@ -337,6 +355,8 @@ class Assets:
             require_checks=bool(spec.get("require_checks", True)),
             coherence_guardrail=bool(spec.get("coherence_guardrail", True)),
             computed_facts=bool(spec.get("computed_facts", True)),
+            now_facts=bool(spec.get("now_facts", False)),
+            state_line=str(spec.get("state_line", "legacy")),
             source_silent_own_alert=bool(spec.get("source_silent_own_alert", True)),
             no_duplicate_cause=bool(spec.get("no_duplicate_cause", True)),
             max_iterations=int(spec["max_iterations"]),

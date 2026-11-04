@@ -36,7 +36,7 @@ from .agent.guardrails import (
     expected_checks,
 )
 from .agent.llm import Messages
-from .agent.tools import Toolbox, strip_computed_facts
+from .agent.tools import Toolbox, strip_computed_facts, strip_now_facts
 from .agent.trace import InvocationTrace
 from .monitor_memory import MonitorMemory, chars_of
 from .outbox import format_t
@@ -309,6 +309,8 @@ class Monitor:
                 rt.last_link_note = f"looked at by the monitor at {format_t(inv.as_of)}"
             if name == "get_track_metrics" and not cfg.computed_facts:
                 result = strip_computed_facts(result)  # el módulo los conserva para los checks
+            elif name == "get_track_metrics" and not cfg.now_facts:
+                result = strip_now_facts(result)
             inv.seen_ids |= set(ID_RE.findall(compact_json(result)))
             return result
 
@@ -397,7 +399,7 @@ class Monitor:
                 open_alerts=rt.state.describe_open_alerts(),
                 open_detections=rt.state.describe_open_detections(),
                 last_decisions=rt.state.describe_decisions(),
-                gps_alert_recent=rt.state.describe_gps_alert(inv.as_of),
+                gps_alert_recent=rt.state.describe_gps_alert(inv.as_of, cfg.state_line),
             )
         ]
         ids = list(dict.fromkeys(p.detection_id for p in inv.pending))

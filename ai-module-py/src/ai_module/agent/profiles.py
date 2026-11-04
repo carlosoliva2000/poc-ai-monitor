@@ -3,7 +3,9 @@
 Un perfil se aplica **en memoria** sobre `agent-assets/agents.yaml` (que no se toca) y solo puede
 cambiar el servidor y el modelo, el muestreo, el razonamiento, los tiempos máximos y los
 interruptores de ayudas. Cualquier otra clave es un error: un perfil no puede cambiar prompts,
-skills ni esquemas de tools.
+skills ni esquemas de tools. Una sola excepción (Fase 14.1): `assets: agent-assets-v13` elige otra
+carpeta completa de la raíz del repositorio (`agent-assets*`), congelada, para repetir con los
+textos antiguos; el perfil no edita nada dentro de ella.
 
     uv run --project ai-module-py python -m ai_module.agent.profiles serve-args <perfil>
     uv run --project ai-module-py python -m ai_module.agent.profiles show <perfil>
@@ -43,6 +45,7 @@ AID_KEYS = (
     "require_checks",
     "coherence_guardrail",
     "computed_facts",
+    "now_facts",
     "source_silent_own_alert",
     "no_duplicate_cause",
     "guided_skills",
@@ -53,6 +56,7 @@ REASONING_KEYS = ("reasoning", "reasoning_effort", "reasoning_field")
 AGENT_KEYS = (*SAMPLING_KEYS, *REASONING_KEYS, *LIMIT_KEYS, *AID_KEYS, *MEMORY_KEYS)
 ALLOWED = {
     "description": None,
+    "assets": None,
     "server": (
         "model",
         "tool_call_parser",
@@ -70,6 +74,8 @@ ALLOWED = {
 # Modelos híbridos de 27B que cuelgan vLLM y han tirado Windows: no se sirven.
 FORBIDDEN_MODELS = ("qwen3.5-27b", "qwen3.8-27b")
 ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
+ASSETS_NAME = re.compile(r"agent-assets[A-Za-z0-9._-]*")
+ASSETS_LABEL = "agent-assets"  # nombre con el que se calcula la huella, sea cual sea la carpeta
 MEMORY_GROWTH_TOKENS = 4000  # lo que puede crecer el contexto durante una invocación
 PLATFORM_MARGIN_S = 15.0  # `max_invocation_s` + margen < espera de la plataforma
 DEFAULT_WAIT_S = 90.0
@@ -90,8 +96,10 @@ def digest(paths: list[tuple[str, Path]]) -> str:
 
 
 def assets_fingerprint(root: Path = ASSETS_DIR) -> str:
-    """Huella completa de `agent-assets/` (con 16 caracteres es la huella de congelado)."""
-    files = [(f"{root.name}/{p.relative_to(root).as_posix()}", p) for p in root.rglob("*")]
+    """Huella completa de `agent-assets/` (con 16 caracteres es la huella de congelado). Se calcula
+    con el nombre `agent-assets` aunque la carpeta sea una copia congelada (`agent-assets-v13`),
+    así la copia tiene la huella que tenía el original."""
+    files = [(f"{ASSETS_LABEL}/{p.relative_to(root).as_posix()}", p) for p in root.rglob("*")]
     return digest([(name, p) for name, p in files if p.is_file()])
 
 
@@ -111,6 +119,12 @@ class Profile:
     @property
     def server(self) -> dict[str, Any]:
         return self.raw.get("server", {})
+
+    @property
+    def assets_dir(self) -> Path:
+        """Carpeta de assets del perfil: la del repositorio o la copia congelada que fije."""
+        name = self.raw.get("assets")
+        return REPO_ROOT / name if name else ASSETS_DIR
 
     @property
     def model(self) -> str | None:
@@ -217,6 +231,11 @@ def _validate(name: str, raw: Any) -> dict[str, Any]:
         if key not in ALLOWED:
             raise ProfileError(f"profile {name}: unknown section {key!r}")
         allowed = ALLOWED[key]
+        if key == "assets":
+            if not isinstance(value, str) or not ASSETS_NAME.fullmatch(value):
+                raise ProfileError(f"profile {name}: assets must be a folder named agent-assets*")
+            if not (REPO_ROOT / value).is_dir():
+                raise ProfileError(f"profile {name}: the assets folder {value} does not exist")
         if allowed is None:
             continue
         if not isinstance(value, dict):

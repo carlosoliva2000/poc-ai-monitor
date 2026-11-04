@@ -37,13 +37,21 @@ def cap_until(name: str, args: dict[str, Any], as_of: float | None) -> dict[str,
     return {**args, "until": as_of} if too_late else args
 
 
+def strip_now_facts(result: Any) -> Any:
+    """Quita el bloque `now` de un resultado de `get_track_metrics` (interruptor `now_facts`
+    apagado: los assets anteriores a la Fase 14.1). Devuelve una copia."""
+    if not isinstance(result, dict):
+        return result
+    return {k: v for k, v in result.items() if k != "now"}
+
+
 def strip_computed_facts(result: Any) -> Any:
     """Quita de un resultado de `get_track_metrics` los campos calculados (interruptor
     `computed_facts` apagado): `wind_to_deg`, `drift_vs_wind_deg`, `notable`, `with_drift`,
     `gps_radar` (`disagreed`) y `gps_max_step_m`. Devuelve una copia."""
     if not isinstance(result, dict):
         return result
-    out = {k: v for k, v in result.items() if k not in ("gps_radar", "gps_max_step_m")}
+    out = {k: v for k, v in result.items() if k not in ("gps_radar", "gps_max_step_m", "now")}
     wind = out.get("wind")
     if isinstance(wind, dict):
         drop = ("wind_to_deg", "drift_vs_wind_deg", "notable", "with_drift")

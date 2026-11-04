@@ -139,3 +139,47 @@ def test_main_writes_the_file(sources: list, tmp_path: Path) -> None:
     assert texts.main([*args, f"x={tmp_path / 'a'}"]) == 0
     assert "# Texts for quality review" in out.read_text("utf-8")
     assert texts.main([*args, "wrong"]) == 2
+
+
+ANNEX_REPORT = """# Mission report X
+
+## Summary
+
+The drone flew.
+
+## Anomalies
+
+### A1 · Wind (medium, confidence 0.8)
+- **What was seen:** Wind pushed it.
+- **Status:** closed.
+
+## Recommendations
+
+1. Check the wind.
+
+## Limitations
+
+Simulated.
+
+## Annex: monitor self-assessment
+
+**Monitor figures** (written by the module): 3 invocations.
+
+### Assessment
+
+- **Support:** it held.
+
+### Technical recommendations
+
+1. Reduce the delay.
+"""
+
+
+def test_report_with_annex_gives_mission_and_annex_sections() -> None:
+    sections, seen = texts.model_report_sections(ANNEX_REPORT)
+    assert sections["Summary"] == "The drone flew."
+    assert sections["Recommendations"] == "1. Check the wind."
+    assert sections["Monitor assessment"] == "- **Support:** it held."
+    assert sections["Technical recommendations"] == "1. Reduce the delay."
+    assert "Monitor figures" not in "".join(sections.values())
+    assert seen["A1"][1] == "Wind pushed it."

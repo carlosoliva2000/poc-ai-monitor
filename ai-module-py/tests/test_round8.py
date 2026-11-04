@@ -119,6 +119,8 @@ def test_the_prompt_carries_the_gps_alert_line(tmp_path: Path) -> None:
     run(monitor.handle_batch([raised("det-0002", 20.0)]))
     prompt = llm.requests[0]["messages"][1]["content"]
     assert "- Recent GPS alert (open or closed ≤ 60 s ago): yes — ai-0008 GPS_SPOOFING" in prompt
+    # los assets actuales usan `state_line: legacy` (medido en la Fase 14.1); el estilo `data`
+    # se prueba en test_monitor_state.py
     assert "cause GPS_SPOOFING, supersedes ai-0008" in prompt
     skill = ASSETS.skills["route-deviation"].content
     assert '"Recent GPS alert" line of the state says **yes**' in skill

@@ -240,9 +240,10 @@ class MonitorState:
     def gps_alert_recent(self, now: float, grace_s: float = 60.0) -> bool:
         return self.recent_gps_alert(now, grace_s) is not None
 
-    def describe_gps_alert(self, now: float) -> str:
-        """La línea fija del estado del prompt: «yes — ai-0008 GPS_SPOOFING (open). If this warning
-        is the GPS recovery: cause GPS_SPOOFING, supersedes ai-0008» o «no»."""
+    def describe_gps_alert(self, now: float, style: str = "legacy") -> str:
+        """La línea fija del estado del prompt. Estilo `data`: «yes — ai-0008 GPS_SPOOFING (open)»
+        o «no». Estilo `legacy` (assets anteriores a la Fase 14.1): añade «If this warning is the
+        GPS recovery: cause GPS_SPOOFING, supersedes ai-0008»."""
         alert = self.recent_gps_alert(now)
         if alert is None:
             return "no"
@@ -251,6 +252,8 @@ class MonitorState:
         else:
             ago = now - (alert.closed_at or now)
             state, supersedes = f"closed {ago:.0f} s ago", "no supersedes (already closed)"
+        if style == "data":
+            return f"yes — {alert.alert_id} {alert.cause} ({state})"
         return (
             f"yes — {alert.alert_id} {alert.cause} ({state}). If this warning is the GPS "
             f"recovery: cause {alert.cause}, {supersedes}"

@@ -17,6 +17,9 @@ Cálculos (todo sale de `PositionUpdated` del GPS y `TrackUpdated` del radar en 
 - `wind`: velocidad media y racha máxima de los `WindReported` de la ventana; la dirección es la
   media vectorial ponderada por la velocidad (`from_deg`), `wind_to_deg` = `from_deg` + 180 y
   `drift_vs_wind_deg` la diferencia absoluta (0 a 180) con `drift_direction_deg`.
+- `now` (v0.13): la última muestra de los últimos 10 s antes de `until` (distancia GPS–radar,
+  si coinciden ahora, desviación del GPS y del radar, último viento ya interpretado en texto),
+  para contar «cómo está ahora» frente a los agregados de la ventana.
 """
 
 import math
@@ -29,6 +32,7 @@ from poc_contracts.tools import (
     GetTrackMetricsArgs,
     GpsRadarFact,
     MetricStat,
+    NowFacts,
     SampleCounts,
     SourcePair,
     TrackMetrics,
@@ -51,6 +55,9 @@ WIND_NOTABLE_SPEED_MPS = 5.0  # viento notable: velocidad media ≥ 5 m/s o rach
 WIND_NOTABLE_GUST_MPS = 8.0
 WIND_WITH_DRIFT_DEG = 45.0  # la deriva va a favor del viento si difiere como mucho esto
 DISAGREED_M = 25.0  # GPS y radar discrepan si la distancia máxima de la ventana llega a esto
+NOW_WINDOW_S = 10.0  # tramo de los hechos de «ahora»: la última muestra de los últimos 10 s
+NOW_WIND_WINDOW_S = 30.0  # el viento llega cada 10 s: se mira más atrás para tener el último
+COMPASS_POINTS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 MAX_STEP_GAP_S = 1.5  # solo se comparan muestras consecutivas del GPS a esta distancia o menos
 
 Sample = tuple[float, float, float]  # (sim_time, x, y)
@@ -156,6 +163,75 @@ def _max_step(times: list[float], deviation: list[float]) -> float | None:
     return round(max(steps + [0.0]), 1)
 
 
+def _compass(deg: float) -> str:
+    return COMPASS_POINTS[int(((deg % 360.0) + 22.5) // 45.0) % 8]
+
+
+def _wind_text(from_deg: float, speed: float) -> str:
+    """El viento ya interpretado: «from NW (326°), pushing SE» (o «calm» si no sopla)."""
+    if speed < 0.1:
+        return "calm"
+    to_deg = (from_deg + 180.0) % 360.0
+    return f"from {_compass(from_deg)} ({round(from_deg):d}°), pushing {_compass(to_deg)}"
+
+
+def _now_facts(ctx: ToolContext, route: list[Point], until: float) -> NowFacts:
+    """Hechos de «ahora»: lo último que se ha visto, no el agregado de la ventana."""
+    since = max(until - NOW_WINDOW_S, 0.0)
+    gps_last, _ = ctx.events(
+        source=GPS_SOURCE, type=EventType.POSITION_UPDATED, since=since, until=until, limit=1
+    )
+    radar_last, _ = ctx.events(
+        source=RADAR_SOURCE, type=EventType.TRACK_UPDATED, since=since, until=until, limit=1
+    )
+    gps_context, _ = ctx.events(
+        source=GPS_SOURCE,
+        type=EventType.POSITION_UPDATED,
+        since=since - MAX_INTERP_GAP_S,
+        until=until,
+    )
+    series = _samples(gps_context)
+    distance: float | None = None
+    if radar_last:
+        t, rx, ry = _samples(radar_last)[0]
+        pos = _interpolate(series, [s[0] for s in series], t)
+        if pos is not None:
+            distance = round(math.hypot(rx - pos[0], ry - pos[1]), 1)
+
+    def deviation(events: Sequence[Envelope]) -> float | None:
+        if not events:
+            return None
+        _, x, y = _samples(events)[0]
+        return round(closest_on_route((x, y), route)[1], 1)
+
+    wind_last, _ = ctx.events(
+        source=METEO_SOURCE,
+        type=EventType.WIND_REPORTED,
+        since=max(until - NOW_WIND_WINDOW_S, 0.0),
+        until=until,
+        limit=1,
+    )
+    speed = gust = from_deg = None
+    text: str | None = None
+    if wind_last:
+        payload = wind_last[0].payload
+        speed, gust = round(float(payload["speed_mps"]), 1), round(float(payload["gust_mps"]), 1)
+        from_deg = round(float(payload["from_deg"]), 1)
+        text = _wind_text(from_deg, speed)
+    return NowFacts(
+        as_of=until,
+        window_s=NOW_WINDOW_S,
+        gps_radar_distance_m=distance,
+        gps_radar_agree=None if distance is None else distance < DISAGREED_M,
+        gps_deviation_from_plan_m=deviation(gps_last),
+        radar_deviation_from_plan_m=deviation(radar_last),
+        wind_speed_mps=speed,
+        wind_gust_mps=gust,
+        wind_from_deg=from_deg,
+        wind=text,
+    )
+
+
 def get_track_metrics(ctx: ToolContext, args: GetTrackMetricsArgs) -> TrackMetrics:
     if args.since > args.until:
         raise ToolFailure("`since` cannot be greater than `until`")
@@ -244,4 +320,5 @@ def get_track_metrics(ctx: ToolContext, args: GetTrackMetricsArgs) -> TrackMetri
         ),
         first_event_ids=first_ids,
         last_event_ids=last_ids,
+        now=_now_facts(ctx, route, until),
     )
