@@ -1,0 +1,13 @@
+# E4a: Qwen3-30B-A3B-Instruct-2507 (MoE) en una cuantización de la comunidad (stelterlab). No tiene
+# modo razonamiento (ni parser ni enable_thinking). repetition_penalty 1,05 explícito, como `actual`.
+# Ficha: https://huggingface.co/stelterlab/Qwen3-30B-A3B-Instruct-2507-AWQ
+description: stelterlab/Qwen3-30B-A3B-Instruct-2507-AWQ, sin razonamiento
+server:
+  model: stelterlab/Qwen3-30B-A3B-Instruct-2507-AWQ
+  tool_call_parser: hermes
+  reasoning_parser: null
+  max_model_len: 32768
+  extra_args: []
+sampling:
+  repetition_penalty: 1.05
+  reasoning: null

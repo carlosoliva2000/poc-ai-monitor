@@ -53,6 +53,10 @@ class AgentConfig:
     presence_penalty: float = 0.0
     reasoning: bool | None = None
     """Razonamiento por petición (`enable_thinking`); `None` = no se envía (modelo sin él)."""
+    reasoning_effort: str | None = None
+    """Esfuerzo de razonamiento (gpt-oss: low, medium, high); `None` = no se envía."""
+    reasoning_field: str = "reasoning_content"
+    """Campo del mensaje del asistente con el que se devuelve el razonamiento al modelo."""
     objective_prompt: str | None = None
     output_prompt: str | None = None
     system_prompt_notools: str | None = None
@@ -123,6 +127,8 @@ class AgentConfig:
         }
         if self.reasoning is not None:
             extra_body["chat_template_kwargs"] = {"enable_thinking": self.reasoning}
+        if self.reasoning_effort is not None:
+            extra_body["reasoning_effort"] = self.reasoning_effort
         return {
             "temperature": self.temperature,
             "top_p": self.top_p,
@@ -142,6 +148,16 @@ class AgentConfig:
             "presence_penalty": self.presence_penalty,
             "max_tokens": self.max_tokens,
             "reasoning": self.reasoning,
+            **(
+                {"reasoning_effort": self.reasoning_effort}
+                if self.reasoning_effort is not None
+                else {}
+            ),
+            **(
+                {"reasoning_field": self.reasoning_field}
+                if self.reasoning_field != "reasoning_content"
+                else {}
+            ),
             "max_invocation_s": self.max_invocation_s,
             "llm_timeout_s": self.llm_timeout_s,
             "aids": self.aids() if self.name == "monitor" else None,
@@ -332,6 +348,8 @@ class Assets:
             repetition_penalty=float(pick("repetition_penalty", 1.0)),
             presence_penalty=float(pick("presence_penalty", 0.0)),
             reasoning=None if pick("reasoning") is None else bool(pick("reasoning")),
+            reasoning_effort=pick("reasoning_effort"),
+            reasoning_field=str(pick("reasoning_field", "reasoning_content")),
             max_tokens=int(pick("max_tokens")),
             tool_choice=str(pick("tool_choice", "auto")),
             guided_skills=bool(spec.get("guided_skills", False)),

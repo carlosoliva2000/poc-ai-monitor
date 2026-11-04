@@ -1,0 +1,14 @@
+# E4a: Ministral 3 14B Instruct (Mistral, oficial, pesos FP8, lleva visión que aquí se desactiva).
+# Receta de vLLM: formato Mistral para tokenizador, configuración y pesos; contexto por defecto
+# 262144, aquí 32768. Sin razonamiento (la variante «Reasoning» no se prueba).
+# Ficha: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512
+description: mistralai/Ministral-3-14B-Instruct-2512, sin razonamiento, sin visión
+server:
+  model: mistralai/Ministral-3-14B-Instruct-2512
+  tool_call_parser: mistral
+  reasoning_parser: null
+  max_model_len: 32768
+  extra_args: [--tokenizer-mode, mistral, --config-format, mistral, --load-format, mistral, --language-model-only]
+sampling:
+  repetition_penalty: 1.05
+  reasoning: null

@@ -48,12 +48,13 @@ AID_KEYS = (
 )
 # La memoria del monitor no es una ayuda: cambia lo que el modelo recuerda, no lo que se le quita.
 MEMORY_KEYS = ("memory", "memory_budget_tokens", "memory_target_tokens")
-AGENT_KEYS = (*SAMPLING_KEYS, "reasoning", *LIMIT_KEYS, *AID_KEYS, *MEMORY_KEYS)
+REASONING_KEYS = ("reasoning", "reasoning_effort", "reasoning_field")
+AGENT_KEYS = (*SAMPLING_KEYS, *REASONING_KEYS, *LIMIT_KEYS, *AID_KEYS, *MEMORY_KEYS)
 ALLOWED = {
     "description": None,
     "server": ("model", "tool_call_parser", "reasoning_parser", "max_model_len", "extra_args"),
     "llm": ("model", "base_url", "api_key"),
-    "sampling": (*SAMPLING_KEYS, "reasoning"),
+    "sampling": (*SAMPLING_KEYS, *REASONING_KEYS),
     "agents": AGENT_NAMES,
     "chat": ("tools_enabled",),
     "platform": ("wait_agent_timeout_s",),

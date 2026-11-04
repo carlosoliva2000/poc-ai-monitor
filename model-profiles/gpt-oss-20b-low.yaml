@@ -1,0 +1,19 @@
+# E4a: gpt-oss-20b (OpenAI, oficial, MXFP4, formato harmony) con esfuerzo de razonamiento `low`.
+# Parser de tools `openai` y de razonamiento `openai_gptoss`. El razonamiento vuelve al modelo en el
+# campo `reasoning` del mensaje del asistente (es el que lee vLLM) y el esfuerzo se pide con
+# `reasoning_effort`; no usa `enable_thinking`. --enforce-eager: los kernels MXFP4 dieron fallos en
+# Blackwell de consumo. vLLM elige FLASHINFER para la atención y falla («FlashInfer backend is not
+# available»): se fija TRITON_ATTN. Muestreo por defecto de agents.yaml (T=0 en monitor y chats).
+# Ficha: https://huggingface.co/openai/gpt-oss-20b
+description: openai/gpt-oss-20b, razonamiento low, harmony
+server:
+  model: openai/gpt-oss-20b
+  tool_call_parser: openai
+  reasoning_parser: openai_gptoss
+  max_model_len: 32768
+  extra_args: [--enforce-eager, --attention-backend, TRITON_ATTN]
+sampling:
+  reasoning: null
+  reasoning_effort: low
+  reasoning_field: reasoning
+  repetition_penalty: 1.0

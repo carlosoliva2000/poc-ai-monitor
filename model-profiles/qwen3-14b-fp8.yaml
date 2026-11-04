@@ -1,0 +1,13 @@
+# E4a: el mismo Qwen3-14B que `actual` con pesos FP8 (control de si la AWQ de 4 bits limita).
+# Publica Qwen (oficial). Sin razonamiento, mismo parser y muestreo que `actual` (agents.yaml).
+# Con 24 GB los pesos FP8 ocupan 15,3 GiB y la caché KV no da 32768 tokens (vLLM estima 28544): se baja
+# el contexto a 28000 (más de 2,5 veces el pico de la PoC) y no se usa KV en FP8 para no mezclar variables.
+# Hace falta arrancar con VLLM_USE_DEEP_GEMM=0: DeepGEMM no encuentra el CUDA toolkit en este entorno.
+# Ficha: https://huggingface.co/Qwen/Qwen3-14B-FP8
+description: Qwen/Qwen3-14B-FP8, sin razonamiento, configuración de agents.yaml
+server:
+  model: Qwen/Qwen3-14B-FP8
+  tool_call_parser: hermes
+  reasoning_parser: qwen3    # el razonamiento queda activado en el servidor; cada petición lo apaga
+  max_model_len: 28000
+  extra_args: []

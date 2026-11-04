@@ -208,3 +208,66 @@ def test_profile_json_is_written_with_the_effective_parameters(tmp_path: Path) -
 
 async def _noop(event: object) -> None:
     return None
+
+
+def test_existing_profiles_send_the_same_requests_as_before_reasoning_effort() -> None:
+    """`reasoning_effort` y `reasoning_field` no cambian nada con su valor por defecto: la petición
+    de `actual` es exactamente la de antes y ningún otro perfil añade claves nuevas."""
+    sampling = Assets(profile=load_profile("actual")).agent("monitor").sampling()
+    assert set(sampling) == {
+        "temperature",
+        "top_p",
+        "presence_penalty",
+        "max_tokens",
+        "tool_choice",
+        "extra_body",
+    }
+    assert sampling["extra_body"] == {
+        "top_k": sampling["extra_body"]["top_k"],
+        "repetition_penalty": 1.05,
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    for name in list_profiles():
+        if name in ("gpt-oss-20b-low",):
+            continue
+        for agent in AGENTS:
+            config = Assets(profile=load_profile(name)).agent(agent)
+            assert set(config.sampling()["extra_body"]) <= {
+                "top_k",
+                "repetition_penalty",
+                "chat_template_kwargs",
+            }, (name, agent)
+            assert config.reasoning_effort is None and config.reasoning_field == "reasoning_content"
+            assert "reasoning_effort" not in config.effective()
+            assert "reasoning_field" not in config.effective()
+
+
+def test_a_profile_can_set_the_reasoning_effort_and_the_returned_reasoning_field(
+    tmp_path: Path,
+) -> None:
+    directory = write_profile(
+        tmp_path,
+        "harmony",
+        {
+            "server": {"model": "openai/gpt-oss-20b", "tool_call_parser": "openai"},
+            "sampling": {
+                "reasoning": None,
+                "reasoning_effort": "low",
+                "reasoning_field": "reasoning",
+            },
+        },
+    )
+    config = Assets(profile=load_profile("harmony", directory)).agent("monitor")
+    extra = config.sampling()["extra_body"]
+    assert extra["reasoning_effort"] == "low" and "chat_template_kwargs" not in extra
+    assert config.effective()["reasoning_effort"] == "low"
+    assert config.reasoning_field == "reasoning"
+
+
+def test_the_assistant_message_returns_the_reasoning_in_the_configured_field() -> None:
+    from ai_module.agent.llm import LlmResponse
+
+    response = LlmResponse(content="", reasoning="because")
+    assert response.assistant_message()["reasoning_content"] == "because"
+    message = response.assistant_message("reasoning")
+    assert message["reasoning"] == "because" and "reasoning_content" not in message

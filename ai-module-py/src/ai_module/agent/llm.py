@@ -77,11 +77,13 @@ class LlmResponse:
     """Tokens del prompt servidos desde la caché de prefijos, si vLLM los da en
     `usage.prompt_tokens_details`, si no `None`."""
 
-    def assistant_message(self) -> dict[str, Any]:
-        """El mensaje del asistente para devolver al modelo en la siguiente petición."""
+    def assistant_message(self, reasoning_field: str = REASONING_INPUT_FIELD) -> dict[str, Any]:
+        """El mensaje del asistente para devolver al modelo en la siguiente petición. El
+        razonamiento va en `reasoning_field` (gpt-oss lo lee de `reasoning`, Qwen3 de
+        `reasoning_content`)."""
         message: dict[str, Any] = {"role": "assistant", "content": self.content or None}
         if self.reasoning:
-            message[REASONING_INPUT_FIELD] = self.reasoning
+            message[reasoning_field] = self.reasoning
         if self.tool_calls:
             message["tool_calls"] = [
                 {

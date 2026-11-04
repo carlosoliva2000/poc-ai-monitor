@@ -1,0 +1,13 @@
+# E4a: Qwen3-32B denso en AWQ de 4 bits (~19 GB de pesos). Publica Qwen (oficial).
+# Mismo parser y muestreo que `actual`. Con 24 GB los pesos (18,2 GiB) dejan 1,26 GiB de caché KV: en BF16
+# solo caben 5136 tokens (256 KiB por token), así que se usa KV en FP8 (~10,3 k tokens) y un contexto de 10240,
+# por encima del pico de prompt medido en la base (7003 tokens en el monitor). Con KV en FP8 vLLM elige
+# FLASHINFER, que compila con nvcc (no hay CUDA toolkit aquí): se fija TRITON_ATTN.
+# Ficha: https://huggingface.co/Qwen/Qwen3-32B-AWQ
+description: Qwen/Qwen3-32B-AWQ, sin razonamiento, configuración de agents.yaml
+server:
+  model: Qwen/Qwen3-32B-AWQ
+  tool_call_parser: hermes
+  reasoning_parser: qwen3
+  max_model_len: 10240
+  extra_args: [--kv-cache-dtype, fp8, --attention-backend, TRITON_ATTN]

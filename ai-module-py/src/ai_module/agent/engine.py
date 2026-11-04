@@ -189,10 +189,10 @@ class AgentEngine:
 
             if not response.tool_calls:  # nunca se mira finish_reason
                 if is_done is None:
-                    messages.append(response.assistant_message())
+                    messages.append(response.assistant_message(config.reasoning_field))
                     return result("final")
                 if is_done():
-                    messages.append(response.assistant_message())
+                    messages.append(response.assistant_message(config.reasoning_field))
                     return result("done")
                 if reminder is not None and not reminded:
                     # Un intento fallido que es solo texto no se guarda en los `messages`
@@ -202,9 +202,9 @@ class AgentEngine:
                     trace.reminders += 1
                     messages.append({"role": "user", "content": reminder()})
                     continue
-                messages.append(response.assistant_message())
+                messages.append(response.assistant_message(config.reasoning_field))
                 return result("text")
-            messages.append(response.assistant_message())
+            messages.append(response.assistant_message(config.reasoning_field))
 
             for call in response.tool_calls:
                 tool_names.append(call.name)
