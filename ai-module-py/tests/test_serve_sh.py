@@ -23,6 +23,7 @@ if [ "$2" = "--help=all" ]; then
   echo "--reasoning-parser"
   exit 0
 fi
+echo "${VLLM_USE_DEEP_GEMM:-unset}" > "$SERVE_STATE_DIR/seen_env"
 while [ $# -gt 0 ]; do [ "$1" = "--port" ] && PORT="$2"; shift; done
 exec python3 -c "
 import http.server  # vllm falso
@@ -233,3 +234,34 @@ def test_stop_fails_while_a_vllm_process_survives(env: Env, tmp_path: Path) -> N
     finally:
         with contextlib.suppress(ProcessLookupError):
             os.killpg(pid, signal.SIGKILL)
+
+
+def env_profile(tmp_path: Path, env: dict | None) -> Path:
+    profiles = tmp_path / "profiles"
+    profiles.mkdir()
+    server = {"model": "Qwen/Qwen3-14B-AWQ", "tool_call_parser": "hermes"}
+    if env is not None:
+        server["env"] = env
+    (profiles / "withenv.yaml").write_text(yaml.safe_dump({"server": server}))
+    return profiles
+
+
+def test_server_env_is_shown_in_the_dry_run(env: Env, tmp_path: Path) -> None:
+    profiles = env_profile(tmp_path, {"VLLM_USE_DEEP_GEMM": "0"})
+    result = env.serve("start", "withenv", "--dry-run", MODEL_PROFILES_DIR=str(profiles))
+    assert result.returncode == 0, result.stderr
+    assert "VLLM_USE_FLASHINFER_SAMPLER=0 VLLM_USE_DEEP_GEMM=0 " in result.stdout
+
+
+def test_server_env_reaches_only_that_server(env: Env, tmp_path: Path) -> None:
+    profiles = env_profile(tmp_path, {"VLLM_USE_DEEP_GEMM": "0"})
+    started = env.serve("start", "withenv", MODEL_PROFILES_DIR=str(profiles))
+    assert started.returncode == 0, started.stdout + started.stderr
+    assert (env.state / "seen_env").read_text().strip() == "0"
+    assert env.serve("stop").returncode == 0
+    (tmp_path / "x").mkdir()
+    plain = env_profile(tmp_path / "x", None)
+    started = env.serve("start", "withenv", MODEL_PROFILES_DIR=str(plain))
+    assert started.returncode == 0, started.stdout + started.stderr
+    assert (env.state / "seen_env").read_text().strip() == "unset"  # no queda nada del anterior
+    assert env.serve("stop").returncode == 0

@@ -177,3 +177,111 @@ reasoning_field (defaults leave every existing request unchanged, with tests).
 Level 0/1 bench, reproducibility check and six-scenario matrix for four of them
 against e12-cierre; gpt-oss-20b fails level 1 and is not run. No model change.
 ```
+
+---
+
+# 13.1 · gpt-oss, variables de entorno por perfil y textos para revisar (04/11/2026)
+
+Escrito para: Carlos. Contratos **sin cambios**; `agent-assets` igual (huella `293927dd0c038af5`, confirmada en cada `manifest.json`); no se cambia el modelo por defecto. Un servidor cada vez (gpt-oss, después `qwen3-14b-fp8`), puerto 8000 libre al empezar y al terminar, sin cuelgues de Windows, WSL ni vLLM, `HF_TOKEN` no usado. E4b y E4c no se hacen.
+
+## Resumen
+
+**gpt-oss-20b (esfuerzo `low`) iguala a `actual` en las seis pruebas de la matriz, con menos rechazos y menos tokens de prompt, y a una velocidad parecida.** El fallo de la Fase 13 era del comprobador (guiones y espacios Unicode), no del modelo. Sigue sin ser una mejora demostrada (n = 1, empate en calidad): la decisión de modelo por defecto es tuya.
+
+## 1. Nivel 1 normalizado
+- `~/llm-bench/nivel1_e4.py` (fichero nuevo de la Fase 13; el banco original no se toca): función `norm()` que convierte en ASCII los guiones U+2010–U+2015, U+2212 (y las variantes pequeñas U+FE58, U+FE63, U+FF0D) y los espacios U+00A0, U+1680, U+2000–U+200A, U+202F, U+205F y U+3000. Se aplica al texto libre que comprueban 6a («-91» y «18») y 6b (la distancia). El resto de casos no compara texto libre.
+- **`gpt-oss-20b-low`: PASA, 11 casos × 5/5** (el 6a pasa de 0/5 a 5/5; el 8b también 5/5). 48 tok/s, 0 cortes por longitud, 0 fugas. Arranque con el perfil de la Fase 13 y `--drop-thinking-kwargs --body-extra '{"repetition_penalty":1.0,"reasoning_effort":"low"}'`.
+- **Control: `qwen3-14b-fp8`, mismo banco normalizado: idéntico al de la Fase 13** (11 casos, 5/5 antes y después, comparados caso a caso). La normalización no cambia un resultado ya aprobado.
+- Los `nivel1_gpt-oss-20b-low.*` de `~/llm-bench/` se sobrescriben con la nueva ejecución; la antigua (con el 6a en 0/5) sigue en `results/bench/nivel1/`.
+
+## 2. gpt-oss: perfil, reproducibilidad y matriz
+- **`repetition_penalty`:** su `generation_config.json` (en la caché) no trae ninguno (solo ids de tokens y `do_sample`) y el README no lo menciona; no hay valor recomendado y **el perfil se queda en 1,0**. No se leyó la ficha web, solo la copia local de la caché.
+- **`demo` ×2** (`experiments/e13-gpt-oss-20b-low-repro/`): **estable (2/2)**, A1 A2 A3 ✅ en las dos, 0 fallbacks, 1 rechazo en total → `--reps 1`.
+- **Matriz de los seis escenarios ×1** (`experiments/e13-gpt-oss-20b-low/`; comparación `experiments/e13-gpt-oss-20b-low-vs-e12.md` con `compare.py` juntando manifiestos; uso en `experiments/e13-gpt-oss-20b-low-uso.md` con `monitor_usage`). Arranque como en la Fase 13 (`--enforce-eager`, `--attention-backend TRITON_ATTN`, `reasoning_effort: low`, `reasoning_field: reasoning`); listo en 36 s, 22 666 MiB, contexto 32 768; la PoC completa funciona con él de extremo a extremo (hasta ahora solo se había probado el nivel 1).
+
+| Escenario | `actual` (base) | gpt-oss-20b-low | Rechazos (base / gpt-oss) |
+|---|---|---|---|
+| demo | A1 A2 A3 ✅ | A1 A2 A3 ✅ | 3 / 0 |
+| nominal | 0 falsas alarmas | ídem | 0 / 0 |
+| wind | A1 ✅ | ✅ | 1 / 0 |
+| spoofing | A1 ✅ | ✅ | 1 / 0 |
+| hijack | A1 ✅ | ✅ | 1 / 0 |
+| faults | F1 F2 F3 ✅ | F1 F2 F3 ✅ | 5 / 5 |
+
+Falsas alarmas, fallbacks, alertas abiertas, frases que contradicen, `checks`≠tools, cortes por longitud y caracteres no latinos: **0** en todo (como la base). Una sola cadena por anomalía en las seis.
+
+### Tabla resumen de E4a actualizada
+| Modelo | Nivel 1 | Matriz (6 escenarios) | Veredicto |
+|---|---|---|---|
+| `qwen3-14b-fp8` | PASA | ×1: igual que la base; más lento (p50 8,6 s) | no mejora a `actual` |
+| `qwen3-32b-awq` | PASA | ×1: **F3 ❌**; el doble de lento | peor |
+| `qwen3-30b-a3b-2507` | PASA | ×1: **5 fallbacks**, F1 y F3 ❌ | peor |
+| `ministral-3-14b` | PASA | ×3: `wind` 1/3, 13 cortes por longitud | peor |
+| **`gpt-oss-20b-low`** | **PASA (normalizado)** | **×1: igual que la base en las seis pruebas; 5 rechazos frente a 11; 0 fallbacks** | **empata con `actual`; nada que ganar en calidad, algo en tokens** |
+
+## 3. Fallos clasificados
+No hay fallos de etiqueta, de formato, de bucle ni de idioma. Los **5 rechazos** de los guardrails (todos en `faults`, que en la base también concentra 5), tras leer `guardrail_rejections` de la traza:
+
+| Rechazo | Dónde | Clase | Qué pasa |
+|---|---|---|---|
+| `recovery` | faults inv-0006 | decisión | Intenta otra alerta en una recuperación de `GPS_JAMMING`; el guardrail le dice «publish cause GPS_JAMMING, severity medium and supersedes ai-0004». |
+| `source_silent` ×2 | faults inv-0008 | decisión | Intenta reconocer y luego sustituir una alerta de `GPS_JAMMING` ante `SOURCE_SILENT`; el guardrail le exige una alerta propia `SENSOR_FAULT` (la regla de la Fase 8). |
+| `checks` | faults inv-0008 | formato | `gps_radar_disagreed = true` contra un `get_track_metrics` que no había llamado. |
+| `ids` | faults inv-0009 | ids | **No es un id de evidencia inexistente:** `close_alert` con `ai-0006` cuando el aviso de cierre era de `ai-0008`; el guardrail dice «use ai-0008». Ambos ids en ASCII (véase §4). |
+
+Los cinco se corrigen en la llamada siguiente. En `faults` la invocación inv-0008 llega a 9 iteraciones (el máximo; la base, 8).
+
+## 4. Ids con caracteres Unicode (solo medido)
+**No se ha añadido ninguna normalización al guardrail.** Medido sobre las trazas y las líneas de tiempo de la matriz (6 ejecuciones), con U+2010–U+2015 y U+2212 dentro de un id:
+
+- **Rechazos por ids de evidencia inexistentes: 0.** El único rechazo de clase `ids` es el de arriba, con ids ASCII.
+- **Llamadas a tools del monitor: 85, ninguna con un guion Unicode en los argumentos** (`evidence_event_ids` incluido; las publicadas, también ASCII). Coincide con el nivel 1 (6b y 7 pasan 5/5): en argumentos de tool copia bien los ids.
+- **Donde sí aparece U+2011 es en el texto libre**, con la forma «met‑0010», «gps‑000106», «lnk‑0067», «ai‑0004»: en **5 respuestas de chat** (demo ×2, faults, hijack, spoofing) y **3 informes** (demo, faults, hijack; ahí sobre todo ids de otro tipo como «UNK‑4», «sub‑5»), y en el mensaje del asistente que el motor guarda del propio chat/informe. Los textos de las alertas (`summary`, `explanation`, `recommendation`) no traen ningún id con guion Unicode.
+- **Efecto:** ninguno en las pruebas de la PoC (los chats y el informe no pasan por el guardrail), pero un id copiado de esos textos no se podría buscar con una comparación exacta, y los textos escriben además guiones y espacios finos Unicode («off‑route», «3.9 m/s» con U+202F). Si gpt-oss se adopta, merece la pena decidir si la web o el guardrail deben normalizarlos (**no hecho**; es tu decisión).
+- Ejemplo con traza: `experiments/e13-gpt-oss-20b-low/runs/gpt-oss-20b-low/demo/r1/llm_trace.jsonl`, invocación del chat del monitor (la de `inv-0002`: «`met‑0010`, `gps‑000106`»); el rechazo `ids`, en `faults/r1`, `inv-0009`.
+
+## 5. Coste (gpt-oss frente a `actual`, mismas seis pruebas)
+| | `actual` | gpt-oss-20b-low |
+|---|---|---|
+| Invocaciones con LLM | 25 | 25 |
+| Invocación p50 / p95 | 7,0 / 13,8 s | 7,6 / 11,7 s |
+| Iteraciones p50 / máx. | 4 / 8 | 3 / 9 |
+| Tokens de prompt / respuesta (suma) | 462 794 / 8 748 | 345 044 / 8 346 (+ 6 496 de razonamiento, que no cuentan como respuesta) |
+| Pico de prompt en una llamada | 7 003 | 6 007 |
+| Generación (nivel 1) | 57–65 tok/s (fase 7) | 48 tok/s |
+| Memoria GPU / contexto | 21 336 MiB / 32 768 | 22 666 MiB / 32 768 |
+Reloj de la matriz: ≈ 8 min (106 + 38 + 54 + 68 + 69 + 137 s). `demo` ×2 de la reproducibilidad: ≈ 4 min.
+
+## 6. Límites
+- n = 1 por escenario (la reproducibilidad `demo` ×2 sale estable): diferencias de 1–2 rechazos no cuentan (Fase 12). El empate en calidad no dice que sea mejor, solo que no es peor con esta batería.
+- No se comprobó la calidad de los textos (ahí, §8): los contadores de frases que contradicen los `checks` son reglas simples.
+- El modelo razona en `low`; el razonamiento no se envía a la web (regla de la PoC) y cuesta ~6 500 tokens en las seis pruebas.
+
+## 7. `server.env` en los perfiles (código)
+- **`model-profiles/*.yaml`:** nueva clave opcional `server.env: {VAR: "valor"}`. Se valida en `agent/profiles.py`: tiene que ser un mapa; los nombres, `[A-Z_][A-Z0-9_]*`; los valores, **texto** (`"0"` entre comillas; un `0` de YAML se rechaza para que no cambie en silencio). Forma parte de `server_signature()`, así que `run_matrix` reinicia el servidor si cambia.
+- **`tools/vllm/serve.sh`:** nuevo subcomando interno `profiles serve-env <perfil>`; `start` lanza `setsid env VAR=valor … vllm …`, de modo que las variables llegan **solo** a ese servidor (no se exportan en el shell) y el comando impreso las muestra (`--dry-run` incluido).
+- **`model-profiles/qwen3-14b-fp8.yaml`:** `env: {VLLM_USE_DEEP_GEMM: "0"}`. Comprobado arrancando el perfil: arranca a la primera (47 s) y `/proc/<pid>/environ` del servidor tiene `VLLM_USE_DEEP_GEMM=0`.
+- **Tests (+9):** `test_server_env_is_validated_and_part_of_the_server_signature` (perfiles), `test_server_env_is_shown_in_the_dry_run` y `test_server_env_reaches_only_that_server` (`serve.sh` con un `vllm` falso que escribe la variable que ve; el servidor siguiente sin `env` no la hereda).
+- **`--dry-run` de los 25 perfiles, antes y después:** idéntico el comando de **24**; solo cambia `qwen3-14b-fp8`, que añade `VLLM_USE_DEEP_GEMM=0` antes del binario (era lo pedido). Los perfiles existentes siguen con el mismo comando que antes.
+- **Pruebas:** 428 pasan (419 + 9), `ruff` limpio.
+
+## 8. Textos para revisar la calidad (solo extraídos, nada evaluado)
+- **`experiments/e13-textos.md`** (1 687 líneas, copiado a `results/experiments/`): `demo` y `faults` de `actual` (base `e12-cierre`), `qwen3-14b-fp8`, `qwen3-32b-awq`, `qwen3-30b-a3b-2507`, `ministral-3-14b` (**r1**) y `gpt-oss-20b-low`. Un bloque por etiqueta y, dentro, un modelo detrás de otro: alertas (T+, causa, severidad, confianza, `summary`, `explanation`, `recommendation` completos), cierres y reconocimientos con su `reason` (un fallback sin `alert_id` se asigna a la etiqueta por su detección), las respuestas de los dos chats con su pregunta y las secciones del informe que escribe el modelo (Summary, What was seen, Monitor assessment, Recommendations). Sin recortar nada.
+- Notas para leerlo: el informe numera sus anomalías A1, A2… (también en `faults`, donde la evaluación usa F1…F3), por eso «What was seen» va aparte con el título del propio informe; un `_missing_` es un apartado que ese modelo no escribió (en el 30B-A3B-2507, el F3, que no publicó alerta).
+- **Generador:** `tools/experiments/texts.py` (`nombre=experimento[:perfil]`, `--scenarios`, `--rep`, `--out`), con test (`ai-module-py/tests/test_texts.py`, 6 pruebas sobre una matriz sintética). La regla 13 del `CLAUDE.md` ahora pide generar y copiar este fichero con cada matriz.
+- Comando: `uv run --project ai-module-py python tools/experiments/texts.py --out experiments/e13-textos.md --scenarios demo,faults --rep 1 actual=experiments/e12-cierre:actual qwen3-14b-fp8=experiments/e13-qwen3-14b-fp8 qwen3-32b-awq=experiments/e13-qwen3-32b-awq qwen3-30b-a3b-2507=experiments/e13-qwen3-30b-a3b-2507 ministral-3-14b=experiments/e13-ministral-3-14b gpt-oss-20b-low=experiments/e13-gpt-oss-20b-low`.
+
+## 9. Ficheros y copias
+Nuevos: `tools/experiments/texts.py`, `ai-module-py/tests/test_texts.py`, `experiments/e13-gpt-oss-20b-low{,-repro}/`, `experiments/e13-gpt-oss-20b-low-{vs-e12,uso}.md`, `experiments/e13-textos.md`. Modificados: `ai-module-py/src/ai_module/agent/profiles.py`, `tools/vllm/serve.sh`, `model-profiles/qwen3-14b-fp8.yaml`, `ai-module-py/tests/{test_profiles,test_serve_sh}.py`, `CLAUDE.md` (regla 13), `ai-module-py/CLAUDE.md`, `docs/quien_decide_que.md` (§3 bis: `server.env`; sin cambios de reparto), `docs/fases/fase13.md`. Fuera del repo: `~/llm-bench/nivel1_e4.py` y los `nivel1_{gpt-oss-20b-low,qwen3-14b-fp8}.*` (copiados a `results/bench/`).
+Copias en `/mnt/c/CITADEL/_CLAUDE/poc-ai-monitor/results/`: `docs/fases/`, `experiments/` (`e13-textos.md`, `e13-gpt-oss-20b-low*`, `eval.md`/`informe.md` de las dos nuevas), `bench/`, `snapshots/fase13_1/` y `snapshots-limpias/fase13_1/` (las dos comprobaciones de la regla 15 en el apartado siguiente).
+
+## 10. Mensaje de commit propuesto
+```
+feat: phase 13.1 - gpt-oss-20b matrix, per-profile server env, review texts
+
+Level 1 compares text after normalising Unicode dashes and spaces; gpt-oss-20b
+(low) then passes and matches the current baseline in the six scenarios.
+Profiles can set server.env (validated, exported only to that server);
+qwen3-14b-fp8 gets VLLM_USE_DEEP_GEMM=0. New tools/experiments/texts.py extracts
+alert, chat and report texts of several matrices for quality review (with test).
+```

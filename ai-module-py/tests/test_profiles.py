@@ -271,3 +271,17 @@ def test_the_assistant_message_returns_the_reasoning_in_the_configured_field() -
     assert response.assistant_message()["reasoning_content"] == "because"
     message = response.assistant_message("reasoning")
     assert message["reasoning"] == "because" and "reasoning_content" not in message
+
+
+def test_server_env_is_validated_and_part_of_the_server_signature(tmp_path: Path) -> None:
+    server = {"model": "m/x", "tool_call_parser": "hermes"}
+    ok = write_profile(tmp_path, "ok", {"server": {**server, "env": {"VLLM_USE_DEEP_GEMM": "0"}}})
+    profile = load_profile("ok", ok)
+    assert profile.server_env() == {"VLLM_USE_DEEP_GEMM": "0"}
+    assert profile.server_signature()["env"] == {"VLLM_USE_DEEP_GEMM": "0"}
+    assert load_profile("qwen3-14b-fp8").server_env() == {"VLLM_USE_DEEP_GEMM": "0"}
+    assert load_profile("actual").server_env() == {}
+    for bad in ({"lower": "1"}, {"VAR": 0}, ["VAR"], {"A B": "1"}):
+        folder = write_profile(tmp_path, "bad", {"server": {**server, "env": bad}})
+        with pytest.raises(ProfileError):
+            load_profile("bad", folder)

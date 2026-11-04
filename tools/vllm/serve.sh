@@ -108,6 +108,10 @@ cmd_start() {
   local model args
   model="$("${PROFILES[@]}" model "$profile" "${PROFILES_DIR_ARGS[@]}")" || die 2 "invalid profile '$profile'"
   args="$("${PROFILES[@]}" serve-args "$profile" --port "$PORT" "${PROFILES_DIR_ARGS[@]}")" || die 2 "invalid profile '$profile'"
+  # Variables de entorno del perfil (server.env): solo para el servidor que se lanza.
+  local env_out; env_out="$("${PROFILES[@]}" serve-env "$profile" "${PROFILES_DIR_ARGS[@]}")" || die 2 "invalid profile '$profile'"
+  local -a env_vars=()
+  [ -z "$env_out" ] || mapfile -t env_vars <<< "$env_out"
   case "$(echo "$model" | tr 'A-Z' 'a-z')" in
     *qwen3.5-27b*|*qwen3.8-27b*) die 2 "model $model is forbidden";;
   esac
@@ -139,7 +143,7 @@ cmd_start() {
   echo "$help" | grep -- '--tool-call-parser' | grep -qE "[{,]${tool}[,}]" || die 2 "parser '$tool' not in --tool-call-parser"
 
   log "profile: $profile · model: $model"
-  log "command: HF_HUB_OFFLINE=1 VLLM_USE_FLASHINFER_SAMPLER=0 $VLLM_BIN $args"
+  log "command: HF_HUB_OFFLINE=1 VLLM_USE_FLASHINFER_SAMPLER=0 ${env_vars[*]:+${env_vars[*]} }$VLLM_BIN $args"
   [ "$dry" = 1 ] && { log "(dry-run: nothing is started)"; exit 0; }
 
   mkdir -p "$STATE"
@@ -149,7 +153,7 @@ cmd_start() {
   local t0; t0="$(date +%s)"
   # shellcheck disable=SC2086
   eval "set -- $args"
-  setsid "$VLLM_BIN" "$@" > "$logfile" 2>&1 < /dev/null &
+  setsid env ${env_vars[@]+"${env_vars[@]}"} "$VLLM_BIN" "$@" > "$logfile" 2>&1 < /dev/null &
   local pid=$!
   echo "$pid" > "$PIDFILE"; echo "$profile" > "$PROFILEFILE"
   log "started PID $pid, log $logfile"

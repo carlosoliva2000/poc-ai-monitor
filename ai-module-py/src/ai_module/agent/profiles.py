@@ -13,6 +13,7 @@ import argparse
 import copy
 import hashlib
 import json
+import re
 import shlex
 import sys
 from dataclasses import dataclass, field
@@ -52,7 +53,14 @@ REASONING_KEYS = ("reasoning", "reasoning_effort", "reasoning_field")
 AGENT_KEYS = (*SAMPLING_KEYS, *REASONING_KEYS, *LIMIT_KEYS, *AID_KEYS, *MEMORY_KEYS)
 ALLOWED = {
     "description": None,
-    "server": ("model", "tool_call_parser", "reasoning_parser", "max_model_len", "extra_args"),
+    "server": (
+        "model",
+        "tool_call_parser",
+        "reasoning_parser",
+        "max_model_len",
+        "extra_args",
+        "env",
+    ),
     "llm": ("model", "base_url", "api_key"),
     "sampling": (*SAMPLING_KEYS, *REASONING_KEYS),
     "agents": AGENT_NAMES,
@@ -61,6 +69,7 @@ ALLOWED = {
 }
 # Modelos híbridos de 27B que cuelgan vLLM y han tirado Windows: no se sirven.
 FORBIDDEN_MODELS = ("qwen3.5-27b", "qwen3.8-27b")
+ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 MEMORY_GROWTH_TOKENS = 4000  # lo que puede crecer el contexto durante una invocación
 PLATFORM_MARGIN_S = 15.0  # `max_invocation_s` + margen < espera de la plataforma
 DEFAULT_WAIT_S = 90.0
@@ -120,7 +129,12 @@ class Profile:
             "reasoning_parser": s.get("reasoning_parser"),
             "max_model_len": s.get("max_model_len"),
             "extra_args": list(s.get("extra_args", [])),
+            "env": self.server_env(),
         }
+
+    def server_env(self) -> dict[str, str]:
+        """Variables de entorno que se exportan solo al servidor de este perfil."""
+        return {k: str(v) for k, v in self.server.get("env", {}).items()}
 
     def serve_args(self, port: int = 8000) -> list[str]:
         """Argumentos de `vllm serve`. Con parser de razonamiento, el razonamiento queda activado
@@ -184,6 +198,18 @@ class Profile:
             )
 
 
+def _validate_env(name: str, env: Any) -> None:
+    """`server.env`: nombres de variable válidos y valores de texto (los números y booleanos de
+    YAML se rechazan: `"0"` no es `0`)."""
+    if not isinstance(env, dict):
+        raise ProfileError(f"profile {name}: server.env must be a mapping")
+    for var, value in env.items():
+        if not isinstance(var, str) or not ENV_NAME.fullmatch(var):
+            raise ProfileError(f"profile {name}: server.env name {var!r} is not a valid variable")
+        if not isinstance(value, str):
+            raise ProfileError(f"profile {name}: server.env.{var} must be a string (quote it)")
+
+
 def _validate(name: str, raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ProfileError(f"profile {name}: the file is not a mapping")
@@ -198,6 +224,8 @@ def _validate(name: str, raw: Any) -> dict[str, Any]:
         for sub, subvalue in value.items():
             if sub not in allowed:
                 raise ProfileError(f"profile {name}: unknown key {key}.{sub}")
+            if key == "server" and sub == "env":
+                _validate_env(name, subvalue)
             if key == "agents":
                 if not isinstance(subvalue, dict):
                     raise ProfileError(f"profile {name}: agents.{sub} must be a mapping")
@@ -233,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
     )
-    parser.add_argument("command", choices=["serve-args", "show", "model", "list"])
+    parser.add_argument("command", choices=["serve-args", "serve-env", "show", "model", "list"])
     parser.add_argument("profile", nargs="?")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--dir", type=Path, default=DEFAULT_PROFILES)
@@ -250,6 +278,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.command == "serve-args":
         print(shlex.join(profile.serve_args(args.port)))  # para `eval set -- …` en serve.sh
+    elif args.command == "serve-env":
+        for var, value in profile.server_env().items():
+            print(f"{var}={value}")  # una por línea, para `env VAR=valor …` en serve.sh
     elif args.command == "model":
         print(profile.server["model"])
     else:
