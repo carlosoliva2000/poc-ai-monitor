@@ -255,12 +255,13 @@ class ReachedWaypoint(_Model):
 
 
 class DetectionsByRule(_Model):
-    """Siempre con las cuatro reglas (0 si no hubo detecciones)."""
+    """Siempre con las cinco reglas (0 si no hubo detecciones)."""
 
     ROUTE_DEVIATION: int
     SOURCE_DISCREPANCY: int
     SOURCE_SILENT: int
     GPS_DEGRADED: int
+    LINK_ANOMALY: int
 
 
 class AlertsByCause(_Model):

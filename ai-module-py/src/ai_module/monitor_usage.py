@@ -25,6 +25,7 @@ SKILL_OF_RULE = {
     "SOURCE_DISCREPANCY": "source-discrepancy",
     "SOURCE_SILENT": "source-discrepancy",
     "GPS_DEGRADED": "source-discrepancy",
+    "LINK_ANOMALY": "link-anomaly",
 }
 KIND_OF_TYPE = {
     "DetectionRaised": "raised",
@@ -35,6 +36,7 @@ KIND_OF_TYPE = {
 REJECTION_TYPES: list[tuple[str, str]] = [
     ("repeated_call", "same call as before"),
     ("history_evidence", "request it again"),
+    ("foreign_fault", "is a different problem"),
     ("link_anomalous", "link_anomalous"),
     ("recovery", "recovery"),
     ("nothing_changes", "Nothing changes"),
@@ -152,6 +154,12 @@ def expected_decision(
                 link_events = list(result.get("events", []))
     if rule == "SOURCE_SILENT":
         return "own alert SENSOR_FAULT/UNKNOWN", {"cause:SENSOR_FAULT", "cause:UNKNOWN"}
+    if rule == "LINK_ANOMALY":
+        if link_events is None:
+            return "no data (link not looked at)", None
+        if link_is_anomalous(link_events):
+            return "cause HIJACK", {"cause:HIJACK"}
+        return "cause SENSOR_FAULT/UNKNOWN", {"cause:SENSOR_FAULT", "cause:UNKNOWN"}
     if metrics is None:
         return "no data (get_track_metrics not called)", None
     facts = metric_facts(metrics)

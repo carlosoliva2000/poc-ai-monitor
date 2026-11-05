@@ -28,6 +28,8 @@ def test_system_prompts_leave_no_marker(agent: str) -> None:
         "report_markdown": "# Informe",
         "open_alerts": "ninguna",
         "open_detections": "ninguna",
+        "alerts_detail": "None.",
+        "last_facts": "none",
         "report_format": ASSETS.skill_body("report-format"),
     }
     prompt = ASSETS.system_prompt(config, **values)
@@ -46,7 +48,9 @@ def test_render_requires_every_marker() -> None:
 
 def test_objective_sections_and_markers() -> None:
     common, secs = sections(ASSETS.prompt("prompts/monitor_objective.md"))
-    assert set(secs) == {"batch", "raised", "updated", "cleared", "reminder", "guided_skill"}
+    assert set(secs) == {
+        "batch", "raised", "updated", "cleared", "link_recovered", "reminder", "guided_skill",
+    }  # fmt: skip
     assert "<!--" not in common  # los comentarios de la plantilla no llegan al modelo
     values = {
         "t_label": "T+01:46", "sim_time": "106", "open_alerts": "ninguna",
@@ -139,3 +143,30 @@ def test_every_skill_and_tool_named_in_agents_yaml_exists() -> None:
         config = ASSETS.agent(name)
         ASSETS.skills_index(config.skills)
         ASSETS.tool_schemas(config.tools)
+
+
+READ_ONLY = {"get_events", "get_track_metrics", "get_mission_plan", "get_my_alerts", "load_skill"}
+
+
+def test_the_chats_only_get_read_tools() -> None:
+    """Fase 15: los chats consultan datos pero nunca publican ni cierran alertas."""
+    chat_monitor = set(ASSETS.agent("chat_monitor").active_tools)
+    chat_report = set(ASSETS.agent("chat_report").active_tools)
+    assert chat_monitor == READ_ONLY
+    assert chat_report == READ_ONLY | {"get_flight_summary"}
+    for forbidden in ("publish_alert", "acknowledge_detection", "close_alert"):
+        assert forbidden not in chat_monitor | chat_report
+    assert ASSETS.chat_tools_enabled
+
+
+@pytest.mark.parametrize("agent", ["chat_monitor", "chat_report"])
+def test_the_chat_prompts_say_that_alerts_are_the_monitors_job(agent: str) -> None:
+    values = {
+        "t_label": "T+01:00", "sim_time": "60", "report_markdown": "# Informe",
+        "open_alerts": "none", "open_detections": "none", "alerts_detail": "None.",
+        "last_facts": "none",
+    }  # fmt: skip
+    prompt = ASSETS.system_prompt(ASSETS.agent(agent), **values)
+    assert "work of the monitor" in prompt
+    assert "Never say that you have no tools" in prompt
+    assert "You have no tools" not in prompt

@@ -25,6 +25,9 @@
 //                                              (autoevaluación del monitor) plegado y desplegado (módulo de IA con la configuración por defecto)
 //   node scripts/capture.mjs fase14_2 <carpeta> demo a 16× con «esperar al agente» a 1920×1080: la alerta de recuperación con su fase («recovering»)
 //                                              y la cadena del episodio leída como estados (módulo de IA con la configuración por defecto)
+//   node scripts/capture.mjs chatlayout <carpeta> faults a 16× con «esperar al agente», a 1920×1080, 1440×900 y 1280×720: chat del monitor
+//                                              plegado, desplegado, con la altura mínima y la máxima y con respuestas largas con Markdown; mide por DOM
+//                                              que el feed y el chat no se solapan (chatlayout.json) y comprueba el Markdown (fase 15)
 // Requiere plataforma (8100), módulo de IA y web (3000) en marcha. Una sola pestaña: los ids
 // `ops-` los calcula la web y con dos pestañas podrían repetirse.
 import { chromium } from 'playwright'
@@ -490,6 +493,77 @@ async function runChatSize() {
   note(`tras recargar, minimizado: ${await page.locator('[data-testid=chat-monitor]').getAttribute('data-minimized')}`)
   await page.getByRole('button', { name: 'Expand the monitor chat' }).click()
   writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
+
+async function runChatLayout() {
+  await setup('faults', { waitAgent: true, interactive: false, speed: 16 })
+  await page.getByRole('button', { name: 'Start', exact: true }).click()
+  while ((await simTime()) < 270) await sleep(500)
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=episode-chip]').length >= 1)
+  const questions = ['What is the current state of the battery?', 'What was the last battery event and what data does it have?', 'Check the link now']
+  const results = []
+  const measure = () =>
+    page.evaluate(() => {
+      const box = (el) => (el ? el.getBoundingClientRect() : null)
+      const chat = box(document.querySelector('[data-testid=chat-monitor]'))
+      const feed = box(document.querySelector('[data-testid=monitor-feed]'))
+      const chips = box(document.querySelector('ul[aria-label^="Alerts"]'))
+      const section = box(document.querySelector('section[aria-labelledby=agent-title]'))
+      const overlapFeed = feed && chat ? Math.max(0, feed.bottom - chat.top) : null
+      const overlapChips = chips && chat ? Math.max(0, chips.bottom - chat.top) : null
+      return {
+        chatTop: chat?.top, chatHeight: chat?.height, chatBottom: chat?.bottom,
+        feedHeight: feed?.height, feedBottom: feed?.bottom, chipsBottom: chips?.bottom,
+        sectionBottom: section?.bottom, overlapFeed, overlapChips,
+        chatBelowSection: chat && section ? Math.max(0, chat.bottom - section.bottom) : null,
+      }
+    })
+  const state = async (size, label) => {
+    await sleep(300)
+    const m = await measure()
+    results.push({ size, label, ...m })
+    note(`${size} ${label}: feed ${m.feedHeight?.toFixed(0)} px, chat ${m.chatHeight?.toFixed(0)} px, solape feed ${m.overlapFeed?.toFixed(1)} px, chips ${m.overlapChips?.toFixed(1)} px`)
+    await shot(`${size}_${label}`)
+  }
+  for (const [w, h] of [[1920, 1080], [1440, 900], [1280, 720]]) {
+    const size = `${w}x${h}`
+    await page.setViewportSize({ width: w, height: h })
+    await page.evaluate(() => localStorage.removeItem('poc-chat-monitor-v1'))
+    await page.reload()
+    await page.waitForSelector('[data-testid=chat-monitor]')
+    await sleep(800)
+    await page.getByRole('tab', { name: 'Monitor' }).click()
+    await state(size, '1_chat_por_defecto')
+    if (w === 1920) for (const q of questions) await ask('monitor', q, null)
+    else await ask('monitor', questions[1], null)
+    await state(size, '2_con_respuestas_largas')
+    const handle = page.locator('[data-testid=chat-monitor-resize]')
+    await handle.focus()
+    for (let i = 0; i < 40; i++) await page.keyboard.press('ArrowUp')
+    await state(size, '3_altura_maxima')
+    for (let i = 0; i < 40; i++) await page.keyboard.press('ArrowDown')
+    await state(size, '4_altura_minima')
+    await page.reload()
+    await page.waitForSelector('[data-testid=chat-monitor]')
+    await sleep(800)
+    await state(size, '5_tras_recargar')
+    await page.getByRole('button', { name: 'Minimize the monitor chat' }).click()
+    await state(size, '6_plegado')
+    await page.getByRole('button', { name: 'Expand the monitor chat' }).click()
+    await sleep(300)
+  }
+  // Markdown de las respuestas del agente: negrita, cursiva, listas, código y nada de HTML
+  const md = await page.evaluate(() => {
+    const art = [...document.querySelectorAll('[data-testid=chat-monitor] article:not(.items-end)')].pop()
+    const q = (sel) => art?.querySelectorAll(sel).length ?? 0
+    return {
+      strong: q('strong'), em: q('em'), ul: q('ul'), ol: q('ol'), li: q('li'), code: q('code'), pre: q('pre'),
+      rawStars: (art?.textContent ?? '').includes('**'), rawHtmlElement: q('b'), htmlAsText: (art?.textContent ?? '').includes('<b>raw html</b>'),
+    }
+  })
+  note(`markdown: ${JSON.stringify(md)}`)
+  writeFileSync(`${out}/chatlayout.json`, JSON.stringify({ results, md, log }, null, 2))
 }
 
 async function runLayout() {
@@ -1227,6 +1301,7 @@ try {
   else if (mode === 'chatsize') await runChatSize()
   else if (mode === 'deadgps') await runDeadGps()
   else if (mode === 'chattools') await runChatTools()
+  else if (mode === 'chatlayout') await runChatLayout()
   else if (mode === 'smooth') await runSmooth()
   else if (mode === 'fase9_2') await runFase9_2()
   else if (mode === 'fase10') await runFase10()

@@ -79,6 +79,7 @@ EXPECTED: list[tuple[str, Check | str]] = [
         payload_of(T.DETECTION_RAISED),
     ),
     ('{ "detection_id": "det-0004", "rule": "GPS_DEGRADED"', payload_of(T.DETECTION_RAISED)),
+    ('{ "detection_id": "det-0001", "rule": "LINK_ANOMALY"', payload_of(T.DETECTION_RAISED)),
     (
         '{ "detection_id": "det-0002", "rule": "ROUTE_DEVIATION", "duration_s"',
         payload_of(T.DETECTION_CLEARED),

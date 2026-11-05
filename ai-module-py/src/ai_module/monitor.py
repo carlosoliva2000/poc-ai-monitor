@@ -68,7 +68,11 @@ class Pending:
     detection_id: str
     answered: bool = False
     last_open_of: str | None = None
-    """Para un `cleared` que ha ido al LLM: la alerta cuya última detección abierta era."""
+    """Para un `cleared` que ha ido al LLM: la alerta cuya última detección abierta era (o, con
+    `link_recovery`, la alerta del secuestro cuyo enlace ha vuelto)."""
+    link_recovery: bool = False
+    """Fase 15: el cierre de una `LINK_ANOMALY` con la alerta `HIJACK` activa y la desviación de la
+    ruta aún abierta: lo atiende el LLM para publicar la recuperación (no es un cierre)."""
 
     @property
     def event_id(self) -> str:
@@ -243,6 +247,20 @@ class Monitor:
                     "was already closed."
                 )
             elif remaining := state.open_detections_of(alert.alert_id):
+                link_alert = (
+                    state.link_recovery_alert(detection_id) if self.config.link_anomaly else None
+                )
+                if link_alert is not None:
+                    for_llm.append(
+                        Pending(
+                            event,
+                            kind,
+                            detection_id,
+                            last_open_of=link_alert.alert_id,
+                            link_recovery=True,
+                        )  # fmt: skip
+                    )
+                    continue
                 ids = ", ".join(d.detection_id for d in remaining)
                 reason = (
                     f"Detection {detection_id} was cleared; alert {alert.alert_id} "
@@ -538,7 +556,7 @@ class Monitor:
             window_since = closure_window_start(record.since if record else None, inv.as_of)
             parts.append(
                 render(
-                    secs[p.kind],
+                    secs["link_recovered" if p.link_recovery else p.kind],
                     detection_id=p.detection_id,
                     detection_json=compact_json(payload),
                     related_alerts=rt.state.describe_related_alerts(p.detection_id),
@@ -680,6 +698,7 @@ class Monitor:
             source_silent_own_alert=self.config.source_silent_own_alert,
             no_duplicate_cause=self.config.no_duplicate_cause,
             history_ids=inv.history_ids - inv.seen_ids,
+            link_recovery=self.config.link_anomaly,
         )
         if not verdict.ok:
             return self._reject(inv, "publish_alert", raw, verdict)
@@ -734,6 +753,7 @@ class Monitor:
             facts=inv.facts,
             as_of=inv.as_of,
             recovery_ack_veto=self.config.recovery_ack_veto,
+            link_recovery=self.config.link_anomaly,
         )
         if not verdict.ok:
             return self._reject(inv, "acknowledge_detection", raw, verdict)
@@ -807,10 +827,12 @@ class Monitor:
             return
         state, trace = self.rt.state, inv.trace
         trace.fallback = True
-        no_open_alert = not state.open_alerts()  # foto previa a los fallbacks
+        open_before = state.open_alerts()  # foto previa a los fallbacks
         why = f"the agent did not conclude ({trace.end_reason})"
         for p in left:
-            if p.kind == "raised" and no_open_alert:
+            # un `SENSOR_FAULT` abierto de otra fuente no explica esta detección (Fase 15)
+            explained = any(not state.foreign_sensor_fault(a, p.detection_id) for a in open_before)
+            if p.kind == "raised" and not explained:
                 evidence = list(p.event.payload.get("trigger_event_ids", []))[
                     -MAX_FALLBACK_EVIDENCE:
                 ]
@@ -834,7 +856,7 @@ class Monitor:
                     fallback=True,
                 )
                 inv.alerts[alert_id] = [p.detection_id]
-            elif p.kind == "cleared" and p.last_open_of is not None:
+            elif p.kind == "cleared" and p.last_open_of is not None and not p.link_recovery:
                 alert = state.alerts.get(p.last_open_of)
                 if alert is not None and alert.status.value == "open":
                     trace.fallback_close = True

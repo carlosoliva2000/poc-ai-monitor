@@ -31,3 +31,17 @@ gps_degraded:
   min_sats: 6            # se abre con menos satélites
   max_hdop: 3.0          # ... o con más hdop (también es el umbral de la detección)
   clear_hold_s: 5.0      # segundos de lecturas normales para cerrar
+
+# Enlace de mando (Fase 15). El controlador de la misión es el primero que se ve en la ejecución.
+# Abre con otro controlador o con la latencia o la señal fuera de los umbrales de apertura; cierra
+# cuando vuelve el controlador de la misión y latencia y señal están dentro de los de cierre
+# durante `close_hold_s`. En vuelo normal la latencia va de 30 a 56 ms y la señal de -65 a -59 dBm;
+# en el secuestro, de 116 a 128 ms y de -82 a -76 dBm. El módulo de IA la apaga con
+# `monitor.link_anomaly: false` (los assets anteriores a la Fase 15 no la conocen).
+link_anomaly:
+  enabled: true
+  open_latency_ms: 90.0
+  open_rssi_dbm: -72.0
+  close_latency_ms: 70.0
+  close_rssi_dbm: -68.0
+  close_hold_s: 5.0

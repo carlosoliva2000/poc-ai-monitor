@@ -338,3 +338,13 @@ def test_tool_call_event_is_ephemeral_and_has_its_own_prefix() -> None:
     assert event["ephemeral"] and event["asset"] is None
     assert event["source"] == "ai-module" and event["topic"].endswith("ai.agent.AgentToolCall.v1")
     EventDraft.model_validate(event)
+
+
+def test_link_anomaly_is_about_the_link_in_milliseconds() -> None:
+    link = {**DETECTION, "rule": "LINK_ANOMALY", "unit": "ms", "source": "link", "value": 122.4}
+    assert DetectionRaised.model_validate(link).source == "link"
+    for bad in (None, "gps"):
+        with pytest.raises(ValidationError, match="exige `source: link`"):
+            DetectionRaised.model_validate({**link, "source": bad})
+    with pytest.raises(ValidationError, match="milisegundos"):
+        DetectionRaised.model_validate({**link, "unit": "m"})

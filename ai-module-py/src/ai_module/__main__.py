@@ -15,7 +15,7 @@ from .agent.assets import DEFAULT_ASSETS, Assets
 from .agent.llm import ModelMismatchError, OpenAiLlm, check_served_model
 from .agent.profiles import DEFAULT_PROFILES, load_profile
 from .bus_client import DEFAULT_PLATFORM, BusClient, fetch_mission_plan
-from .detector import Detector
+from .detector import Detector, load_config
 from .module import AiModule
 from .runtime import Runtime
 
@@ -48,7 +48,10 @@ async def run(
             raise SystemExit(f"error: {exc}") from exc
         log.info("LLM server checked: serves %s", assets.llm.model)
     llm = OpenAiLlm(url, assets.llm.api_key, assets.llm.model)
-    detector = Detector()
+    config = load_config()
+    if not detector_only:  # con agentes, la regla del enlace va con la ayuda del monitor
+        config.link_anomaly.enabled &= assets.agent("monitor").link_anomaly
+    detector = Detector(config)
 
     async def bootstrap_plan() -> None:
         """Si la simulación ya está en marcha, no llegará `MissionPlanned`: se pide el plan."""

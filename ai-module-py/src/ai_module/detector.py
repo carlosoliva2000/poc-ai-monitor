@@ -11,6 +11,8 @@ Reglas (umbrales en `config/detector.yaml`), todas con histéresis y un solo avi
 - `SOURCE_DISCREPANCY`: distancia GPS-radar (GPS interpolado al instante del radar).
 - `SOURCE_SILENT`: tiempo sin eventos de una fuente (una detección por fuente).
 - `GPS_DEGRADED`: mala calidad del GPS (`fix`, satélites o `hdop`).
+- `LINK_ANOMALY` (Fase 15): el enlace de mando cambia de controlador (el de la misión es el primero
+  que se ve en la ejecución) o se degradan su latencia o su señal.
 
 Severidades: `ROUTE_DEVIATION` y `SOURCE_DISCREPANCY` abren en `medium` y pasan a `high` al
 empeorar (o abren ya en `high` si el primer valor supera el umbral de empeora); `SOURCE_SILENT`
@@ -44,6 +46,7 @@ from poc_contracts.payloads import (
     DetectionRaised,
     DetectionUpdated,
     DetectionWindow,
+    LinkStatus,
     MissionPlanned,
     Payload,
     PositionUpdated,
@@ -131,11 +134,23 @@ class GpsDegradedConfig(_Config):
     clear_hold_s: float
 
 
+class LinkAnomalyConfig(_Config):
+    """Umbrales de `LINK_ANOMALY` con histéresis (latencia en ms, señal en dBm)."""
+
+    enabled: bool
+    open_latency_ms: float
+    open_rssi_dbm: float
+    close_latency_ms: float
+    close_rssi_dbm: float
+    close_hold_s: float
+
+
 class DetectorConfig(_Config):
     route_deviation: ThresholdConfig
     source_discrepancy: DiscrepancyConfig
     source_silent: SilentConfig
     gps_degraded: GpsDegradedConfig
+    link_anomaly: LinkAnomalyConfig
 
 
 def load_config(text: str | None = None) -> DetectorConfig:
@@ -255,6 +270,8 @@ class Detector:
             out += self._on_position(event)
         elif event.type == EventType.TRACK_UPDATED:
             out += self._on_track(event)
+        elif event.type == EventType.LINK_STATUS:
+            out += self._on_link(event)
         return out
 
     # --- Reinicio y reloj ---------------------------------------------------------------
@@ -272,6 +289,7 @@ class Detector:
         self._last_seen_id: dict[SensorSource, str] = {}
         self._silence_enabled = True
         self._last_gps_t: float | None = None
+        self._mission_controller: str | None = None
 
     def _init_sources(self) -> None:
         """Inicializa `last_seen` de las fuentes al primer instante visto."""
@@ -502,6 +520,76 @@ class Detector:
             if episode.calm_since is None:
                 episode.calm_since = self._clock
             if self._clock - episode.calm_since >= cfg.clear_hold_s - _EPS:
+                out.append(self._clear(episode))
+        return out
+
+    # --- LINK_ANOMALY -------------------------------------------------------------------
+
+    def _on_link(self, event: EventDraft) -> list[EventDraft]:
+        """Abre con otro controlador o con la latencia o la señal fuera de los umbrales de apertura
+        (`high` con otro controlador, `medium` si solo se degrada la calidad) y cierra cuando vuelve
+        el controlador de la misión y latencia y señal están dentro de los umbrales de cierre
+        durante `close_hold_s`."""
+        cfg = self.config.link_anomaly
+        link = LinkStatus.model_validate(event.payload)
+        if self._mission_controller is None:
+            self._mission_controller = link.controller_id  # el de la misión: el primero visto
+        if not cfg.enabled:
+            return []
+        foreign = link.controller_id != self._mission_controller
+        poor = link.latency_ms > cfg.open_latency_ms or link.rssi_dbm < cfg.open_rssi_dbm
+        normal = (
+            not foreign
+            and link.latency_ms < cfg.close_latency_ms
+            and link.rssi_dbm > cfg.close_rssi_dbm
+        )
+        severity = Severity.HIGH if foreign else Severity.MEDIUM
+        quality = f"latency {_fmt(link.latency_ms)} ms, signal {_fmt(link.rssi_dbm)} dBm"
+        message = (
+            f"The command link has changed controller: {self._mission_controller} → "
+            f"{link.controller_id} ({quality})"
+            if foreign
+            else f"The command link has degraded: {quality}"
+        )
+        key = (Rule.LINK_ANOMALY, SensorSource.LINK)
+        episode = self._episodes.get(key)
+        if episode is None:
+            if not (foreign or poor):
+                return []
+            raised = self._raise(
+                Rule.LINK_ANOMALY,
+                SensorSource.LINK,
+                severity,
+                value=link.latency_ms,
+                threshold=cfg.open_latency_ms,
+                unit="ms",
+                since=self._clock,
+                trigger=[event.event_id],
+                message=message,
+            )
+            self._episodes[key].worsened = severity == Severity.HIGH
+            return [raised]
+        out: list[EventDraft] = []
+        episode.max_value = max(episode.max_value, link.latency_ms)
+        if not normal:
+            episode.calm_since = None
+            if severity == Severity.HIGH and not episode.worsened:
+                episode.worsened = True
+                episode.severity = Severity.HIGH
+                out.append(
+                    self._update(
+                        episode,
+                        link.latency_ms,
+                        cfg.open_latency_ms,
+                        "ms",
+                        [event.event_id],
+                        message,
+                    )
+                )
+        else:
+            if episode.calm_since is None:
+                episode.calm_since = self._clock
+            if self._clock - episode.calm_since >= cfg.close_hold_s - _EPS:
                 out.append(self._clear(episode))
         return out
 

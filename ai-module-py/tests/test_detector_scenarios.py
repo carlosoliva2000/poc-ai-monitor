@@ -13,7 +13,7 @@ from poc_contracts.envelope import EventDraft
 from poc_contracts.payloads import DetectionCleared, DetectionRaised
 
 RUNS = Path(__file__).resolve().parents[2] / "runs"
-SCENARIOS = ["nominal", "wind", "spoofing", "hijack", "faults", "demo"]
+SCENARIOS = ["nominal", "wind", "spoofing", "hijack", "faults", "demo", "demo-battery"]
 
 
 @dataclass
@@ -76,6 +76,8 @@ def test_every_raised_is_cleared_and_payloads_validate(
     ids = [d.event_id for d in detections]
     assert len(ids) == len(set(ids)), table(detections)
     for episode in episodes:
+        if scenario == "demo-battery" and episode.source == "battery":
+            continue  # la batería sigue callada hasta el final del vuelo
         assert episode.cleared is not None, f"{episode} sigue abierta\n{table(detections)}"
         assert len(episode.updated) <= 1, table(detections)
 
@@ -84,7 +86,7 @@ def test_nominal_has_no_detections(results: dict[str, list[EventDraft]]) -> None
     assert results["nominal"] == [], table(results["nominal"])
 
 
-@pytest.mark.parametrize("scenario", ["wind", "spoofing", "hijack", "demo"])
+@pytest.mark.parametrize("scenario", ["wind", "spoofing", "hijack", "demo", "demo-battery"])
 def test_each_label_fires_its_expected_rules_once(
     scenario: str, results: dict[str, list[EventDraft]]
 ) -> None:
@@ -120,13 +122,19 @@ def test_spoofing_discrepancy_then_recovery_deviation(
     assert len(episodes) == 2
 
 
-def test_hijack_is_a_route_deviation_that_gets_worse(
+def test_hijack_is_a_link_anomaly_and_then_a_route_deviation_that_gets_worse(
     results: dict[str, list[EventDraft]],
 ) -> None:
     episodes = episodes_of(results["hijack"])
-    assert [(e.rule, e.source) for e in episodes] == [("ROUTE_DEVIATION", None)]
-    assert 335.0 <= episodes[0].raised <= 380.0
-    assert len(episodes[0].updated) == 1
+    assert [(e.rule, e.source) for e in episodes] == [
+        ("LINK_ANOMALY", "link"),  # el controlador cambia a T+05:35 (lnk-0067)
+        ("ROUTE_DEVIATION", None),
+    ], table(results["hijack"])
+    link, route = episodes
+    assert link.raised == 335.0 and link.cleared == 385.0  # vuelve el controlador a T+06:20 + 5 s
+    assert 335.0 <= route.raised <= 380.0 and route.raised > link.raised
+    assert len(route.updated) == 1 and not link.updated  # el enlace ya abre en `high`
+    assert route.cleared > link.cleared  # el enlace vuelve antes que la ruta
 
 
 def test_faults_each_muted_source_fires_its_own_silent_detection(
@@ -183,5 +191,16 @@ def test_demo_has_exactly_the_three_anomalies(results: dict[str, list[EventDraft
         ("ROUTE_DEVIATION", None),  # viento
         ("SOURCE_DISCREPANCY", None),  # spoofing
         ("ROUTE_DEVIATION", None),  # recuperación tras el spoofing
-        ("ROUTE_DEVIATION", None),  # secuestro
+        ("LINK_ANOMALY", "link"),  # secuestro: cambia el controlador
+        ("ROUTE_DEVIATION", None),  # secuestro: se desvía de la ruta
     ], table(results["demo"])
+
+
+def test_demo_battery_is_demo_plus_the_silent_battery(
+    results: dict[str, list[EventDraft]],
+) -> None:
+    demo = [(e.rule, e.source, e.raised) for e in episodes_of(results["demo"])]
+    battery = [(e.rule, e.source, e.raised) for e in episodes_of(results["demo-battery"])]
+    silent = [e for e in battery if e[0] == "SOURCE_SILENT"]
+    assert [(r, s) for r, s, _ in silent] == [("SOURCE_SILENT", "battery")]
+    assert [e for e in battery if e[0] != "SOURCE_SILENT"] == demo

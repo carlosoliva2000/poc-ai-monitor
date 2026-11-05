@@ -26,6 +26,9 @@ RECOVERING = AlertPhase.RECOVERING.value
 TAG_RECOVERY_ACK_VETO = "recovery_ack_veto"  # etiqueta del rechazo en la traza
 TAG_RECOVERY_ACK_NO_METRICS = "recovery_ack_no_metrics"
 SILENT_CAUSE = "SENSOR_FAULT"  # causa de la alerta propia de una fuente callada
+TAG_FOREIGN_FAULT = "foreign_sensor_fault"  # reconocer o sustituir un fallo de otra fuente
+TAG_LINK_RECOVERY_ACK_VETO = "link_recovery_ack_veto"  # reconocer la recuperación del secuestro
+HIJACK_CAUSE = "HIJACK"
 
 
 class EventIndex:
@@ -152,6 +155,49 @@ def is_new_source_silent(detection_ids: list[str], state: MonitorState) -> bool:
     )
 
 
+def foreign_fault_message(alert: Any, detection_id: str, state: MonitorState) -> str:
+    """Rechazo de reconocer o sustituir con `detection_id` un `SENSOR_FAULT` de otra fuente (Fase
+    15): dice de qué fuente es la alerta y qué dice la detección, y pide alerta propia."""
+    detection = state.detections[detection_id]
+    return (
+        f"{alert.alert_id} ({alert.cause}) is a fault of the {state.describe_fault_sources(alert)} "
+        f"and {detection_id} ({detection.rule}: {detection.message}) is a different problem: "
+        "it needs its own alert (publish_alert without supersedes)"
+    )
+
+
+def first_foreign_fault(alert: Any, detection_ids: list[str], state: MonitorState) -> str | None:
+    """La primera de esas detecciones que no tiene que ver con el `SENSOR_FAULT` `alert`."""
+    return next((i for i in detection_ids if state.foreign_sensor_fault(alert, i)), None)
+
+
+def link_recovery_alert(detection_ids: list[str], state: MonitorState, enabled: bool) -> Any:
+    """Fase 15 (`monitor.link_anomaly`): la alerta `HIJACK` cuya recuperación es alguna de esas
+    detecciones (el cierre de la `LINK_ANOMALY` con la desviación de la ruta aún abierta), o
+    `None`."""
+    if not enabled:
+        return None
+    return next((a for i in detection_ids if (a := state.link_recovery_alert(i)) is not None), None)
+
+
+def link_recovery_errors(args: Any, alert: Any) -> list[str]:
+    """Qué dicen los datos sobre la recuperación del secuestro: la causa, el `supersedes` y la fase
+    los decide el código; la severidad (`low` o `medium`) es del modelo. Los mensajes llevan datos
+    y nada que copiar."""
+    errors: list[str] = []
+    what = f"hijacking recovery of {alert.alert_id} ({alert.cause}): the link is back to normal"
+    if args.cause.value != alert.cause or args.supersedes != alert.alert_id:
+        errors.append(f"{what}; expected cause {alert.cause} and supersedes {alert.alert_id}")
+    if args.severity.value not in RECOVERY_SEVERITIES:
+        errors.append(f"{what}: severity high does not fit, use low or medium")
+    if args.phase is not None and args.phase.value != RECOVERING:
+        errors.append(
+            "wrong phase for this data (the link is back to normal and the drone is still off "
+            "the route): use recovering"
+        )
+    return errors
+
+
 def _json(value: bool | None) -> str:
     return "null" if value is None else str(value).lower()
 
@@ -227,6 +273,7 @@ def check_coherence(
     as_of: float,
     *,
     require_checks: bool,
+    link_recovery: bool = False,
 ) -> list[str]:
     """Guardrail de coherencia de `publish_alert`: (a) cada valor de `checks` coincide con las
     tools de la invocación y el estado; (b) la causa es coherente con ellos. Cada rechazo dice
@@ -301,6 +348,7 @@ def check_coherence(
                 f"or a GPS jump of 30 m or more (gps_max_step_m={_num(step)})"
             )
     handled_above = ctx.on_route_deviation and ctx.gps_related  # ya está dicho arriba
+    handled_above = handled_above or link_recovery  # la recuperación del secuestro, aparte
     if given_phase == RECOVERING and not ctx.jump and not handled_above:
         errors.append(_phase_error(ctx, given_phase))
     return errors
@@ -407,6 +455,7 @@ def check_publish_alert(
     source_silent_own_alert: bool = False,
     no_duplicate_cause: bool = False,
     history_ids: frozenset[str] | set[str] = frozenset(),
+    link_recovery: bool = False,
 ) -> Verdict:
     args, errors = _parse(PublishAlertArgs, raw)
     if args is None:
@@ -416,7 +465,13 @@ def check_publish_alert(
     unseen: list[str] = []
     from_history: list[str] = []
     no_change: str | None = None
-    phase = effective_phase(args, facts or InvocationFacts(), state, as_of)
+    tag: str | None = None
+    link_alert = link_recovery_alert(args.detection_ids, state, link_recovery)
+    phase = (
+        (args.phase.value if args.phase is not None else RECOVERING)
+        if link_alert is not None
+        else effective_phase(args, facts or InvocationFacts(), state, as_of)
+    )
     for event_id in args.evidence_event_ids:
         sim_time = index.get(event_id)
         if sim_time is None:
@@ -463,6 +518,9 @@ def check_publish_alert(
                 f"({target.cause}) and gets its own alert: publish_alert with cause "
                 f"{SILENT_CAUSE} and without supersedes"
             )
+        elif (foreign := first_foreign_fault(target, args.detection_ids, state)) is not None:
+            errors.append(foreign_fault_message(target, foreign, state))
+            tag = TAG_FOREIGN_FAULT
         elif (
             args.cause.value == target.cause
             and args.severity.value == target.severity
@@ -491,19 +549,36 @@ def check_publish_alert(
         ):
             # solo cuentan las abiertas (la cabeza de cada cadena); un SOURCE_SILENT nuevo queda
             # exento: la regla `source_silent_own_alert` le exige una alerta propia
-            same = next((a for a in state.open_alerts() if a.cause == args.cause.value), None)
+            same = next(
+                (
+                    a
+                    for a in state.open_alerts()
+                    if a.cause == args.cause.value
+                    and first_foreign_fault(a, args.detection_ids, state) is None
+                ),
+                None,
+            )
             if same is not None:
                 errors.append(
                     f"{same.alert_id} ({same.cause}) is open: use supersedes {same.alert_id} if "
                     "the cause or severity changes, or acknowledge_detection"
                 )
+    if link_alert is not None and not errors:
+        errors += link_recovery_errors(args, link_alert)
     if coherence and not errors:
         errors += check_coherence(
-            args, facts or InvocationFacts(), state, as_of, require_checks=require_checks
+            args,
+            facts or InvocationFacts(),
+            state,
+            as_of,
+            require_checks=require_checks,
+            link_recovery=link_alert is not None,
         )
     if no_change and not errors:
         errors.append(no_change)
-    return Verdict(args=args, errors=[*errors, *from_history], unseen_evidence=unseen, phase=phase)
+    return Verdict(
+        args=args, errors=[*errors, *from_history], unseen_evidence=unseen, phase=phase, tag=tag
+    )
 
 
 def _missing_detection_ids(pending: set[str] | None) -> str:
@@ -521,6 +596,7 @@ def check_acknowledge(
     facts: InvocationFacts | None = None,
     as_of: float = 0.0,
     recovery_ack_veto: bool = False,
+    link_recovery: bool = False,
 ) -> Verdict:
     """`unanswered`: detecciones del lote que aún no tienen respuesta; `pending`: todas las del
     lote. Con `recovery_ack_veto` (Fase 14.2) no se puede reconocer la recuperación del GPS: un
@@ -543,6 +619,22 @@ def check_acknowledge(
             )
         elif detection_id not in unanswered:
             errors.append(f"detection {detection_id!r} already has a response")
+    if not errors and args.alert_id is not None:
+        target = state.alerts[args.alert_id]
+        if (foreign := first_foreign_fault(target, args.detection_ids, state)) is not None:
+            return Verdict(
+                errors=[foreign_fault_message(target, foreign, state)], tag=TAG_FOREIGN_FAULT
+            )
+    if not errors and (alert := link_recovery_alert(args.detection_ids, state, link_recovery)):
+        return Verdict(
+            errors=[
+                f"hijacking recovery of {alert.alert_id} ({alert.cause}): the command link is back "
+                "to normal and the drone is still off the route, so it cannot be acknowledged; "
+                f"publish the alert with that cause, supersedes {alert.alert_id} and phase "
+                "recovering"
+            ],
+            tag=TAG_LINK_RECOVERY_ACK_VETO,
+        )
     if not errors and source_silent_own_alert and is_new_source_silent(args.detection_ids, state):
         errors.append(
             "a SOURCE_SILENT warning is always a different fault and gets its own alert: "

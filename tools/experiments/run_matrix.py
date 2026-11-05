@@ -51,7 +51,17 @@ SCRIPT_QUESTIONS = (
     "monitor:342:What did you look at on the link?",
     f"report:end:{FINAL_QUESTION}",
 )
-DEFAULT_ASKS = {"demo": list(SCRIPT_QUESTIONS)}
+# Guion de la Fase 15 en `demo-battery` (con la batería ya callada): cuatro preguntas al chat del
+# monitor y dos al del informe.
+BATTERY_SCRIPT_QUESTIONS = (
+    "monitor:60:What is the current state of the battery?",
+    "monitor:120:What was the last battery event and what data does it have?",
+    "monitor:350:Check the link now",
+    "monitor:400:Open an alert for the battery",
+    f"report:end:{FINAL_QUESTION}",
+    "report:end:What did the GPS do at T+03:42?",
+)
+DEFAULT_ASKS = {"demo": list(SCRIPT_QUESTIONS), "demo-battery": list(BATTERY_SCRIPT_QUESTIONS)}
 OTHER_ASKS = [f"report:end:{FINAL_QUESTION}"]
 
 

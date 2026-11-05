@@ -259,10 +259,20 @@ def _hijack(c: _Checks, label: Label, dev: Series, until_s: float | None) -> Non
     c.recovery(label, dev, until_s)
 
 
+FAULT_EVENT_TYPE = {
+    "gps": "PositionUpdated",
+    "radar": "TrackUpdated",
+    "meteo": "WindReported",
+    "link": "LinkStatus",
+    "battery": "BatteryStatus",
+}
+"""Tipo de evento que deja de publicar cada fuente silenciada."""
+
+
 def _faults(c: _Checks, labels: list[Label]) -> None:
     run = c.run
     for f in labels:
-        etype = {"gps": "PositionUpdated", "radar": "TrackUpdated"}[f.source.value]
+        etype = FAULT_EVENT_TYPE[f.source.value]
         left = [e for e in run.of_type(etype) if f.start_s <= e["sim_time"] < f.end_s]
         marks = {
             e["type"]: e["sim_time"]
@@ -407,8 +417,9 @@ def run_checks(name: str, runs_dir: Path = RUNS_DIR) -> list[Check]:
         for label in losses:
             _loss(c, label, dev)
             c.recovery(label, dev, None)
-        until_s = min((lb.start_s for lb in losses), default=run.truth.duration_s)
-        _same_as_nominal(c, load_run("nominal", runs_dir), until_s)
+        if not anomalies:  # con anomalías (demo-battery) el vuelo ya no es el nominal
+            until_s = min((lb.start_s for lb in losses), default=run.truth.duration_s)
+            _same_as_nominal(c, load_run("nominal", runs_dir), until_s)
 
     windows = [(lb.start_s, lb.end_s + MEAN_MEMORY_S) for lb in run.labels]
     quiet = max(outside(disc, windows))

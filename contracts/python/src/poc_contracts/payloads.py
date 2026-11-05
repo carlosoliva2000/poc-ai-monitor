@@ -186,6 +186,13 @@ class DetectionRaised(Payload):
         elif self.rule == Rule.GPS_DEGRADED:
             if self.source != SensorSource.GPS:
                 raise ValueError("GPS_DEGRADED exige `source: gps`")
+        elif self.rule == Rule.LINK_ANOMALY:
+            if self.source != SensorSource.LINK:
+                raise ValueError("LINK_ANOMALY exige `source: link`")
+            if self.unit != "ms":
+                raise ValueError(
+                    "LINK_ANOMALY mide la latencia en milisegundos: `unit` debe ser 'ms'"
+                )
         elif self.source is not None:
             raise ValueError(f"{self.rule} no lleva `source` (debe ser null)")
         return self

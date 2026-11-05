@@ -2,8 +2,10 @@
 
 import { ArrowUp, ChevronDown, ChevronUp } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button'
 import { useStoredState } from '@/hooks/use-stored-state'
+import { CHAT_MARKDOWN_PROPS } from '@/lib/chat-markdown'
 import type { ChatEntry } from '@/lib/derive'
 import { formatT } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -76,7 +78,7 @@ export function ChatPanel({ title, agentLabel, agentClass, entries, suggestions,
   const onResizeKey = (e: React.KeyboardEvent) => {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
     e.preventDefault()
-    const current = height ?? rootRef.current?.offsetHeight ?? 240
+    const current = rootRef.current?.offsetHeight ?? height ?? 240
     const next = clampHeight(current + (e.key === 'ArrowUp' ? KEY_STEP : -KEY_STEP), maxHeight())
     setSaved((prev) => ({ ...prev, height: next }))
   }
@@ -102,7 +104,7 @@ export function ChatPanel({ title, agentLabel, agentClass, entries, suggestions,
   return (
     <div
       ref={rootRef}
-      className={cn('relative flex min-h-0 flex-col overflow-hidden border-t border-border', height === null ? 'min-h-60 flex-1' : 'shrink-0')}
+      className={cn('relative flex min-h-0 flex-col overflow-hidden border-t border-border bg-card', height === null ? 'min-h-60 flex-1' : 'shrink')}
       style={height === null ? undefined : { height }}
       data-testid={`chat-${title}`}
       data-minimized="false"
@@ -151,10 +153,10 @@ export function ChatPanel({ title, agentLabel, agentClass, entries, suggestions,
           ) : (
             <article key={m.key} className="flex flex-col gap-1 pl-3">
               <span className={cn('font-mono text-[11px] font-medium', agentClass)}>{agentLabel} → OPERATOR</span>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground text-pretty">
-                {m.text}
-                {m.streaming && <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary align-text-bottom" aria-hidden="true" />}
-              </p>
+              <div className="chat-md text-sm leading-relaxed text-foreground text-pretty" data-testid="chat-reply">
+                <ReactMarkdown {...CHAT_MARKDOWN_PROPS}>{m.text}</ReactMarkdown>
+                {m.streaming && <span className="mt-1 block h-4 w-1.5 animate-pulse bg-primary" aria-hidden="true" />}
+              </div>
               {showToolCalls && m.calls.length > 0 ? (
                 <ToolCallList calls={m.calls} title={`Tool calls (${m.calls.length})`} />
               ) : m.toolCalls.length > 0 ? (

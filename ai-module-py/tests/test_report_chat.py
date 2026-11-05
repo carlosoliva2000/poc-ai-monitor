@@ -234,7 +234,9 @@ def test_monitor_chat_streams_chunks_and_replies(tmp_path: Path) -> None:
     assert chunks and all(c.ephemeral and c.source == "ai-chat-monitor" for c in chunks)
     assert all(c.payload["reply_to"] == "ops-0001" for c in chunks)
     [reply] = of_type(published, EventType.AGENT_REPLY)
-    assert reply.payload["text"] == "Miro. Hay una alerta de viento"
+    # la respuesta es el último mensaje: lo de antes de la tool («Miro.») solo salió en streaming
+    assert reply.payload["text"] == "Hay una alerta de viento"
+    assert "Miro." in "".join(c.payload["delta"] for c in chunks)
     assert (
         reply.payload["tool_calls"] == ["get_my_alerts"] and reply.payload["reply_to"] == "ops-0001"
     )

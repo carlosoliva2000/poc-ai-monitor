@@ -74,6 +74,34 @@
 }
 
 @layer components {
+  /* Respuestas de los chats (lib/chat-markdown.ts): solo negrita, cursiva, listas y código. */
+  .chat-md p {
+    @apply my-0;
+  }
+  .chat-md p + p,
+  .chat-md * + ul,
+  .chat-md * + ol,
+  .chat-md * + pre {
+    @apply mt-2;
+  }
+  .chat-md ul {
+    @apply list-disc pl-5;
+  }
+  .chat-md ol {
+    @apply list-decimal pl-5;
+  }
+  .chat-md li {
+    @apply my-0.5;
+  }
+  .chat-md :not(pre) > code {
+    @apply rounded-sm bg-muted px-1 font-mono text-[0.85em];
+  }
+  .chat-md pre {
+    @apply overflow-x-auto rounded-md bg-muted p-2 font-mono text-xs leading-snug;
+  }
+  .chat-md {
+    overflow-wrap: anywhere;
+  }
   .md-body {
     @apply text-sm leading-relaxed text-foreground;
   }

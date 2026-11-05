@@ -337,7 +337,7 @@ def test_wait_agent_through_the_websocket(client: TestClient) -> None:
 def test_scenarios(client: TestClient) -> None:
     body = client.get("/api/scenarios").json()
     names = [s["name"] for s in body["scenarios"]]
-    assert names == ["demo", "faults", "hijack", "nominal", "spoofing", "wind"]
+    assert names == ["demo", "demo-battery", "faults", "hijack", "nominal", "spoofing", "wind"]
     demo = body["scenarios"][0]
     assert demo["generated"] is True and demo["duration_s"] == pytest.approx(556.3)
     assert demo["description"]

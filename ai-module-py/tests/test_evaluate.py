@@ -1022,3 +1022,63 @@ def test_the_module_jump_decides_the_reason_and_is_counted_apart(tmp_path: Path)
 def test_a_run_without_module_jumps_says_nothing_about_them(tmp_path: Path) -> None:
     ev = evaluate(demo_run(tmp_path, phases="recovering").write())
     assert "Saltos del GPS que calculó el módulo" not in render_markdown(ev)
+
+
+def test_text_tool_calls_are_recognised() -> None:
+    """Fase 15: una llamada a tool escrita como texto (el fallo del 14B con Qwen2.5)."""
+    from ai_module.evaluate import looks_like_text_tool_call
+
+    assert looks_like_text_tool_call('<tool_call>\n{"name": "get_events", "arguments": {}}')
+    assert looks_like_text_tool_call('{"name": "get_my_alerts", "arguments": {}}')
+    assert not looks_like_text_tool_call("The battery reported 99.6 % at T+00:20.")
+    assert not looks_like_text_tool_call('The alert is named {"name": "WIND"}')
+    assert not looks_like_text_tool_call("")
+    assert not looks_like_text_tool_call(None)
+
+
+# --- Recuperación del secuestro (Fase 15) -------------------------------------------------------
+
+
+def hijack_run(tmp_path: Path, link_response: str) -> Builder:
+    """`hijack`: la `LINK_ANOMALY` abre a T+05:35 y cierra a T+06:25; el `ROUTE_DEVIATION`, a
+    T+07:21.
+    `link_response`: `recovering` (alerta que sustituye), `ack`, `fallback` o `closed-first` (la
+    ruta vuelve antes que el enlace: no hay recuperación que contar)."""
+    b = Builder(tmp_path, "hijack")
+    link = b.raised("det-0001", 335.0, "LINK_ANOMALY", "link")
+    first = b.alert("ai-0001", 335.5, "HIJACK", link, ["det-0001"], phase="active")
+    route = b.raised("det-0002", 338.0, "ROUTE_DEVIATION")
+    b.ack("ai-0002", 338.5, route, "det-0002", "ai-0001")
+    link_end_t, route_end_t = (385.0, 441.0) if link_response != "closed-first" else (441.0, 380.0)
+    route_end = b.cleared("det-0002", route_end_t, "ROUTE_DEVIATION")
+    link_end = b.cleared("det-0001", link_end_t, "LINK_ANOMALY")
+    if link_response == "recovering":
+        b.alert("ai-0003", 385.5, "HIJACK", link_end, ["det-0001"], supersedes="ai-0001",
+                phase="recovering")  # fmt: skip
+        last = "ai-0003"
+    else:
+        target = None if link_response == "fallback" else "ai-0001"
+        b.ack("ai-0003", 385.5, link_end, "det-0001", target, fallback=link_response == "fallback")
+        last = first["event_id"]
+    b.close("ai-0004", 441.5, route_end, last)
+    return b
+
+
+@pytest.mark.parametrize(
+    ("response", "miss"),
+    [
+        ("recovering", None),
+        ("ack", "acknowledged"),
+        ("fallback", "fallback"),
+        ("closed-first", None),  # la ruta vuelve antes que el enlace: no es una recuperación
+    ],
+)
+def test_a_hijack_whose_link_returned_first_needs_its_recovering_alert(
+    tmp_path: Path, response: str, miss: str | None
+) -> None:
+    ev = evaluate(hijack_run(tmp_path, response).write())
+    assert [(m.label_id, m.detection_id, m.reason) for m in ev.recovery_misses or []] == (
+        [("A1", "det-0001", miss)] if miss else []
+    )
+    if miss:
+        assert f"❌ A1 (det-0001): sin fase `recovering` · motivo `{miss}`" in render_markdown(ev)

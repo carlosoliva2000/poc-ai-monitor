@@ -16,10 +16,10 @@ from poc_contracts.envelope import EventDraft
 from poc_contracts.run_files import LabelsFile, PlanFile, TruthFile
 
 SENSOR_TYPES = {"PositionUpdated", "TrackUpdated", "WindReported", "LinkStatus", "BatteryStatus"}
-ALL = ["demo", "faults", "hijack", "nominal", "spoofing", "wind"]
+ALL = ["demo", "demo-battery", "faults", "hijack", "nominal", "spoofing", "wind"]
 
 
-def test_all_scenarios_in_the_repo_are_the_six_expected() -> None:
+def test_all_scenarios_in_the_repo_are_the_seven_expected() -> None:
     assert list_scenarios() == ALL
 
 
@@ -241,3 +241,28 @@ def test_radar_and_meteo_ids_must_match_the_envelope_source() -> None:
     sensors["radar"]["id"] = "radar-2"
     with pytest.raises(ValidationError, match="radar-1"):
         scenario_config("nominal", sensors=sensors)
+
+
+def test_demo_battery_is_demo_without_the_silenced_battery_events(runs_dir: Path) -> None:
+    """`demo-battery` = `demo` + una batería callada desde T+25 s: mismos eventos, menos los de la
+    batería de ese tramo, más `FaultInjected`/`FaultCleared` (un `mute` no cambia el ruido)."""
+
+    def load(name: str) -> list[dict]:
+        return [json.loads(x) for x in (runs_dir / name / "events.jsonl").read_text().splitlines()]
+
+    demo, battery = load("demo"), load("demo-battery")
+    expected = [e for e in demo if not (e["type"] == "BatteryStatus" and e["sim_time"] >= 25.0)]
+    got = [e for e in battery if e["type"] not in ("FaultInjected", "FaultCleared")]
+    assert got == expected
+    faults = [e for e in battery if e["type"] in ("FaultInjected", "FaultCleared")]
+    assert [(e["type"], e["payload"]["source"], e["payload"]["origin"]) for e in faults] == [
+        ("FaultInjected", "battery", "scenario"),
+        ("FaultCleared", "battery", "scenario"),
+    ]
+    labels = json.loads((runs_dir / "demo-battery" / "labels.json").read_text())["labels"]
+    assert [(lb["id"], lb["type"], lb["source"]) for lb in labels] == [
+        ("A1", "wind", None),
+        ("A2", "gps_spoofing", None),
+        ("A3", "hijack", None),
+        ("F1", "source_silent", "battery"),
+    ]

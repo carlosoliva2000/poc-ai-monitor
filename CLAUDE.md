@@ -17,7 +17,7 @@ experiments/      Salida de run_matrix (no se versiona, salvo compare.md)
 agent-assets/     Compartido con el futuro módulo Java: prompts/, skills/, tools.json
 agent-assets-v13/ Copia congelada de agent-assets/ antes de la Fase 14.1 (no se edita): la usa el perfil `actual-textos-v13` para comparar textos
 web/              JS: la interfaz de v0 adaptada (Next.js)
-scenarios/        nominal, wind, hijack, spoofing, faults y demo (YAML con semilla)
+scenarios/        nominal, wind, hijack, spoofing, faults, demo y demo-battery (YAML con semilla)
 runs/             Salida del simulador sin intervenciones, versionada (`runs/<escenario>/`: plan, verdad, eventos esperados, etiquetas y PNG), y de cada ejecución (`runs/<escenario>/<run_id>/`, no se versiona)
 docs/  ref/       Diseño, mejoras futuras y referencias
 ```

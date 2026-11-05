@@ -294,8 +294,9 @@ def test_report_chat_without_tools_also_gets_the_data(tmp_path: Path) -> None:
     )
 
 
-def test_the_demo_default_is_chats_without_tools() -> None:
-    assert Assets().chat_tools_enabled is False
+def test_the_default_is_chats_with_read_tools() -> None:
+    """Desde la Fase 15 los chats consultan datos (el interruptor `chat.tools_enabled`)."""
+    assert Assets().chat_tools_enabled is True
 
 
 def test_the_monitor_remembers_the_last_metrics_for_the_chats(tmp_path: Path) -> None:

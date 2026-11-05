@@ -10,6 +10,7 @@ Cada YAML describe una misión completa y es **determinista** con su `seed`. Tod
 | `hijack.yaml` | Cambio de destino no autorizado en el tramo WP4→BASE, con pista en el enlace; se recupera el control | `HIJACK` |
 | `faults.yaml` | Nominal con fallos programados: radar silenciado (T+02:00 a T+03:00), pérdida de GPS de 45 s en el tramo WP3→WP4 (T+04:05 a T+04:50) y GPS silenciado (T+05:00 a T+05:12) | `SOURCE_SILENT` → `SENSOR_FAULT`; `GPS_DEGRADED` + `SOURCE_DISCREPANCY` → `GPS_JAMMING` (o `SENSOR_FAULT`), probado de forma automática (lo mismo que se hará a mano con el modo interactivo) |
 | `demo.yaml` | Las tres anomalías en un mismo vuelo | La demo |
+| `demo-battery.yaml` | `demo` con la batería silenciada desde T+00:25 hasta el final (`faults`: `mute`, `end_s` 900, recortado al fin del vuelo) | Un fallo de sensor que sigue abierto mientras pasan las demás anomalías (un `SENSOR_FAULT` es de una sola fuente) |
 
 ## Campos
 - `seed`, `t0` (ISO UTC; `event_time = t0 + sim_time`), `max_duration_s` (si se alcanza, `MissionCompleted` con `completed: false, reason: timeout`).
@@ -39,7 +40,8 @@ Entre paréntesis, los valores de referencia de una simulación de la misma fís
 - `nominal`: desviación de la verdad y del GPS respecto al plan < 15 m en todo el vuelo, esquinas incluidas (≈ 13 m); distancia GPS–radar dentro del ruido.
 - `wind`: desviación máxima entre 40 y 120 m durante el episodio (≈ 52 m); GPS y radar coinciden; el dron recupera la ruta.
 - `spoofing`: el GPS se mantiene a < 15 m del plan mientras dura el engaño (< 10 m); la verdad (y el radar) se alejan hasta unos 70–90 m (≈ 75 m); al final del engaño el GPS salta y el dron corrige.
-- `hijack`: la verdad y el GPS se alejan cientos de metros hacia el `target` (≈ 700 m); `LinkStatus` cambia durante el secuestro; tras recuperar el control se reincorpora a la ruta, vuelve a la base y la misión se completa.
+- `hijack`: la verdad y el GPS se alejan cientos de metros hacia el `target` (≈ 700 m); `LinkStatus` cambia durante el secuestro (el detector avisa con `LINK_ANOMALY` a T+05:35, antes que la desviación, y cierra a T+06:25); tras recuperar el control se reincorpora a la ruta, vuelve a la base y la misión se completa.
 - `faults`: trayectoria idéntica a `nominal` hasta T+245 s, y eventos de las fuentes idénticos a los de `nominal` salvo los silenciados y los del GPS durante la pérdida (a partir de ella cambia el GPS y la trayectoria). En `events.jsonl` no hay `TrackUpdated` entre 120 y 180 s ni `PositionUpdated` entre 300 y 312 s, y están los `FaultInjected`/`FaultCleared` correspondientes. Durante la pérdida (245–290 s) el `PositionUpdated` lleva `fix: none`, `sats: 0` y `hdop` alto; la verdad se desvía más de 40 m de la ruta mientras el GPS (la estima) sigue a menos de 15 m, y el radar ve la desviación real.
+- `demo-battery`: los mismos eventos que `demo` salvo los de la batería desde T+25 s (un `mute` no cambia el ruido), con `FaultInjected`/`FaultCleared` y la etiqueta `F1` (`source_silent`, batería), que dura hasta el fin del vuelo.
 - `demo`: las tres anomalías se ven separadas en el tiempo, en el orden wind → spoofing → hijack.
 Si con estos parámetros no se cumple algún criterio, ajusta los parámetros del YAML, no la física.

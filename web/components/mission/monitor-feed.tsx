@@ -55,7 +55,7 @@ export function MonitorFeed({ events, data, activity, toolCalls }: Props) {
   }, [feed.length, data.pending.length, toolCalls.length])
 
   return (
-    <div className="flex min-h-0 flex-[3] flex-col">
+    <div className="flex min-h-48 flex-[3] flex-col overflow-hidden">
       <Episodes data={data} />
       <div
         ref={scrollRef}
@@ -63,7 +63,7 @@ export function MonitorFeed({ events, data, activity, toolCalls }: Props) {
           const el = e.currentTarget
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48
         }}
-        className="flex min-h-24 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3"
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3"
         role="log"
         aria-live="polite"
         data-testid="monitor-feed"

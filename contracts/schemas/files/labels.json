@@ -107,7 +107,8 @@
         "ROUTE_DEVIATION",
         "SOURCE_DISCREPANCY",
         "SOURCE_SILENT",
-        "GPS_DEGRADED"
+        "GPS_DEGRADED",
+        "LINK_ANOMALY"
       ],
       "title": "Rule",
       "type": "string"

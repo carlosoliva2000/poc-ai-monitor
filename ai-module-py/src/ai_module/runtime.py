@@ -78,7 +78,8 @@ class Runtime:
 
     def __post_init__(self) -> None:
         self.factory = EventFactory(self.ids)
-        self.state = MonitorState(self.assets.agent("monitor").last_decisions_in_state)
+        monitor = self.assets.agent("monitor")
+        self.state = MonitorState(monitor.last_decisions_in_state, monitor.sensor_fault_per_source)
 
     # --- Ejecución actual -----------------------------------------------------------------
 

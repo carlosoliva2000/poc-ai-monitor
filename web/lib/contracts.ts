@@ -45,7 +45,7 @@ export type Waypoint = { id: string; x: number; y: number; eta_s: number }
 
 export type Detection = {
   detection_id: string
-  rule: 'ROUTE_DEVIATION' | 'SOURCE_DISCREPANCY' | 'SOURCE_SILENT' | 'GPS_DEGRADED'
+  rule: 'ROUTE_DEVIATION' | 'SOURCE_DISCREPANCY' | 'SOURCE_SILENT' | 'GPS_DEGRADED' | 'LINK_ANOMALY'
   severity: Severity
   value: number
   threshold: number

@@ -158,7 +158,9 @@ def detection_event(
             "severity": severity,
             "value": 35.0,
             "threshold": 30.0,
-            "unit": {"SOURCE_SILENT": "s", "GPS_DEGRADED": "hdop"}.get(rule, "m"),
+            "unit": {"SOURCE_SILENT": "s", "GPS_DEGRADED": "hdop", "LINK_ANOMALY": "ms"}.get(
+                rule, "m"
+            ),
             "source": source,
             "window": {"since": sim_time - 2, "until": sim_time},
             "trigger_event_ids": list(trigger),

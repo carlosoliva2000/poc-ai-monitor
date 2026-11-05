@@ -15,7 +15,7 @@ from platform_app.scenario_metrics import (
     run_checks,
 )
 
-ALL = ["demo", "faults", "hijack", "nominal", "spoofing", "wind"]
+ALL = ["demo", "demo-battery", "faults", "hijack", "nominal", "spoofing", "wind"]
 
 
 @pytest.mark.parametrize("name", ALL)

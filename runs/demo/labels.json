@@ -40,6 +40,7 @@
       "start_s": 335.0,
       "end_s": 380.0,
       "expected_rules": [
+        "LINK_ANOMALY",
         "ROUTE_DEVIATION"
       ],
       "expected_cause": "HIJACK",

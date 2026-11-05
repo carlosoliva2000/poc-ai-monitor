@@ -518,7 +518,7 @@ RECOVERY_REASONS = {
 
 @dataclass
 class RecoveryMiss:
-    """Una recuperación del GPS que no se publicó con `phase: recovering`."""
+    """Una recuperación (del GPS o del secuestro) que no se publicó con `phase: recovering`."""
 
     label_id: str
     detection_id: str
@@ -543,6 +543,32 @@ def metrics_seen(record: dict[str, Any] | None) -> tuple[bool, float | None]:
     return called, step
 
 
+def hijack_recovery_miss(data: RunData, label: Label) -> RecoveryMiss | None:
+    """Fase 15: un secuestro cuyo enlace volvió (cierre de la `LINK_ANOMALY`) antes de que el
+    dron vuelva a la ruta (cierre del `ROUTE_DEVIATION`) y que no tiene alerta `HIJACK` en fase
+    `recovering`. Sin esas dos detecciones (ejecuciones anteriores a la regla del enlace),
+    `None`."""
+    items = data_items_of(data, label)
+
+    def cleared_at(rule: str) -> Item | None:
+        return next((i for i in items if i.rule == rule and i.kind == "Cleared"), None)
+
+    link, route = cleared_at("LINK_ANOMALY"), cleared_at("ROUTE_DEVIATION")
+    if link is None or route is None or link.event["sim_time"] >= route.event["sim_time"]:
+        return None
+    alerts = label_alerts(data, label)
+    if any(a["payload"].get("phase") == "recovering" for a in alerts):
+        return None
+    response = link.first
+    if response is None or response.fallback:
+        reason = "fallback"
+    elif response.kind == "acknowledge":
+        reason = "acknowledged"
+    else:
+        reason = "other"
+    return RecoveryMiss(label.id, link.detection_id, reason)
+
+
 def recovery_misses(data: RunData) -> list[RecoveryMiss] | None:
     """Etiquetas de spoofing o pérdida de GPS cuyo `ROUTE_DEVIATION` de la recuperación no dio
     ninguna alerta `recovering`, con el motivo. `None` si las alertas no llevan `phase`
@@ -551,6 +577,10 @@ def recovery_misses(data: RunData) -> list[RecoveryMiss] | None:
         return None
     misses: list[RecoveryMiss] = []
     for label in data.labels:
+        if label.type == LabelType.HIJACK:
+            if (miss := hijack_recovery_miss(data, label)) is not None:
+                misses.append(miss)
+            continue
         if label.type not in RECOVERY_LABELS:
             continue
         if any(a["payload"].get("phase") == "recovering" for a in label_alerts(data, label)):
@@ -641,6 +671,18 @@ def percentile(values: list[float], q: float) -> float:
     return ordered[min(len(ordered) - 1, round(q * (len(ordered) - 1)))] if ordered else 0.0
 
 
+TEXT_TOOL_CALL_RE = re.compile(
+    r"<tool_call>|\{\s*\"name\"\s*:\s*\"(?:get_|load_skill|publish_alert|acknowledge_detection|"
+    r"close_alert)"
+)
+
+
+def looks_like_text_tool_call(content: str | None) -> bool:
+    """El 14B a veces escribe una llamada a tool como texto (`<tool_call>{"name": …}`) en vez de
+    usar el mecanismo de tool calls: se cuenta sobre el texto de una llamada sin `tool_calls`."""
+    return bool(content) and TEXT_TOOL_CALL_RE.search(content or "") is not None
+
+
 def agent_stats(trace: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     stats: dict[str, dict[str, Any]] = {}
     for agent in sorted({t["agent"] for t in trace}):
@@ -669,6 +711,17 @@ def agent_stats(trace: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             "reasoning_tokens_reported": any(c.get("reasoning_tokens") is not None for c in calls),
             "latency_max": max(latencies, default=0.0),
             "tools": dict(tools),
+            "text_tool_calls": sum(
+                1
+                for c in calls
+                if not c["tool_calls"] and looks_like_text_tool_call(c.get("content"))
+            ),
+            "foreign_fault_rejections": sum(
+                1
+                for t in records
+                for r in t["guardrail_rejections"]
+                if r.get("tag") == "foreign_sensor_fault"
+            ),
             "skills_by_model": model_skills,
             "skills_guided": guided_skills,
             "invalid_json": sum(t["invalid_json"] for t in records),
@@ -917,6 +970,8 @@ AID_NAMES = {
     "recovery_ack_veto": "veto del reconocimiento de la recuperación",
     "fill_link_anomalous": "link_anomalous lo rellena el módulo",
     "recovery_jump_from_module": "salto de la recuperación calculado por el módulo",
+    "sensor_fault_per_source": "un fallo de sensor es de una sola fuente",
+    "link_anomaly": "regla del enlace y recuperación del secuestro",
     "guided_skills": "modo guiado",
 }
 
@@ -1106,8 +1161,9 @@ def phase_section(ev: Evaluation) -> list[str]:
         return lines + ["n/d: las alertas de esta ejecución no llevan `phase` (anterior a v0.14)."]
     lines.append(
         "La fase de cada alerta va en la lista de arriba (informativo: `recovering` solo en la "
-        "recuperación del GPS, su severidad es `low` o `medium` y la elige el modelo). Una "
-        "recuperación sin alerta `recovering` cuenta como fallo de ciclo de vida."
+        "recuperación del GPS y en la del secuestro cuando el enlace vuelve antes que la ruta; su "
+        "severidad es `low` o `medium` y la elige el modelo). Una recuperación sin alerta "
+        "`recovering` cuenta como fallo de ciclo de vida."
     )
     if not ev.recovery_misses:
         lines.append("- Recuperaciones sin fase `recovering`: 0")
@@ -1249,7 +1305,9 @@ def agents_section(ev: Evaluation) -> list[str]:
             f"**máximo de prompt en una llamada: {s['max_prompt_tokens']}**",
             f"- Latencia por llamada: media {_num(s['latency_mean'], ' s')}, "
             f"p50 {_num(s['latency_p50'], ' s')}, máx. {_num(s['latency_max'], ' s')}",
-            f"- Llamadas por tool: {tools}",
+            f"- Llamadas por tool: {tools} · escritas como texto en vez de como tool call: "
+            f"{s['text_tool_calls']} · rechazos por mezclar fuentes de un fallo de sensor: "
+            f"{s['foreign_fault_rejections']}",
             f"- Skills cargadas por el modelo: {s['skills_by_model']} · precargadas por el modo "
             f"guiado: {s['skills_guided']}",
             f"- JSON inválido: {s['invalid_json']} · rechazos de guardrails: {s['rejections']} · "

@@ -95,7 +95,9 @@ class Chat:
         if self.conversation == ConversationId.REPORT:
             values["report_markdown"] = self.report.markdown if self.report else ""
         tools_on = rt.assets.chat_tools_enabled
-        if not tools_on:  # sin tools: el sistema lleva las alertas con su razonamiento y los hechos
+        if self.conversation == ConversationId.MONITOR or not tools_on:
+            # el chat del monitor lleva siempre sus alertas con los `checks` y los últimos hechos
+            # que miró (sin la prosa del monitor); con tools, además, puede consultar el resto
             values["alerts_detail"] = rt.state.describe_alerts_detail(explanation=False)
             values["last_facts"] = rt.describe_last_facts()
         trace.aids = {"chat_tools_enabled": tools_on}
@@ -137,7 +139,10 @@ class Chat:
                 on_delta=chunk,
                 on_tool_call=rt.tool_call_listener(self.agent_name, invocation_id, event.event_id),
             )
-            text = result.streamed_text.strip() or result.text.strip()
+            # con tools, el texto de antes de una llamada («voy a consultar…») no es la respuesta:
+            # lo es el último mensaje; sin tools, lo entregado en streaming es el mismo texto
+            final = result.text.strip()
+            text = final if result.tool_names and final else result.streamed_text.strip() or final
             if not text:
                 text = f"I could not answer ({result.end_reason}). Try asking the question again."
             tool_names = result.tool_names

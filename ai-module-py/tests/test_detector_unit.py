@@ -435,3 +435,83 @@ def test_gps_degraded_message_names_the_failing_values() -> None:
     message = DetectionRaised.model_validate(out[0].payload).message
     assert "4 satellites (minimum 6)" in message and "hdop 4.2 (maximum 3" in message
     assert "fix" not in message  # el fix es bueno
+
+
+# --- LINK_ANOMALY (Fase 15) ---------------------------------------------------------------------
+
+
+def link_event(maker: Maker, t: float, controller: str = "GCS-1", rssi=-62.0, latency=45.0):
+    payload = {"controller_id": controller, "rssi_dbm": rssi, "latency_ms": latency}
+    return maker.event(EventType.LINK_STATUS, t, payload)
+
+
+def link_detections(events: list[EventDraft]) -> list[EventDraft]:
+    det = quiet()
+    return [d for d in feed_all(det, events) if d.payload["rule"] == "LINK_ANOMALY"]
+
+
+def test_a_normal_link_raises_nothing() -> None:
+    maker = Maker()
+    events = [
+        link_event(maker, t, rssi=-65.0 + t % 5, latency=30.0 + t % 25) for t in range(0, 300, 5)
+    ]
+    assert link_detections(events) == []
+
+
+def test_another_controller_raises_high_and_clears_after_the_hold() -> None:
+    maker = Maker()
+    events = [link_event(maker, t) for t in (0, 5, 10)]
+    events += [link_event(maker, t, "UNK-4F2A", -79.0, 120.0) for t in (15, 20, 25)]
+    events += [link_event(maker, t) for t in (30, 35, 40)]
+    out = link_detections(events)
+    assert kinds(out) == [(15.0, RAISED), (35.0, CLEARED)]  # normal desde 30: cierra a los 5 s
+    raised = DetectionRaised.model_validate(out[0].payload)
+    assert raised.severity == Severity.HIGH and raised.source == SensorSource.LINK
+    assert raised.unit == "ms" and raised.value == 120.0 and raised.threshold == 90.0
+    assert "GCS-1 → UNK-4F2A" in raised.message and "120.0 ms" in raised.message
+    cleared = DetectionCleared.model_validate(out[1].payload)
+    assert cleared.max_value == 120.0 and cleared.duration_s == 20.0
+
+
+def test_a_degraded_link_is_medium_and_gets_high_if_the_controller_changes() -> None:
+    maker = Maker()
+    events = [link_event(maker, 0), link_event(maker, 5, latency=130.0)]
+    events += [link_event(maker, 10, rssi=-80.0), link_event(maker, 15, "UNK-1", -80.0, 130.0)]
+    out = link_detections(events)
+    assert kinds(out) == [(5.0, RAISED), (15.0, UPDATED)]
+    assert out[0].payload["severity"] == "medium" and out[1].payload["severity"] == "high"
+    assert "degraded" in out[0].payload["message"]
+
+
+def test_the_link_thresholds_have_hysteresis() -> None:
+    maker = Maker()
+    events = [link_event(maker, 0), link_event(maker, 5, latency=89.0, rssi=-71.0)]  # no abre
+    assert link_detections(events) == []
+    events = [link_event(maker, 0), link_event(maker, 5, latency=95.0)]  # abre
+    events += [link_event(maker, t, latency=80.0) for t in (10, 15, 20)]  # entre umbrales: sigue
+    events += [link_event(maker, 25, latency=60.0), link_event(maker, 30, latency=60.0)]
+    assert kinds(link_detections(events)) == [(5.0, RAISED), (30.0, CLEARED)]
+    # un pico en mitad del cierre reinicia la espera
+    events = [link_event(maker, 0), link_event(maker, 5, latency=95.0), link_event(maker, 10)]
+    events += [link_event(maker, 15, latency=95.0), link_event(maker, 20), link_event(maker, 25)]
+    assert kinds(link_detections(events)) == [(5.0, RAISED), (25.0, CLEARED)]
+
+
+def test_the_mission_controller_is_the_first_one_seen_and_a_reset_forgets_it() -> None:
+    maker = Maker()
+    det = quiet()
+    out = feed_all(det, [link_event(maker, t, "GCS-2") for t in (0, 5, 10)])
+    assert out == []  # el de la misión es el primero visto, sea cual sea
+    out = feed_all(det, [link_event(maker, 15, "GCS-1")])
+    assert [d.payload["rule"] for d in out] == ["LINK_ANOMALY"]
+    feed_all(det, [maker.reset(20.0)])
+    assert feed_all(det, [link_event(maker, 25, "GCS-1"), link_event(maker, 30, "GCS-1")]) == []
+
+
+def test_the_link_rule_can_be_switched_off() -> None:
+    config = load_config()
+    config.link_anomaly.enabled = False
+    maker = Maker()
+    det = Detector(config)
+    out = feed_all(det, [link_event(maker, 0), link_event(maker, 5, "UNK-4F2A", -80.0, 125.0)])
+    assert [d for d in out if d.payload["rule"] == "LINK_ANOMALY"] == []

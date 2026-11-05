@@ -104,6 +104,17 @@ class AgentConfig:
     """Interruptor del monitor (Fase 14.4): si el modelo pidió los eventos del enlace y deja
     `checks.link_anomalous` a `null` (o lo omite), el módulo pone el valor esperado, sin rechazo.
     Sin la clave (los assets anteriores) está apagado."""
+    link_anomaly: bool = False
+    """Interruptor del monitor (Fase 15): la regla `LINK_ANOMALY` del detector está encendida y el
+    monitor la atiende con la skill `link-anomaly`; el cierre de esa detección, con la alerta
+    `HIJACK` activa y la desviación de la ruta aún abierta, es la recuperación del secuestro
+    (alerta `HIJACK` en fase `recovering`, que decide el código). Sin la clave (los assets
+    anteriores) está apagado."""
+    sensor_fault_per_source: bool = False
+    """Interruptor del monitor (Fase 15): un `SENSOR_FAULT` es de una sola fuente (la de las
+    detecciones que lo abrieron): no se reconoce ni se sustituye con detecciones de otra fuente y
+    no cuenta como causa duplicada de una alerta de otra fuente. Sin la clave (los assets
+    anteriores) está apagado."""
     guided_skills: bool = False
     """Interruptor del monitor (modo guiado): el módulo mete en el primer mensaje de usuario la
     skill de la regla de cada aviso, sin que el modelo tenga que pedirla."""
@@ -147,6 +158,8 @@ class AgentConfig:
             "recovery_ack_veto": self.recovery_ack_veto,
             "fill_link_anomalous": self.fill_link_anomalous,
             "recovery_jump_from_module": self.recovery_jump_from_module,
+            "sensor_fault_per_source": self.sensor_fault_per_source,
+            "link_anomaly": self.link_anomaly,
             "guided_skills": self.guided_skills,
         }
 
@@ -396,6 +409,8 @@ class Assets:
             recovery_ack_veto=bool(spec.get("recovery_ack_veto", False)),
             fill_link_anomalous=bool(spec.get("fill_link_anomalous", False)),
             recovery_jump_from_module=bool(spec.get("recovery_jump_from_module", False)),
+            sensor_fault_per_source=bool(spec.get("sensor_fault_per_source", False)),
+            link_anomaly=bool(spec.get("link_anomaly", False)),
             guided_skills=bool(spec.get("guided_skills", False)),
             guided_skill_by_rule=dict(spec.get("guided_skill_by_rule", {})),
             last_decisions_in_state=int(spec.get("last_decisions_in_state", 3)),

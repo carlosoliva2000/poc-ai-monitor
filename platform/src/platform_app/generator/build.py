@@ -45,7 +45,9 @@ def _labels(config: ScenarioConfig, end_s: float) -> LabelsFile:
     if config.hijack:
         h = config.hijack
         end = min(h.end_s, end_s) if h.end_s is not None else end_s
-        anomalies.append((h.start_s, end, LabelType.HIJACK, [Rule.ROUTE_DEVIATION], Cause.HIJACK))
+        # el cambio de controlador del enlace salta antes que la desviación de la ruta
+        rules = [Rule.LINK_ANOMALY, Rule.ROUTE_DEVIATION]
+        anomalies.append((h.start_s, end, LabelType.HIJACK, rules, Cause.HIJACK))
     labels = [
         Label(
             id=f"A{i}",

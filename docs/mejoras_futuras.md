@@ -32,6 +32,13 @@ Anotadas el 16/10/2026 durante el diseño. Sirven de lista para la Fase 5 y para
 - **Inyectar viento, secuestro o spoofing en directo** desde la web o el visor (hoy solo se programan en el YAML; en directo solo se inyectan los fallos `mute` y `loss`).
 - **Alertas del monitor en el visor sin web:** pintar en el visor de matplotlib las alertas `AnomalyDetected` del monitor (causa, severidad y resumen) junto a las detecciones.
 
+- **Controlador de la misión desde el plan (Fase 15):** `LINK_ANOMALY` toma como controlador de la misión el **primero que ve** en `LinkStatus` desde `SimulationStarted`; un secuestro anterior al primer `LinkStatus` no se detectaría. Lo robusto es que salga del plan (`MissionPlanned`), pero exige cambiar el evento, el generador y todos los escenarios.
+- **Una regla del enlace con más causas (Fase 15):** con el mismo controlador y solo calidad degradada, la skill `link-anomaly` manda `SENSOR_FAULT` del enlace (confianza ≤ 0,6) o `UNKNOWN`: no existe una causa «interferencia del enlace» (como `GPS_JAMMING`). Con el 14B no se ha medido ninguna ejecución de ese caso (ningún escenario lo produce).
+- **Recuperación del secuestro sin el `ROUTE_DEVIATION` abierto (Fase 15):** si el dron vuelve a la ruta antes que el enlace, no hay recuperación que publicar (el cierre del enlace va a la rama de cierre normal); no se ha probado con el 14B porque ningún escenario lo da.
+- **Texto del monitor con nombres de campo (Fase 15):** en la recuperación del secuestro el 14B escribió «(now.gps_radar_agree: true)» y «(gps_radar_agree: true)» en la explicación; la web los quita al mostrar (`stripFieldValues`), el evento, `eval.md` y el informe los conservan. Es el problema de «Texto fiable del monitor».
+- **Markdown de los chats en streaming (Fase 15):** mientras una respuesta llega, un `**` sin cerrar se ve en crudo hasta que se cierra y el cursor parpadeante queda en una línea aparte.
+- **Chat con tools y respuesta al instante de la pregunta (Fase 15):** a 16× la respuesta puede llegar 50 s de simulación después de la pregunta; los datos son los de la pregunta («ahora» = el instante en que se preguntó), pero la web lo etiqueta con la hora de la respuesta.
+
 ## Integración y arquitectura
 - **MCP:** exponer las tools de datos de la plataforma como servidor MCP (Streamable HTTP) con el SDK oficial de Python, y consumirlas desde el módulo de IA. En Java, el cliente MCP de LangChain4j (Streamable HTTP, verificado en su documentación el 16/10/2026).
 - **Módulo de IA en Java** con `openai-java` (misma estructura que el Python: bucle a mano, mismos `agent-assets/`), pasando la misma evaluación. Ver `Java_modulo_IA_worker.md` (puertos `LlmPort`, `DetectorPort`).

@@ -25,13 +25,16 @@ llm:
   # monitor). Nunca por nombre (vLLM devuelve finish_reason "stop" aunque haya llamada).
   tool_choice: auto
 
-# Chats. `tools_enabled: false` (el valor de la demo): los chats no reciben tools y su sistema lleva
-# el estado, las alertas (con recomendación, checks y evidencias; sin la explicación en prosa del
-# monitor, que puede contradecir sus propios checks) y los últimos hechos que consultó el monitor
-# (trayectoria y enlace), cada uno con su sí o no calculado. Con `true` mantienen sus tools (con tool_choice auto el 14B a veces escribe la
-# llamada como texto y contesta sin consultar nada).
+# Chats. `tools_enabled: true` (Fase 15): los chats pueden consultar datos con tools de LECTURA
+# (`get_events`, `get_track_metrics`, `get_mission_plan`, `get_my_alerts`, `load_skill` y, el del
+# informe, `get_flight_summary`); nunca `publish_alert`, `acknowledge_detection` ni `close_alert`:
+# abrir, cambiar o cerrar alertas es trabajo del monitor, y el prompt del chat lo dice. El chat del
+# monitor lleva además en el sistema el estado, sus alertas (con recomendación, checks y evidencias;
+# sin la explicación en prosa del monitor, que puede contradecir sus propios checks) y los últimos
+# hechos que consultó, cada uno con su sí o no calculado. Con `false` (los assets anteriores a la
+# Fase 15 y el perfil `actual-textos-v13`) no reciben tools y su sistema lleva los mismos datos.
 chat:
-  tools_enabled: false
+  tools_enabled: true
 
 agents:
   monitor:
@@ -40,7 +43,7 @@ agents:
     output_prompt: prompts/monitor_output.md        # se añade al final del prompt de sistema
     tools: [get_events, get_mission_plan, get_track_metrics, get_my_alerts, publish_alert, acknowledge_detection, close_alert, load_skill]
     disabled_tools: []      # experimento: [get_track_metrics]
-    skills: [route-deviation, source-discrepancy]
+    skills: [route-deviation, source-discrepancy, link-anomaly]
     max_iterations: 12
     # Tiempos medidos con las invocaciones del monitor (ver docs de la fase). Condición:
     # max_invocation_s + 15 < 90 (la plataforma espera al agente 90 s como mucho).
@@ -72,6 +75,8 @@ agents:
     recovery_ack_veto: true     # no se puede reconocer la recuperación del GPS con la alerta aún `active` (Fase 14.2)
     fill_link_anomalous: true   # si el modelo miró el enlace y deja `checks.link_anomalous` a null, lo rellena el módulo (Fase 14.4)
     recovery_jump_from_module: true   # la fase de la recuperación se decide con el salto que calcula el módulo (ventana fija; Fase 14.4)
+    link_anomaly: true          # regla LINK_ANOMALY del detector + skill link-anomaly + recuperación del secuestro (Fase 15)
+    sensor_fault_per_source: true   # un SENSOR_FAULT es de una sola fuente: no se reconoce ni sustituye con detecciones de otra (Fase 15)
     # Modo guiado (ayuda): true = el módulo mete en el primer mensaje de usuario la skill que
     # corresponde a la regla de cada aviso (sección `guided_skill` de monitor_objective.md).
     guided_skills: false
@@ -80,6 +85,7 @@ agents:
       SOURCE_DISCREPANCY: source-discrepancy
       SOURCE_SILENT: source-discrepancy
       GPS_DEGRADED: source-discrepancy
+      LINK_ANOMALY: link-anomaly
     # Memoria del monitor (no es una ayuda): `per_detection` = una conversación nueva por invocación
     # (opción B); `per_run` = una sola durante la simulación (opción A), compactada por bloques
     # cuando el historial pasa de `memory_budget_tokens` (hasta `memory_target_tokens`).

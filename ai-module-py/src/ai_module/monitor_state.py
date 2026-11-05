@@ -78,11 +78,31 @@ class AlertRecord:
     checks: dict | None = None
     phase: str = "active"
     """Fase de la alerta (v0.14): `active` o `recovering`."""
+    opened_by: set[str] = field(default_factory=set)
+    """Detecciones con las que se abrió el episodio (las de su primera alerta y las de las que
+    sustituye); no incluye las que se le reconocen después. Fase 15: de ellas sale la fuente de un
+    `SENSOR_FAULT` (`monitor.sensor_fault_per_source`)."""
+
+
+POSITION_RULES = ("ROUTE_DEVIATION", "SOURCE_DISCREPANCY", "GPS_DEGRADED")
+"""Reglas que hablan de la posición del dron (GPS y radar), no de una fuente concreta que calla."""
+SOURCE_NAMES = {
+    "gps": "GPS",
+    "radar": "radar",
+    "meteo": "weather station",
+    "link": "command link",
+    "battery": "battery",
+    "position": "position (GPS and radar)",
+}
 
 
 class MonitorState:
-    def __init__(self, last_decisions: int = 3) -> None:
+    def __init__(self, last_decisions: int = 3, sensor_fault_per_source: bool = False) -> None:
+        """`sensor_fault_per_source` (Fase 15, `monitor.sensor_fault_per_source`): un `SENSOR_FAULT`
+        es de una sola fuente, la de las detecciones que lo abrieron; las que se le reconocen
+        después no lo cambian."""
         self.last_decisions = last_decisions
+        self.sensor_fault_per_source = sensor_fault_per_source
         self.reset()
 
     def reset(self) -> None:
@@ -157,12 +177,14 @@ class MonitorState:
             evidence_ids=list(p.evidence_event_ids),
             checks=p.checks.model_dump() if p.checks else None,
             phase=p.phase.value,
+            opened_by=set(p.detection_ids),
         )
         previous = self.alerts.get(p.supersedes) if p.supersedes else None
         if previous is not None:
             previous.status = AlertStatus.SUPERSEDED
             previous.superseded_by = p.alert_id
             alert.detection_ids |= previous.detection_ids
+            alert.opened_by |= previous.opened_by
         else:
             self.chains_published += 1
         self.alerts[p.alert_id] = alert
@@ -226,13 +248,80 @@ class MonitorState:
             return True
         if alert.cause != "SENSOR_FAULT":
             return False
-        for detection in self.detections_of(alert.alert_id):
+        for detection in self._origin_detections(alert):
             if (
                 detection.rule in ("GPS_DEGRADED", "SOURCE_DISCREPANCY")
                 or detection.source == "gps"
             ):
                 return True
         return False
+
+    def _origin_detections(self, alert: AlertRecord) -> list[DetectionRecord]:
+        """Las detecciones de las que sale la fuente de la alerta: las que abrieron el episodio (con
+        `sensor_fault_per_source`) o todas las suyas (antes de la Fase 15)."""
+        if not self.sensor_fault_per_source:
+            return self.detections_of(alert.alert_id)
+        return [d for i in sorted(alert.opened_by) if (d := self.detections.get(i)) is not None]
+
+    def fault_sources(self, alert: AlertRecord) -> set[str]:
+        """Fuentes de un `SENSOR_FAULT` según las detecciones que lo abrieron: la fuente de un
+        `SOURCE_SILENT`, `gps` en un `GPS_DEGRADED` y `position` (GPS o radar) en una discrepancia
+        o una desviación de la ruta."""
+        out: set[str] = set()
+        for d in self._origin_detections(alert):
+            if d.rule == "SOURCE_SILENT" and d.source:
+                out.add(d.source)
+            elif d.rule == "GPS_DEGRADED":
+                out.add("gps")
+            elif d.rule in POSITION_RULES:
+                out.add("position")
+        return out
+
+    def foreign_sensor_fault(self, alert: AlertRecord, detection_id: str) -> bool:
+        """`True` si `alert` es un `SENSOR_FAULT` de una fuente y la detección habla de otra: una
+        batería callada no explica una discrepancia GPS–radar, ni al revés. Solo con
+        `sensor_fault_per_source`."""
+        detection = self.detections.get(detection_id)
+        if not self.sensor_fault_per_source or alert.cause != "SENSOR_FAULT" or detection is None:
+            return False
+        sources = self.fault_sources(alert)
+        if not sources:
+            return False
+        if detection.rule == "SOURCE_SILENT":
+            return detection.source not in sources and not (
+                detection.source in ("gps", "radar") and "position" in sources
+            )
+        return not sources & {"gps", "radar", "position"}
+
+    def describe_fault_sources(self, alert: AlertRecord) -> str:
+        return ", ".join(SOURCE_NAMES.get(s, s) for s in sorted(self.fault_sources(alert)))
+
+    def _of_source(self, alert: AlertRecord) -> str:
+        """« of the battery»: la fuente de un `SENSOR_FAULT` (con `sensor_fault_per_source`)."""
+        if not self.sensor_fault_per_source or alert.cause != "SENSOR_FAULT":
+            return ""
+        sources = self.describe_fault_sources(alert)
+        return f" of the {sources}" if sources else ""
+
+    def link_recovery_alert(self, detection_id: str) -> AlertRecord | None:
+        """Fase 15: la alerta `HIJACK` activa de una detección `LINK_ANOMALY` ya cerrada (el
+        controlador de la misión ha vuelto al enlace) cuando a esa alerta aún le queda abierta una
+        desviación de la ruta: es la recuperación del secuestro. `None` en cualquier otro caso."""
+        detection = self.detections.get(detection_id)
+        if detection is None or detection.rule != "LINK_ANOMALY" or detection.open:
+            return None
+        alert = self.head(detection.alert_id)
+        if (
+            alert is None
+            or alert.cause != "HIJACK"
+            or alert.phase != "active"
+            or alert.status != AlertStatus.OPEN
+        ):
+            return None
+        still_off_route = any(
+            d.rule == "ROUTE_DEVIATION" for d in self.open_detections_of(alert.alert_id)
+        )
+        return alert if still_off_route else None
 
     def recent_gps_alert(self, now: float, grace_s: float = 60.0) -> AlertRecord | None:
         """La alerta del GPS abierta, o cerrada hace `grace_s` s de tiempo simulado o menos (se
@@ -318,7 +407,7 @@ class MonitorState:
                 for d in self.detections_of(a.alert_id)
             )
             parts.append(
-                f"{a.alert_id} {a.cause} ({a.severity}"
+                f"{a.alert_id} {a.cause}{self._of_source(a)} ({a.severity}"
                 f"{'' if a.phase == 'active' else ', ' + a.phase}, confidence {a.confidence:g}) "
                 f'"{a.summary}" · detections: {members or "none"}'
             )
@@ -414,7 +503,7 @@ class MonitorState:
                 else "no checks (fallback alert)"
             )
             lines.append(
-                f"- {a.alert_id} {a.cause} ({a.severity}"
+                f"- {a.alert_id} {a.cause}{self._of_source(a)} ({a.severity}"
                 f"{'' if a.phase == 'active' else ', ' + a.phase}, confidence {a.confidence:g}) at "
                 f'{format_t(a.sim_time)}, {state}: "{a.summary}". '
                 f"{f'Explanation: {prose} ' if explanation else ''}"

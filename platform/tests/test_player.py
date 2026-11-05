@@ -14,7 +14,7 @@ from platform_app.player import INTERACTIVE_OFF_MESSAGE, Player, PlayerError
 from poc_contracts.enums import EventType, FaultMode, PlayerStatus, SensorSource
 from poc_contracts.envelope import Envelope
 
-ALL = ["demo", "faults", "hijack", "nominal", "spoofing", "wind"]
+ALL = ["demo", "demo-battery", "faults", "hijack", "nominal", "spoofing", "wind"]
 
 
 def types(player: Player) -> list[str]:

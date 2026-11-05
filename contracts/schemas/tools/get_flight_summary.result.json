@@ -50,7 +50,7 @@
     },
     "DetectionsByRule": {
       "additionalProperties": false,
-      "description": "Siempre con las cuatro reglas (0 si no hubo detecciones).",
+      "description": "Siempre con las cinco reglas (0 si no hubo detecciones).",
       "properties": {
         "ROUTE_DEVIATION": {
           "title": "Route Deviation",
@@ -67,13 +67,18 @@
         "GPS_DEGRADED": {
           "title": "Gps Degraded",
           "type": "integer"
+        },
+        "LINK_ANOMALY": {
+          "title": "Link Anomaly",
+          "type": "integer"
         }
       },
       "required": [
         "ROUTE_DEVIATION",
         "SOURCE_DISCREPANCY",
         "SOURCE_SILENT",
-        "GPS_DEGRADED"
+        "GPS_DEGRADED",
+        "LINK_ANOMALY"
       ],
       "title": "DetectionsByRule",
       "type": "object"

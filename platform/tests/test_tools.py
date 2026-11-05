@@ -206,6 +206,7 @@ def test_flight_summary_after_the_flight(runs_dir: Path) -> None:
         "SOURCE_DISCREPANCY": 0,
         "SOURCE_SILENT": 0,
         "GPS_DEGRADED": 0,
+        "LINK_ANOMALY": 0,
     }
     assert set(summary.alerts_by_cause.model_dump()) == {
         "WIND",
@@ -223,7 +224,7 @@ def test_flight_summary_midway_has_every_key(runs_dir: Path) -> None:
     raw = call_tool(ctx, "get_flight_summary", {})
     assert raw["mission_completed"] is False and raw["completion_reason"] is None
     assert raw["duration_s"] == pytest.approx(10.0, abs=0.2)
-    assert len(raw["detections_by_rule"]) == 4 and len(raw["alerts_by_cause"]) == 6
+    assert len(raw["detections_by_rule"]) == 5 and len(raw["alerts_by_cause"]) == 6
     assert raw["waypoints_reached"] == []
 
 

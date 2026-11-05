@@ -511,6 +511,8 @@ def test_default_switches_are_all_on_and_recorded_in_the_trace(tmp_path: Path) -
         "recovery_ack_veto": True,
         "fill_link_anomalous": True,
         "recovery_jump_from_module": True,
+        "sensor_fault_per_source": True,
+        "link_anomaly": True,
         "guided_skills": False,
     }
 
