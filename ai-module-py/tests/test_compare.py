@@ -215,3 +215,20 @@ def test_the_recovery_cell_counts_state_jumps_the_guardrail_did_not_see(tmp_path
     }
     assert "estado con salto 2, guardrail sin verlo 1" in rows["`p`"]
     assert "estado con salto" not in rows["`q`"]
+
+
+def test_the_recovery_cell_counts_the_module_jumps_the_model_window_did_not_see(
+    tmp_path: Path,
+) -> None:
+    monitor = {"rejections": 0, "length_cuts": 0, "prompt_tokens": 1, "completion_tokens": 1,
+               "module_jumps": 2, "module_jump_unseen": 1}  # fmt: skip
+    data = eval_json([label("A1")], recovery_misses=[])
+    data["agents"] = {**data["agents"], "monitor": {**data["agents"]["monitor"], **monitor}}
+    plain = eval_json([label("A1")], recovery_misses=[])
+    folder = make_experiment(tmp_path, {("p", "demo", 1): data, ("q", "demo", 1): plain})
+    text = write_compare(folder).read_text()
+    rows = {
+        line.split("|")[1].strip(): line for line in text.splitlines() if line.startswith("| `")
+    }
+    assert "salto del módulo 2, ventana del modelo sin verlo 1" in rows["`p`"]
+    assert "salto del módulo" not in rows["`q`"]

@@ -50,7 +50,8 @@ def monitor_with(tmp_path: Path, results: dict, policy=None, state_line: str = "
     seed_evidence(rt, "gps-000001", "gps-000002", sim_time=1.0)
     rt.clock.observe(20.0)
     monitor = Monitor(rt)
-    monitor.config = replace(monitor.config, state_line=state_line)
+    # la llamada del módulo para la fase (Fase 14.4) es otra ayuda: estas pruebas son de la línea
+    monitor.config = replace(monitor.config, state_line=state_line, recovery_jump_from_module=False)
     return rt, platform, monitor, llm
 
 
@@ -161,7 +162,9 @@ def test_the_platform_is_not_called_in_other_warnings(
 
 def test_other_state_styles_do_not_call_the_platform_either(tmp_path: Path) -> None:
     rt, platform, monitor, llm = monitor_with(
-        tmp_path, {"get_track_metrics": {"gps_max_step_m": 67.9}}, state_line="phase"
+        tmp_path,
+        {"get_track_metrics": {"gps_max_step_m": 67.9}},
+        state_line="phase",
     )
     spoofing_alert(rt.state)
     run(monitor.handle_batch([detection_event("raised", "det-0002", 60.0)]))

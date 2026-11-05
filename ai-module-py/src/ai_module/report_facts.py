@@ -541,6 +541,9 @@ def recovery_jump_m(records: list[dict[str, Any]], alert_id: str) -> float | Non
         ):
             continue
         step: float | None = None
+        module = (record.get("recovery_jump") or {}).get("gps_max_step_m")
+        if module is not None:  # Fase 14.4: el salto que calculó el módulo con la ventana fija
+            return float(module)
         for call in record.get("calls", []):
             for tool in call.get("tool_calls") or []:
                 result = tool.get("result")

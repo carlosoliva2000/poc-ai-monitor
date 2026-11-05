@@ -139,9 +139,24 @@ def recovery_cell(runs: list[RunRecord]) -> str:
     text += f" · veto {vetoes} · sin métricas {no_metrics}"
     unseen = sum(e["agents"].get("monitor", {}).get("state_jump_unseen", 0) for e in measured)
     jumps = sum(e["agents"].get("monitor", {}).get("state_jumps", 0) for e in measured)
+    module = sum(e["agents"].get("monitor", {}).get("module_jumps", 0) for e in measured)
+    if module:  # solo con `monitor.recovery_jump_from_module` (Fase 14.4)
+        unseen_by_model = sum(
+            e["agents"].get("monitor", {}).get("module_jump_unseen", 0) for e in measured
+        )
+        text += f" · salto del módulo {module}, ventana del modelo sin verlo {unseen_by_model}"
     if jumps:  # solo con `state_line: recovery_data` (Fase 14.3)
         text += f" · estado con salto {jumps}, guardrail sin verlo {unseen}"
     return text
+
+
+def link_cell(runs: list[RunRecord]) -> str:
+    """Rechazos por `checks.link_anomalous = null` / veces que lo rellenó el módulo (Fase 14.4)."""
+    ok = [r.eval["agents"].get("monitor", {}) for r in runs if r.status == "ok"]
+    if not ok:
+        return "n/d"
+    nulls = sum(m.get("link_null_rejections", 0) for m in ok)
+    return f"{nulls} / {sum(m.get('link_filled', 0) for m in ok)}"
 
 
 def checks_by_field(records: list[RunRecord], profiles: list[str]) -> list[str]:
@@ -256,7 +271,7 @@ HEADERS = [
     "Perfil", "Aciertos (✅ por etiqueta)", "1 cadena", "Falsas alarmas", "Fallbacks",
     "Alertas abiertas", "Frases que contradicen", "Checks≠tools", "Recuperación sin fase",
     "No latinos (monitor / informe / chats)",
-    "Rechazos guardrails",
+    "Rechazos guardrails", "Rechazos link=null / rellenos",
     "Cortes por longitud (monitor / informe / chats)", "Latencia monitor p50 / p95",
     "Iteraciones monitor p50 / p95 / máx",
     "Tokens por ejecución (prompt / respuesta / razonamiento)", "Estabilidad",
@@ -278,6 +293,7 @@ def row(profile: str, runs: list[RunRecord], planned: int) -> list[str]:
         recovery_cell(runs),
         non_latin(runs),
         str(sum(agent_total(runs, a, "rejections") for a in NON_LATIN_AGENTS)),
+        link_cell(runs),
         length_cuts(runs),
         latency(runs),
         iterations_cell(runs),

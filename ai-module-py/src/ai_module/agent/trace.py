@@ -83,6 +83,15 @@ class InvocationTrace:
     """Por alerta publicada por el modelo, los valores que debían tener sus `checks` según las
     tools de la invocación y el estado (los del guardrail de coherencia, esté o no activo). La
     evaluación los compara con los que declaró."""
+    recovery_jump: dict[str, Any] = field(default_factory=dict)
+    """Fase 14.4 (`monitor.recovery_jump_from_module`): lo que calculó el módulo para decidir la
+    fase de una recuperación del GPS: ventana (`since`, `until`), `gps_max_step_m`, `jump` y, si
+    falló la llamada, `error`; al acabar la invocación, `model_view`: qué veía el guardrail con la
+    ventana que pidió el modelo (`jump`, `window_without_jump` o `no_metrics`). Vacío si no hizo
+    falta."""
+    module_filled: list[dict[str, Any]] = field(default_factory=list)
+    """Fase 14.4: campos que rellenó el módulo en una llamada del modelo (`tool`, `field`,
+    `value`), p. ej. `checks.link_anomalous` (`monitor.fill_link_anomalous`)."""
     memory: dict[str, Any] = field(default_factory=dict)
     """Con la memoria A (`per_run`): turno, tokens estimados antes y después de compactar y
     cuántos turnos pasaron al nivel A y al B. Vacío con `per_detection`."""

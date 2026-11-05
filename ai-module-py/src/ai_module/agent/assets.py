@@ -95,6 +95,15 @@ class AgentConfig:
     """Interruptor del monitor (Fase 14.2): no se puede reconocer la recuperación del GPS mientras
     la alerta del GPS sigue en fase `active`; hay que publicar la recuperación. Sin la clave (los
     assets anteriores) está apagado."""
+    recovery_jump_from_module: bool = False
+    """Interruptor del monitor (Fase 14.4): ante un `ROUTE_DEVIATION` con una alerta del GPS
+    reciente, el módulo pide `get_track_metrics` con una ventana fija y el guardrail decide la fase
+    (y el veto del reconocimiento) con ese salto del GPS, no con la ventana que pidió el modelo. Sin
+    la clave (los assets anteriores) está apagado."""
+    fill_link_anomalous: bool = False
+    """Interruptor del monitor (Fase 14.4): si el modelo pidió los eventos del enlace y deja
+    `checks.link_anomalous` a `null` (o lo omite), el módulo pone el valor esperado, sin rechazo.
+    Sin la clave (los assets anteriores) está apagado."""
     guided_skills: bool = False
     """Interruptor del monitor (modo guiado): el módulo mete en el primer mensaje de usuario la
     skill de la regla de cada aviso, sin que el modelo tenga que pedirla."""
@@ -136,6 +145,8 @@ class AgentConfig:
             "source_silent_own_alert": self.source_silent_own_alert,
             "no_duplicate_cause": self.no_duplicate_cause,
             "recovery_ack_veto": self.recovery_ack_veto,
+            "fill_link_anomalous": self.fill_link_anomalous,
+            "recovery_jump_from_module": self.recovery_jump_from_module,
             "guided_skills": self.guided_skills,
         }
 
@@ -383,6 +394,8 @@ class Assets:
             max_tokens=int(pick("max_tokens")),
             tool_choice=str(pick("tool_choice", "auto")),
             recovery_ack_veto=bool(spec.get("recovery_ack_veto", False)),
+            fill_link_anomalous=bool(spec.get("fill_link_anomalous", False)),
+            recovery_jump_from_module=bool(spec.get("recovery_jump_from_module", False)),
             guided_skills=bool(spec.get("guided_skills", False)),
             guided_skill_by_rule=dict(spec.get("guided_skill_by_rule", {})),
             last_decisions_in_state=int(spec.get("last_decisions_in_state", 3)),

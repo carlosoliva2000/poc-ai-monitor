@@ -71,6 +71,7 @@ STYLE_COUNTERS = (
     "summary_missing_type",
     "monitor_talk_in_recommendations",
     "agree_without_fix",
+    "false_radar_unavailable",
     "close_without_cause_source",
     "unsupported_figures",
     "recovery_time_mismatch",
@@ -392,6 +393,44 @@ def agree_without_fix(text: str, gps_nofix: bool) -> list[str]:
     return found
 
 
+# --- «El radar no está» con el radar informando (Fase 14.4) ---------------------------------------
+# Sin fix el GPS no da posición fiable, pero el radar sí; un texto que dice que el radar no está o
+# no informa mientras el radar publica pistas es falso. Heurística léxica en inglés, solo en
+# presente («the radar is unavailable», «no radar data»); el pasado («was silent») no cuenta.
+
+RADAR_SILENCE_S = 6.0
+"""Una pista de radar de hace más de esto (tres periodos) ya es un silencio."""
+RADAR_DOWN_RE = re.compile(
+    r"\bradar\b(?:\s+\w+){0,2}?\s+(?:is|are|remains?|stays?)\s+(?:currently\s+|still\s+)?"
+    r"(?:unavailable|not available|not reporting|not responding|offline|silent|down|not working"
+    r"|not providing|not giving)"
+    r"|\bno\s+radar\s+(?:data|tracks?|updates?|information|signal)"
+    r"|\bwithout\s+(?:the\s+|any\s+)?radar\s+(?:data|confirmation|information)"
+    r"|\bradar\s+(?:data|information|tracks?)\s+(?:is|are)\s+(?:unavailable|missing|not available)",
+    re.IGNORECASE,
+)
+
+
+def false_radar_unavailable(text: str, radar_reporting: bool) -> list[str]:
+    """Frases que dicen, en presente, que el radar no está o no informa cuando sí publicaba
+    pistas en ese instante. Vacío si el radar estaba callado de verdad."""
+    if not radar_reporting:
+        return []
+    return [s for s in sentences(text) if RADAR_DOWN_RE.search(s)]
+
+
+def radar_reporting_at(events: list[dict[str, Any]], at: float) -> bool:
+    """El radar publicó una pista (`TrackUpdated`) entre `at` − 6 s y `at`."""
+    last = None
+    for e in events:
+        if e.get("type") == "TrackUpdated":
+            if e["sim_time"] <= at:
+                last = e["sim_time"]
+            else:
+                break
+    return last is not None and at - last <= RADAR_SILENCE_S
+
+
 def gps_without_fix_at(events: list[dict[str, Any]], at: float) -> bool:
     """La última posición del GPS publicada hasta `at` no tiene fix (navega a estima)."""
     last = None
@@ -555,6 +594,8 @@ class Facts:
     window_wind_speed: set[float] = field(default_factory=set)
     gps_nofix: bool = False
     """La última posición del GPS de la invocación no tenía fix (se saca de la línea temporal)."""
+    radar_reporting: bool = False
+    """El radar publicó una pista en los 6 s anteriores a la invocación (línea temporal)."""
 
     def merge(self, other: "Facts") -> None:
         self.now_distance |= other.now_distance
@@ -654,6 +695,9 @@ def record_facts(record: dict[str, Any], with_prompts: bool) -> Facts:
             add_metrics(facts, result)
         elif name == "get_events":
             add_events(facts, result)
+    module_step = (record.get("recovery_jump") or {}).get("gps_max_step_m")
+    if module_step is not None:  # Fase 14.4: el rechazo del guardrail se lo dice al modelo
+        facts.deviation.add(float(module_step))
     if with_prompts:
         for message in record.get("messages", []):
             if message.get("role") in ("system", "user") and isinstance(
@@ -864,6 +908,7 @@ def measure_text(
     if kind.startswith(("alert.", "end.")):
         findings["now_window_mix"] = now_window_mix(text, facts)
         findings["agree_without_fix"] = agree_without_fix(text, facts.gps_nofix)
+        findings["false_radar_unavailable"] = false_radar_unavailable(text, facts.radar_reporting)
     if kind == "end.reason" and cause is not None:
         findings["foreign_source_in_close"] = foreign_source_in_close(text, cause, sources or set())
     if is_close and cause is not None:
@@ -954,6 +999,7 @@ def measure_run(
                 continue  # un fallback lo escribe el módulo, no el modelo
             facts = record_facts(record, with_prompts=False)
             facts.gps_nofix = gps_without_fix_at(events, record["as_of"])
+            facts.radar_reporting = radar_reporting_at(events, record["as_of"])
             prose = prompt_prose(record)
             names = (
                 ("summary", "explanation", "recommendation")

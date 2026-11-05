@@ -18,7 +18,7 @@ If a `GPS_JAMMING` or `SENSOR_FAULT` alert of the GPS is open and the `GPS_DEGRA
 Otherwise, continue.
 
 ## 1. Metrics
-Call `get_track_metrics` with `since` = sim_time of the detection − 40 and `until` = now. If `radar_available` is `false`, you cannot check the GPS: say so.
+Call `get_track_metrics` with `since` = sim_time of the detection − 40 and `until` = now; do not shorten the window, because the radar reports every 2 seconds and a window of a second or two may hold no sample of it. `radar_available: false` only says that this window has no radar sample: the radar is silent only if its deviation in `now` is missing as well and its last events (`get_events`, `source` `radar`) are old. If the radar really is silent, you cannot check the GPS: say so.
 
 ## 2. Spoofing or GPS loss?
 Conditions for the deception: `gps_radar.disagreed` is `true`, the GPS is on the plan (`gps_deviation_from_plan_m.mean` < 15) and the radar is outside and moving away.

@@ -70,6 +70,8 @@ agents:
     source_silent_own_alert: true   # un SOURCE_SILENT nuevo lleva alerta propia (SENSOR_FAULT, sin supersedes)
     no_duplicate_cause: true    # no se abre una alerta con la causa de otra abierta sin `supersedes`
     recovery_ack_veto: true     # no se puede reconocer la recuperación del GPS con la alerta aún `active` (Fase 14.2)
+    fill_link_anomalous: true   # si el modelo miró el enlace y deja `checks.link_anomalous` a null, lo rellena el módulo (Fase 14.4)
+    recovery_jump_from_module: true   # la fase de la recuperación se decide con el salto que calcula el módulo (ventana fija; Fase 14.4)
     # Modo guiado (ayuda): true = el módulo mete en el primer mensaje de usuario la skill que
     # corresponde a la regla de cada aviso (sección `guided_skill` de monitor_objective.md).
     guided_skills: false

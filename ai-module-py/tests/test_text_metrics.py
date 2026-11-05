@@ -571,3 +571,50 @@ def test_the_right_times_are_not_flagged() -> None:
     assert tm.recovery_time_mismatch("recovery at T+03:54", []) == []  # nada que contrastar
     # si entrada y cierre coinciden, no hay confusión posible
     assert tm.recovery_time_mismatch("recovery at T+03:54", [(234.0, 234.0)]) == []
+
+
+def test_the_jump_the_module_computed_is_a_valid_figure() -> None:
+    """Fase 14.4: el rechazo del guardrail le dice al modelo el salto que calculó el módulo, y
+    escribirlo no es un error de cifra aunque la ventana del modelo no lo trajera."""
+    record = {"calls": [], "messages": [], "recovery_jump": {"gps_max_step_m": 67.9, "jump": True}}
+    assert 67.9 in tm.record_facts(record, with_prompts=False).deviation
+    assert not tm.record_facts({"calls": [], "messages": []}, with_prompts=False).deviation
+
+
+# --- «El radar no está» con el radar informando (Fase 14.4) ---
+
+
+def test_a_text_that_says_the_radar_is_down_while_it_reports_is_flagged() -> None:
+    for text in (
+        "The radar is unavailable, so we cannot confirm the actual position of the drone.",
+        "There is no radar data to confirm where the drone is.",
+        "The radar is not reporting.",
+        "Without radar confirmation the position cannot be checked.",
+        "Radar data is missing for this window.",
+    ):
+        assert tm.false_radar_unavailable(text, True) == [text], text
+        assert tm.false_radar_unavailable(text, False) == [], text  # radar callado de verdad
+
+
+def test_radar_sentences_that_are_true_or_in_the_past_are_not_flagged() -> None:
+    for text in (
+        "The radar stopped reporting for 7 s.",
+        "The radar was silent for 7 s and is reporting again.",
+        "The radar is the reference for the real position of the drone.",
+        "GPS and radar disagree by 26.2 m.",
+        "The radar places the drone 8.4 m from the route.",
+    ):
+        assert tm.false_radar_unavailable(text, True) == [], text
+
+
+def test_the_radar_reporting_is_read_from_the_last_track_up_to_the_invocation() -> None:
+    def track(t: float) -> dict:
+        return {"type": "TrackUpdated", "source": "radar-1", "sim_time": t, "payload": {}}
+
+    events = [track(242.0), track(244.0), track(280.0)]
+    assert tm.radar_reporting_at(events, 245.8) is True
+    assert tm.radar_reporting_at(events, 250.0) is True  # 6 s: aún no es silencio
+    assert tm.radar_reporting_at(events, 250.5) is False  # 6,5 s: ya es silencio
+    assert tm.radar_reporting_at(events, 251.0) is False
+    assert tm.radar_reporting_at(events, 241.0) is False  # aún no había pistas
+    assert tm.radar_reporting_at([], 10.0) is False

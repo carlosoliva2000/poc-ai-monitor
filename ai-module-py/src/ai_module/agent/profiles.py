@@ -49,6 +49,8 @@ AID_KEYS = (
     "source_silent_own_alert",
     "no_duplicate_cause",
     "recovery_ack_veto",
+    "fill_link_anomalous",
+    "recovery_jump_from_module",
     "guided_skills",
 )
 # La memoria del monitor no es una ayuda: cambia lo que el modelo recuerda, no lo que se le quita.

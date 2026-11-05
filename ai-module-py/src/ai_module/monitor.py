@@ -30,11 +30,13 @@ from .agent.engine import AbortInvocation, AgentEngine, EngineResult, compact_js
 from .agent.guardrails import (
     RECOVERY_STEP_M,
     InvocationFacts,
+    ModuleJump,
     Verdict,
     check_acknowledge,
     check_close_alert,
     check_publish_alert,
     expected_checks,
+    fill_link_anomalous,
 )
 from .agent.llm import Messages
 from .agent.tools import Toolbox, strip_computed_facts, strip_now_facts
@@ -259,6 +261,7 @@ class Monitor:
     async def _invoke_llm(self, inv: Invocation) -> None:
         rt, cfg = self.rt, self.config
         trace = inv.trace
+        await self._module_jump(inv)
         await self._state_metrics(inv)
         objective = self._objective(inv)
         inv.seen_ids |= set(ID_RE.findall(objective))
@@ -340,12 +343,75 @@ class Monitor:
             trace.messages = messages
             trace.guardrail_rejections.append({"tool": "engine", "errors": [str(exc)]})
         self._note_guardrail_view(inv)
+        self._note_model_view(inv)
         try:
             await self._guarantee(inv, result)
         finally:
             await rt.activity(AgentName.MONITOR, ActivityState.FINISHED, inv.invocation_id, first)
             if memory is not None:
                 self._remember(memory, inv, messages, chars_start)
+
+    def _route_deviation_warnings(self, inv: Invocation) -> list[Pending]:
+        """Los avisos `raised` o `updated` de `ROUTE_DEVIATION` del lote."""
+        return [
+            p
+            for p in inv.pending
+            if p.kind in ("raised", "updated") and p.event.payload.get("rule") == "ROUTE_DEVIATION"
+        ]
+
+    async def _module_jump(self, inv: Invocation) -> None:
+        """Fase 14.4 (`monitor.recovery_jump_from_module`): la fase de la recuperación del GPS la
+        decide el código, así que la decide con una ventana fija y no con la que pida el modelo.
+        Ante un `ROUTE_DEVIATION` (`raised` o `updated`) con una alerta del GPS reciente, el módulo
+        pide `get_track_metrics` a la plataforma (con el corte temporal) desde el inicio de la
+        detección menos 30 s, sin salirse por atrás de la publicación de la primera alerta de esa
+        cadena: un salto anterior a la alerta no es la vuelta del GPS. Es una llamada de datos del
+        módulo, sin LLM: entra en la duración de la invocación, no en las iteraciones, y el modelo
+        no la ve. Si falla, el guardrail vuelve a la ventana del modelo y la traza lo anota."""
+        rt = self.rt
+        if not self.config.recovery_jump_from_module:
+            return
+        route = self._route_deviation_warnings(inv)
+        recent = rt.state.recent_gps_alert(inv.as_of)
+        if not route or recent is None:
+            return
+        starts = [
+            record.since
+            if (record := rt.state.detections.get(p.detection_id))
+            else p.event.sim_time
+            for p in route
+        ]
+        since = max(min(starts) - 30.0, rt.state.chain_root(recent).sim_time, 0.0)
+        args = {"since": since, "until": inv.as_of}
+        try:
+            result = await rt.platform_call(rt.platform_url, "get_track_metrics", args)
+        except Exception as exc:  # sin la llamada, el guardrail usa la ventana del modelo
+            log.warning("module jump unavailable: %s", exc)
+            inv.trace.recovery_jump = {**args, "error": str(exc)}
+            return
+        step = result.get("gps_max_step_m") if isinstance(result, dict) else None
+        inv.facts.module_jump = ModuleJump(step)
+        inv.trace.recovery_jump = {
+            **args,
+            "gps_max_step_m": step,
+            "jump": step is not None and step >= RECOVERY_STEP_M,
+        }
+
+    @staticmethod
+    def _note_model_view(inv: Invocation) -> None:
+        """Si el módulo vio el salto, anota qué veía el guardrail con la ventana que pidió el
+        modelo (`jump`, `window_without_jump` o `no_metrics`): solo se cuenta, no decide nada."""
+        info = inv.trace.recovery_jump
+        if not info.get("jump"):
+            return
+        seen = inv.facts.metrics
+        if seen is None:
+            view = "no_metrics"
+        elif (seen.get("gps_max_step_m") or 0.0) >= RECOVERY_STEP_M:
+            view = "jump"
+        else:
+            view = "window_without_jump"
+        info["model_view"] = view
 
     async def _state_metrics(self, inv: Invocation) -> None:
         """Fase 14.3 (`state_line: recovery_data`): ante un aviso de `ROUTE_DEVIATION` con la alerta
@@ -357,11 +423,7 @@ class Monitor:
         rt = self.rt
         if self.config.state_line != "recovery_data":
             return
-        route = [
-            p
-            for p in inv.pending
-            if p.kind in ("raised", "updated") and p.event.payload.get("rule") == "ROUTE_DEVIATION"
-        ]
+        route = self._route_deviation_warnings(inv)
         alert = rt.state.recent_gps_alert(inv.as_of)
         if (
             not route
@@ -598,6 +660,12 @@ class Monitor:
 
     async def _publish_alert(self, inv: Invocation, raw: dict[str, Any]) -> dict[str, Any]:
         rt = self.rt
+        if self.config.fill_link_anomalous:
+            raw, filled = fill_link_anomalous(raw, inv.facts)
+            if filled is not None:
+                inv.trace.module_filled.append(
+                    {"tool": "publish_alert", "field": "checks.link_anomalous", "value": filled}
+                )
         verdict = check_publish_alert(
             raw,
             as_of=inv.as_of,

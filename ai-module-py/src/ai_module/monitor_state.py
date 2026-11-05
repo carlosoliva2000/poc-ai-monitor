@@ -208,6 +208,12 @@ class MonitorState:
             alert = self.alerts.get(alert.superseded_by)
         return alert
 
+    def chain_root(self, alert: AlertRecord) -> AlertRecord:
+        """La primera alerta de la cadena de `supersedes` a la que pertenece `alert`."""
+        while alert.supersedes is not None and alert.supersedes in self.alerts:
+            alert = self.alerts[alert.supersedes]
+        return alert
+
     def alert_of(self, detection_id: str) -> AlertRecord | None:
         """Alerta en vigor de la detección (abierta o cerrada), o `None` si no tiene."""
         record = self.detections.get(detection_id)

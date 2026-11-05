@@ -575,6 +575,9 @@ def recovery_misses(data: RunData) -> list[RecoveryMiss] | None:
             None,
         )
         called, step = metrics_seen(record)
+        module_step = ((record or {}).get("recovery_jump") or {}).get("gps_max_step_m")
+        if module_step is not None:  # Fase 14.4: con el salto del módulo, decide ese
+            called, step = True, module_step
         if response is None or response.fallback:
             reason = "fallback"
         elif not called:
@@ -670,6 +673,18 @@ def agent_stats(trace: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             "skills_guided": guided_skills,
             "invalid_json": sum(t["invalid_json"] for t in records),
             "rejections": sum(len(t["guardrail_rejections"]) for t in records),
+            "link_null_rejections": sum(
+                1
+                for t in records
+                for r in t["guardrail_rejections"]
+                if any("link_anomalous = null" in e for e in r["errors"])
+            ),
+            "link_filled": sum(
+                1
+                for t in records
+                for f in t.get("module_filled", [])
+                if f.get("field") == "checks.link_anomalous"
+            ),
             "recovery_ack_vetoes": sum(
                 1
                 for t in records
@@ -681,6 +696,16 @@ def agent_stats(trace: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
                 for t in records
                 for r in t["guardrail_rejections"]
                 if r.get("tag") == "recovery_ack_no_metrics"
+            ),
+            "module_jumps": sum(1 for t in records if (t.get("recovery_jump") or {}).get("jump")),
+            "module_jump_unseen": sum(
+                1
+                for t in records
+                if (t.get("recovery_jump") or {}).get("model_view")
+                in ("window_without_jump", "no_metrics")
+            ),
+            "module_jump_errors": sum(
+                1 for t in records if (t.get("recovery_jump") or {}).get("error")
             ),
             "state_jumps": sum(1 for t in records if (t.get("state_metrics") or {}).get("jump")),
             "state_jump_unseen": sum(
@@ -890,6 +915,8 @@ AID_NAMES = {
     "source_silent_own_alert": "alerta propia para la fuente callada",
     "no_duplicate_cause": "sin causa duplicada",
     "recovery_ack_veto": "veto del reconocimiento de la recuperación",
+    "fill_link_anomalous": "link_anomalous lo rellena el módulo",
+    "recovery_jump_from_module": "salto de la recuperación calculado por el módulo",
     "guided_skills": "modo guiado",
 }
 
@@ -1095,6 +1122,18 @@ def phase_section(ev: Evaluation) -> list[str]:
         "veces · rechazos por no haber pedido get_track_metrics: "
         f"{monitor.get('recovery_ack_no_metrics', 0)}"
     )
+    lines.append(
+        "- `checks.link_anomalous`: rechazos por `null`: "
+        f"{monitor.get('link_null_rejections', 0)} · rellenados por el módulo: "
+        f"{monitor.get('link_filled', 0)}"
+    )
+    if monitor.get("module_jumps") or monitor.get("module_jump_errors"):
+        lines.append(
+            f"- Saltos del GPS que calculó el módulo para la fase: {monitor.get('module_jumps', 0)}"
+            " · invocaciones en que la ventana que pidió el modelo no los veía: "
+            f"{monitor.get('module_jump_unseen', 0)} · llamadas del módulo que fallaron: "
+            f"{monitor.get('module_jump_errors', 0)}"
+        )
     if monitor.get("state_jumps"):
         lines.append(
             f"- Saltos del GPS que el módulo dio en el estado: {monitor['state_jumps']} · "

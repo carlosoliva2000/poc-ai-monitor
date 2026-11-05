@@ -59,6 +59,26 @@ class InvocationFacts:
     """El último resultado de `get_track_metrics`."""
     link_events: list[dict[str, Any]] | None = None
     """Los eventos del último `get_events` con `source: link` (`None`: no se miró)."""
+    module_jump: "ModuleJump | None" = None
+    """Fase 14.4 (`monitor.recovery_jump_from_module`): el salto del GPS que calculó el módulo con
+    una ventana fija. `None`: no hay dato (apagado, no hacía falta o falló la llamada) y el
+    guardrail usa la ventana que pidió el modelo, como antes."""
+
+
+@dataclass(frozen=True)
+class ModuleJump:
+    """Resultado de la llamada del módulo a `get_track_metrics` para la recuperación del GPS."""
+
+    step: float | None
+    """`gps_max_step_m` de esa ventana (`None` si la plataforma no pudo calcularlo)."""
+
+
+def gps_step(facts: "InvocationFacts") -> float | None:
+    """El salto del GPS con el que se decide la recuperación: el del módulo si lo hay y, si no, el
+    de la última ventana que pidió el modelo."""
+    if facts.module_jump is not None:
+        return facts.module_jump.step
+    return (facts.metrics or {}).get("gps_max_step_m")
 
 
 def link_is_anomalous(events: list[dict[str, Any]]) -> bool:
@@ -104,6 +124,22 @@ def expected_checks(facts: InvocationFacts, state: MonitorState, as_of: float) -
         "link_checked": checked,
         "link_anomalous": link_is_anomalous(facts.link_events or []) if checked else None,
     }
+
+
+def fill_link_anomalous(
+    raw: dict[str, Any], facts: InvocationFacts
+) -> tuple[dict[str, Any], bool | None]:
+    """Fase 14.4: si el modelo miró el enlace en la invocación y deja `checks.link_anomalous` a
+    `null` (o lo omite), devuelve la llamada con el valor esperado y ese valor. No toca nada si no
+    miró el enlace, si no hay `checks` o si declaró un valor (aunque sea el equivocado: ese se
+    sigue rechazando en el guardrail de coherencia)."""
+    checks = raw.get("checks")
+    if facts.link_events is None or not isinstance(checks, dict):
+        return raw, None
+    if checks.get("link_anomalous") is not None:
+        return raw, None
+    value = link_is_anomalous(facts.link_events)
+    return {**raw, "checks": {**checks, "link_anomalous": value}}, value
 
 
 def is_new_source_silent(detection_ids: list[str], state: MonitorState) -> bool:
@@ -160,12 +196,11 @@ class RecoveryContext:
 def recovery_context(
     detection_ids: list[str], facts: InvocationFacts, state: MonitorState, as_of: float
 ) -> RecoveryContext:
-    metrics = facts.metrics or {}
     on_route_deviation = any(
         (d := state.detections.get(i)) is not None and d.rule == "ROUTE_DEVIATION"
         for i in detection_ids
     )
-    step = metrics.get("gps_max_step_m")
+    step = gps_step(facts)
     jump = step is not None and step >= RECOVERY_STEP_M
     disagreed = metric_facts(facts.metrics)["gps_radar_disagreed"]
     recent = state.recent_gps_alert(as_of) if on_route_deviation else None
@@ -528,7 +563,7 @@ def _check_recovery_ack(
     recent = state.recent_gps_alert(as_of) if open_route else None
     if recent is None or recent.status != AlertStatus.OPEN or recent.phase != ACTIVE:
         return Verdict(args=args)
-    if facts.metrics is None:
+    if facts.metrics is None and facts.module_jump is None:
         return Verdict(
             errors=[
                 f"{recent.alert_id} ({recent.cause}) is an open GPS alert and this deviation may "
@@ -536,7 +571,7 @@ def _check_recovery_ack(
             ],
             tag=TAG_RECOVERY_ACK_NO_METRICS,
         )
-    step = facts.metrics.get("gps_max_step_m")
+    step = gps_step(facts)
     if step is not None and step >= RECOVERY_STEP_M:
         return Verdict(
             errors=[

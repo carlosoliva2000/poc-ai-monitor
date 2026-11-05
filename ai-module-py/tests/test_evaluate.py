@@ -994,3 +994,31 @@ def test_a_run_without_state_jumps_says_nothing_about_them(tmp_path: Path) -> No
     ev = evaluate(demo_run(tmp_path, phases="recovering").write())
     assert ev.agents.get("monitor", {}).get("state_jumps", 0) == 0
     assert "Saltos del GPS que el módulo dio" not in render_markdown(ev)
+
+
+def test_the_module_jump_decides_the_reason_and_is_counted_apart(tmp_path: Path) -> None:
+    """Fase 14.4: con el salto que calculó el módulo, una recuperación sin fase no puede ser
+    `window_without_jump` ni `no_metrics`; se cuentan los saltos del módulo, los que la ventana del
+    modelo no veía y las llamadas que fallaron."""
+    b = demo_run(tmp_path, phases="active")
+    jump = {"since": 192.0, "until": 222.0, "gps_max_step_m": 67.9, "jump": True}
+    recovery_trace(
+        b, [metrics_message(5.0)], recovery_jump={**jump, "model_view": "window_without_jump"}
+    )
+    b.trace.append(
+        trace_record(causation_ids=["det-0021"], recovery_jump={**jump, "model_view": "jump"})
+    )
+    b.trace.append(trace_record(causation_ids=["det-0022"], recovery_jump={"error": "down"}))
+    ev = evaluate(b.write())
+    assert [m.reason for m in ev.recovery_misses or []] == ["other"]
+    monitor = ev.agents["monitor"]
+    assert monitor["module_jumps"] == 2 and monitor["module_jump_unseen"] == 1
+    assert monitor["module_jump_errors"] == 1
+    md = render_markdown(ev)
+    assert "Saltos del GPS que calculó el módulo para la fase: 2" in md
+    assert "no los veía: 1" in md and "fallaron: 1" in md
+
+
+def test_a_run_without_module_jumps_says_nothing_about_them(tmp_path: Path) -> None:
+    ev = evaluate(demo_run(tmp_path, phases="recovering").write())
+    assert "Saltos del GPS que calculó el módulo" not in render_markdown(ev)

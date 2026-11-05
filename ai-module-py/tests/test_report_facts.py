@@ -356,3 +356,13 @@ def test_the_jump_comes_from_the_invocation_that_published_the_alert() -> None:
     assert recovery_jump_m(records, "ai-0002") == 5.0
     assert recovery_jump_m(records, "ai-9999") is None
     assert recovery_jump_m([monitor_record("ai-0004")], "ai-0004") is None  # sin métricas
+
+
+def test_the_jump_the_module_computed_wins_over_the_model_window() -> None:
+    from ai_module.report_facts import recovery_jump_m
+
+    record = monitor_record("ai-0004", 4.0)  # la ventana del modelo no vio el salto
+    record["recovery_jump"] = {"gps_max_step_m": 67.9, "jump": True}
+    assert recovery_jump_m([record], "ai-0004") == 67.9
+    record["recovery_jump"] = {"error": "down"}  # la llamada falló: la ventana del modelo
+    assert recovery_jump_m([record], "ai-0004") == 4.0

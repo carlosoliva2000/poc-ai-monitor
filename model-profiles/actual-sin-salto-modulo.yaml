@@ -1,0 +1,14 @@
+# Idéntico a `actual` (Qwen3-14B-AWQ sin razonamiento, T=0, todas las ayudas) salvo que la fase de la
+# recuperación del GPS se decide con la ventana que pide el modelo (monitor.recovery_jump_from_module
+# apagado). Fase 14.4: control de la prueba de robustez del salto calculado por el módulo.
+# Ficha: https://huggingface.co/Qwen/Qwen3-14B-AWQ
+description: Qwen/Qwen3-14B-AWQ, sin razonamiento, como actual sin el salto calculado por el módulo
+server:
+  model: Qwen/Qwen3-14B-AWQ
+  tool_call_parser: hermes
+  reasoning_parser: qwen3
+  max_model_len: 32768
+  extra_args: []
+agents:
+  monitor:
+    recovery_jump_from_module: false
