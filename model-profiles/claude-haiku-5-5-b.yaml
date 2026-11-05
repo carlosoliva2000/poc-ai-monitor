@@ -1,0 +1,46 @@
+# E5 · Haiku 5.5, serie B: sin ayudas (todas las de quien_decide_que.md §3 con interruptor, apagadas), razonamiento por defecto.
+# Fuera del repositorio limpio (nombra al proveedor). Cliente: cloud-adapter (SDK `anthropic`).
+# Temperatura, top_p y top_k no se envían (400 con valores no por defecto): los de agents.yaml no
+# se aplican. Los tiempos son los de Carlos para estos perfiles; `actual` no cambia.
+# Precios por millón de tokens (https://platform.claude.com/docs/en/about-claude/pricing,
+# 05/11/2026), para prompts de hasta 100 k tokens.
+description: claude-haiku-5-5, serie B
+llm:
+  model: claude-haiku-5-5
+  adapter: "cloud_adapter.claude_llm:ClaudeLlm"
+  adapter_path: cloud-adapter
+  api_key_file: ~/.config/poc-ai-monitor/anthropic.key
+  pricing: {input: 0.10, cache_write: 0.125, cache_read: 0.01, output: 0.50}
+sampling:
+  reasoning: null
+  reasoning_effort: medium
+agents:
+  monitor:
+    max_tokens: 4000
+    max_invocation_s: 180
+    llm_timeout_s: 90
+    coherence_guardrail: false
+    require_checks: false
+    computed_facts: false
+    now_facts: false
+    final_iteration_response_tools_only: false
+    source_silent_own_alert: false
+    no_duplicate_cause: false
+    recovery_ack_veto: false
+    fill_link_anomalous: false
+    recovery_jump_from_module: false
+    guided_skills: false
+    state_line: data
+    tool_choice: auto
+  chat_monitor:
+    max_tokens: 3000
+    llm_timeout_s: 90
+  report:
+    max_tokens: 6000
+  chat_report:
+    max_tokens: 3000
+    llm_timeout_s: 90
+chat:
+  tools_enabled: true
+platform:
+  wait_agent_timeout_s: 240

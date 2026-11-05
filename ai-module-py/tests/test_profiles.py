@@ -228,7 +228,8 @@ def test_existing_profiles_send_the_same_requests_as_before_reasoning_effort() -
         "chat_template_kwargs": {"enable_thinking": False},
     }
     for name in list_profiles():
-        if name in ("gpt-oss-20b-low",):
+        # gpt-oss fija el esfuerzo; un cliente alternativo (`llm.adapter`) envía otras claves
+        if name in ("gpt-oss-20b-low",) or load_profile(name).raw.get("llm", {}).get("adapter"):
             continue
         for agent in AGENTS:
             config = Assets(profile=load_profile(name)).agent(agent)

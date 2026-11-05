@@ -28,6 +28,7 @@ import argparse
 import json
 import logging
 import os
+import shlex
 import subprocess
 import sys
 import threading
@@ -164,7 +165,10 @@ def start_ai_module(
     tool_call_events: bool = True,
 ) -> subprocess.Popen:
     """Arranca el módulo de IA (proceso aparte) y espera a que esté conectado y suscrito."""
-    command = ["uv", "run", "--project", str(REPO_ROOT / "ai-module-py"), "python", "-m",
+    # `AI_MODULE_UV_ARGS`: opciones extra de `uv run` para el módulo (p. ej. un paquete con un
+    # cliente LLM alternativo, `--with-editable ruta`); vacío por defecto
+    extra = shlex.split(os.environ.get("AI_MODULE_UV_ARGS", ""))
+    command = ["uv", "run", "--project", str(REPO_ROOT / "ai-module-py"), *extra, "python", "-m",
                "ai_module", "--platform", platform_url, "--runs", str(RUNS_DIR)]  # fmt: skip
     if detector_only:
         command.append("--detector-only")

@@ -1,0 +1,13 @@
+[project]
+name = "poc-cloud-adapter"
+version = "0.1.0"
+description = "Cliente LLM alternativo del módulo de IA (API de mensajes de un proveedor en la nube)"
+requires-python = ">=3.12"
+dependencies = ["anthropic"]
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "cloud_adapter"

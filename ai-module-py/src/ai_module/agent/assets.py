@@ -60,6 +60,9 @@ class AgentConfig:
     """Esfuerzo de razonamiento (gpt-oss: low, medium, high); `None` = no se envía."""
     reasoning_field: str = "reasoning_content"
     """Campo del mensaje del asistente con el que se devuelve el razonamiento al modelo."""
+    thinking: str | None = None
+    """Modo de razonamiento de un adaptador que lo pide por nombre (`adaptive`, `disabled`,
+    `between_tools`); `None` = no se envía y el servidor aplica el suyo."""
     objective_prompt: str | None = None
     output_prompt: str | None = None
     system_prompt_notools: str | None = None
@@ -160,6 +163,8 @@ class AgentConfig:
             extra_body["chat_template_kwargs"] = {"enable_thinking": self.reasoning}
         if self.reasoning_effort is not None:
             extra_body["reasoning_effort"] = self.reasoning_effort
+        if self.thinking is not None:
+            extra_body["thinking_mode"] = self.thinking
         return {
             "temperature": self.temperature,
             "top_p": self.top_p,
@@ -189,6 +194,7 @@ class AgentConfig:
                 if self.reasoning_field != "reasoning_content"
                 else {}
             ),
+            **({"thinking": self.thinking} if self.thinking is not None else {}),
             "max_invocation_s": self.max_invocation_s,
             "llm_timeout_s": self.llm_timeout_s,
             "aids": self.aids() if self.name == "monitor" else None,
@@ -205,6 +211,12 @@ class LlmSettings:
     base_url: str
     api_key: str
     model: str
+    adapter: str | None = None
+    """Cliente LLM alternativo, `modulo:Clase` (se carga con `importlib`); sin él, `OpenAiLlm`."""
+    api_key_file: str | None = None
+    """Fichero (fuera del repositorio) con la clave del adaptador; nunca se guarda su contenido."""
+    pricing: dict[str, float] | None = None
+    """Precios por millón de tokens (`input`, `cache_write`, `cache_read`, `output`)."""
 
 
 MEMORY_MODES = ("per_detection", "per_run")
@@ -262,6 +274,9 @@ class Assets:
             base_url=raw["llm"]["base_url"],
             api_key=raw["llm"]["api_key"],
             model=raw["llm"]["model"],
+            adapter=raw["llm"].get("adapter"),
+            api_key_file=raw["llm"].get("api_key_file"),
+            pricing=raw["llm"].get("pricing"),
         )
         self.tools_json: list[dict[str, Any]] = json.loads(
             (root / "tools.json").read_text(encoding="utf-8")
@@ -304,7 +319,9 @@ class Assets:
     def profile_info(self) -> dict[str, Any]:
         """Contenido de `profile.json`: perfil, huellas y parámetros efectivos de cada agente."""
         profile = self.profile
+        adapter = {"adapter": self.llm.adapter} if self.llm.adapter else {}
         return {
+            **adapter,
             "profile": profile.name if profile else None,
             "profile_fingerprint": profile.short if profile else None,
             "assets": self.root.name,
@@ -391,6 +408,7 @@ class Assets:
             reasoning=None if pick("reasoning") is None else bool(pick("reasoning")),
             reasoning_effort=pick("reasoning_effort"),
             reasoning_field=str(pick("reasoning_field", "reasoning_content")),
+            thinking=None if pick("thinking") is None else str(pick("thinking")),
             max_tokens=int(pick("max_tokens")),
             tool_choice=str(pick("tool_choice", "auto")),
             recovery_ack_veto=bool(spec.get("recovery_ack_veto", False)),

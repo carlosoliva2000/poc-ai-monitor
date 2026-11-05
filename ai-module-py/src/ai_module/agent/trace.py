@@ -29,6 +29,8 @@ class CallTrace:
     reasoning_tokens: int | None = None
     cached_tokens: int | None = None
     """Tokens del prompt servidos desde la caché de prefijos de vLLM (`None` si no los da)."""
+    cache_write_tokens: int | None = None
+    retries: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -43,6 +45,8 @@ class CallTrace:
             "reasoning": self.reasoning,
             "reasoning_tokens": self.reasoning_tokens,
             "cached_tokens": self.cached_tokens,
+            **({"cache_write_tokens": self.cache_write_tokens} if self.cache_write_tokens else {}),
+            **({"retries": self.retries} if self.retries else {}),
         }
 
 

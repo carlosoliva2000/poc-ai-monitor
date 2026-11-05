@@ -1,0 +1,33 @@
+# E5 · Haiku 5.5, serie A0: todas las ayudas y sin razonamiento previo.
+# Fuera del repositorio limpio (nombra al proveedor). Cliente: cloud-adapter (SDK `anthropic`).
+# Temperatura, top_p y top_k no se envían (400 con valores no por defecto): los de agents.yaml no
+# se aplican. Los tiempos son los de Carlos para estos perfiles; `actual` no cambia.
+# Precios por millón de tokens (https://platform.claude.com/docs/en/about-claude/pricing,
+# 05/11/2026), para prompts de hasta 100 k tokens.
+description: claude-haiku-5-5, serie A0
+llm:
+  model: claude-haiku-5-5
+  adapter: "cloud_adapter.claude_llm:ClaudeLlm"
+  adapter_path: cloud-adapter
+  api_key_file: ~/.config/poc-ai-monitor/anthropic.key
+  pricing: {input: 0.10, cache_write: 0.125, cache_read: 0.01, output: 0.50}
+sampling:
+  reasoning: null
+  reasoning_effort: medium
+  thinking: disabled
+agents:
+  monitor:
+    max_tokens: 4000
+    max_invocation_s: 180
+    llm_timeout_s: 90
+    tool_choice: required   # `any`: Haiku 5.5 lo admite (y no razona con él)
+  chat_monitor:
+    max_tokens: 3000
+    llm_timeout_s: 90
+  report:
+    max_tokens: 6000
+  chat_report:
+    max_tokens: 3000
+    llm_timeout_s: 90
+platform:
+  wait_agent_timeout_s: 240

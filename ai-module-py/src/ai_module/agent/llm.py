@@ -6,6 +6,7 @@ tool se detecta por `message.tool_calls` no vacío, **nunca** por `finish_reason
 guarda como anotación).
 """
 
+import importlib
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -53,6 +54,11 @@ async def check_served_model(
 DeltaCallback = Callable[[str], Awaitable[None]]
 
 
+class FatalLlmError(Exception):
+    """El proveedor rechaza las peticiones de forma que repetir no sirve (clave, facturación,
+    límite de gasto, petición inválida). El adaptador no hace más peticiones tras lanzarla."""
+
+
 @dataclass(frozen=True)
 class ToolCall:
     id: str
@@ -76,12 +82,21 @@ class LlmResponse:
     cached_tokens: int | None = None
     """Tokens del prompt servidos desde la caché de prefijos, si vLLM los da en
     `usage.prompt_tokens_details`, si no `None`."""
+    cache_write_tokens: int | None = None
+    """Tokens del prompt escritos en la caché del proveedor (un adaptador que la factura aparte)."""
+    retries: list[dict[str, Any]] = field(default_factory=list)
+    """Reintentos de la llamada (estado y espera de cada uno), si el adaptador reintenta."""
+    raw_blocks: list[dict[str, Any]] | None = None
+    """Contenido original del mensaje del asistente de un adaptador que debe devolverlo intacto
+    (bloques de razonamiento); se reenvía en la petición siguiente."""
 
     def assistant_message(self, reasoning_field: str = REASONING_INPUT_FIELD) -> dict[str, Any]:
         """El mensaje del asistente para devolver al modelo en la siguiente petición. El
         razonamiento va en `reasoning_field` (gpt-oss lo lee de `reasoning`, Qwen3 de
         `reasoning_content`)."""
         message: dict[str, Any] = {"role": "assistant", "content": self.content or None}
+        if self.raw_blocks is not None:
+            message["raw_blocks"] = self.raw_blocks
         if self.reasoning:
             message[reasoning_field] = self.reasoning
         if self.tool_calls:
@@ -109,6 +124,18 @@ class LlmClient(Protocol):
         on_delta: DeltaCallback | None = None,
         timeout_s: float | None = None,
     ) -> LlmResponse: ...
+
+
+def load_adapter(spec: str, **options: Any) -> "LlmClient":
+    """Carga un cliente LLM alternativo `modulo:Clase` (paquete aparte, no del módulo)."""
+    module_name, _, class_name = spec.partition(":")
+    if not module_name or not class_name:
+        raise ModelMismatchError(f"llm.adapter must look like 'module:Class' (got {spec!r})")
+    try:
+        cls = getattr(importlib.import_module(module_name), class_name)
+    except (ImportError, AttributeError) as exc:
+        raise ModelMismatchError(f"cannot load the LLM adapter {spec}: {exc}") from exc
+    return cls(**options)
 
 
 class OpenAiLlm:

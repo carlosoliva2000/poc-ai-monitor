@@ -1,0 +1,32 @@
+# E5 · Sonnet 5.5, serie A: todas las ayudas (la configuración de `actual`, salvo `tool_choice`, que Sonnet no admite forzado), razonamiento por defecto con esfuerzo medium.
+# Fuera del repositorio limpio (nombra al proveedor). Cliente: cloud-adapter (SDK `anthropic`).
+# Temperatura, top_p y top_k no se envían (400 con valores no por defecto): los de agents.yaml no
+# se aplican. Los tiempos son los de Carlos para estos perfiles; `actual` no cambia.
+# Precios por millón de tokens (https://platform.claude.com/docs/en/about-claude/pricing,
+# 05/11/2026), para prompts de hasta 100 k tokens.
+description: claude-sonnet-5-5, serie A
+llm:
+  model: claude-sonnet-5-5
+  adapter: "cloud_adapter.claude_llm:ClaudeLlm"
+  adapter_path: cloud-adapter
+  api_key_file: ~/.config/poc-ai-monitor/anthropic.key
+  pricing: {input: 2.00, cache_write: 2.50, cache_read: 0.10, output: 10.00}
+sampling:
+  reasoning: null
+  reasoning_effort: medium
+agents:
+  monitor:
+    max_tokens: 4000
+    max_invocation_s: 180
+    llm_timeout_s: 90
+    tool_choice: auto
+  chat_monitor:
+    max_tokens: 3000
+    llm_timeout_s: 90
+  report:
+    max_tokens: 6000
+  chat_report:
+    max_tokens: 3000
+    llm_timeout_s: 90
+platform:
+  wait_agent_timeout_s: 240

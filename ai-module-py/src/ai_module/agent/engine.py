@@ -315,4 +315,6 @@ def _call_trace(index: int, response: LlmResponse) -> CallTrace:
         reasoning=response.reasoning,
         reasoning_tokens=response.reasoning_tokens,
         cached_tokens=response.cached_tokens,
+        cache_write_tokens=response.cache_write_tokens,
+        retries=response.retries,
     )

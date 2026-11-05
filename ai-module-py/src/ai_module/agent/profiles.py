@@ -55,8 +55,9 @@ AID_KEYS = (
 )
 # La memoria del monitor no es una ayuda: cambia lo que el modelo recuerda, no lo que se le quita.
 MEMORY_KEYS = ("memory", "memory_budget_tokens", "memory_target_tokens")
-REASONING_KEYS = ("reasoning", "reasoning_effort", "reasoning_field")
-AGENT_KEYS = (*SAMPLING_KEYS, *REASONING_KEYS, *LIMIT_KEYS, *AID_KEYS, *MEMORY_KEYS)
+REASONING_KEYS = ("reasoning", "reasoning_effort", "reasoning_field", "thinking")
+# `state_line` (forma de la línea del estado) no es un interruptor, pero un perfil puede fijarla
+AGENT_KEYS = (*SAMPLING_KEYS, *REASONING_KEYS, *LIMIT_KEYS, *AID_KEYS, *MEMORY_KEYS, "state_line")
 ALLOWED = {
     "description": None,
     "assets": None,
@@ -68,7 +69,7 @@ ALLOWED = {
         "extra_args",
         "env",
     ),
-    "llm": ("model", "base_url", "api_key"),
+    "llm": ("model", "base_url", "api_key", "adapter", "adapter_path", "api_key_file", "pricing"),
     "sampling": (*SAMPLING_KEYS, *REASONING_KEYS),
     "agents": AGENT_NAMES,
     "chat": ("tools_enabled",),

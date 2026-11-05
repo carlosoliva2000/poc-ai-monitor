@@ -15,11 +15,19 @@ en `experiments/<id>/`: `manifest.json`, `runs/<perfil>/<escenario>/r<k>/` (con 
 `logs/` y `compare.md`. Si el servidor cae o no se libera la GPU, para la matriz sin reintentar.
 
 `--fake` sustituye vLLM por el servidor LLM falso de las pruebas (sin GPU).
+
+Un perfil con cliente LLM alternativo (`llm.adapter`, de pago) no usa servidor local: hace falta
+`--budget-usd` (tope del conjunto de la fase, según el libro `experiments/e5-ledger.json`). Antes de
+cada ejecución se estima su coste (`cost.py`) y, si no cabe, la matriz se para sin lanzarla; tras
+cada una se anota el coste real con los tokens de la traza. Un error fatal del proveedor (clave,
+facturación, tope de gasto) o una ejecución fallida paran la matriz sin reintentar.
 """
 
 import argparse
 import importlib.metadata
+import importlib.util
 import json
+import os
 import re
 import shlex
 import shutil
@@ -53,6 +61,21 @@ SCRIPT_QUESTIONS = (
 )
 DEFAULT_ASKS = {"demo": list(SCRIPT_QUESTIONS)}
 OTHER_ASKS = [f"report:end:{FINAL_QUESTION}"]
+
+
+def load_cost() -> Any:
+    """`cost.py`, que vive junto a este script (se carga por ruta para que valga también al
+    importar este fichero desde las pruebas)."""
+    spec = importlib.util.spec_from_file_location("e5_cost", Path(__file__).with_name("cost.py"))
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def uses_adapter(profile: Profile) -> bool:
+    """El perfil usa un cliente LLM alternativo (de pago), no un servidor local."""
+    return bool(profile.raw.get("llm", {}).get("adapter"))
 
 
 class MatrixError(Exception):
@@ -257,7 +280,7 @@ def build_manifest(
             name: {
                 "fingerprint": p.fingerprint,
                 "short": p.short,
-                "model": p.server.get("model"),
+                "model": p.model,
                 "server": p.server_signature(),
                 "wait_agent_timeout_s": p.wait_agent_timeout_s,
                 "assets": p.assets_dir.name,
@@ -274,6 +297,7 @@ def build_manifest(
         ),
         "vllm_version": "n/d",
         "openai_sdk": importlib.metadata.version("openai"),
+        "budget_usd": getattr(args, "budget_usd", None),
         "git": git_info(),
         "speed": float(SPEED),
         "runs": [
@@ -304,16 +328,22 @@ def run_command(spec: RunSpec, args: argparse.Namespace, llm_url: str | None) ->
     return command
 
 
-def execute(spec: RunSpec, args: argparse.Namespace, llm_url: str | None, folder: Path) -> dict:
+def execute(
+    spec: RunSpec,
+    args: argparse.Namespace,
+    llm_url: str | None,
+    folder: Path,
+    env: dict[str, str] | None = None,
+) -> dict:
     """Una ejecución: lanza `run.py`, copia sus ficheros y devuelve su entrada del manifiesto."""
     started = time.monotonic()
-    cache_before = cache_counters()
+    cache_before = cache_counters() if env is None else None
     log = folder / "logs" / f"{spec.profile}_{spec.scenario}_r{spec.rep}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     try:
         done = subprocess.run(
             run_command(spec, args, llm_url), cwd=REPO, text=True, capture_output=True,
-            timeout=args.run_timeout + 300, check=False,
+            timeout=args.run_timeout + 300, check=False, env=env,
         )  # fmt: skip
         output = done.stdout + done.stderr
     except subprocess.TimeoutExpired as exc:
@@ -345,6 +375,99 @@ def execute(spec: RunSpec, args: argparse.Namespace, llm_url: str | None, folder
     return entry
 
 
+def require_budget(profiles: dict[str, Profile], budget_usd: float | None) -> None:
+    """Un perfil de pago no se lanza sin tope de gasto."""
+    paid = [n for n, p in profiles.items() if uses_adapter(p)]
+    if paid and budget_usd is None:
+        raise MatrixError(f"the profiles {', '.join(paid)} use a paid LLM: --budget-usd is needed")
+
+
+def paid_environment(spec: RunSpec, profile: Profile, args: argparse.Namespace) -> dict[str, str]:
+    """Entorno de una ejecución de pago. Antes de lanzarla comprueba que cabe en el presupuesto
+    (estimación con margen) y fija el tope de gasto del proceso del módulo con lo que queda."""
+    cost = load_cost()
+    ledger = cost.load_ledger(args.ledger)
+    spent = cost.spent_usd(ledger)
+    estimate = cost.estimate_usd(ledger, profile.model, spec.scenario, spec.profile.endswith("-b"))
+    left = args.budget_usd - spent
+    print(
+        f"   budget: spent {spent:.3f} + estimate {estimate:.3f} of {args.budget_usd:.2f} USD",
+        flush=True,
+    )
+    if spent + estimate > args.budget_usd:
+        raise MatrixError(
+            f"{spec.profile} {spec.scenario} r{spec.rep} may not fit in the budget "
+            f"({spent:.3f} spent + {estimate:.3f} estimated > {args.budget_usd:.2f} USD): "
+            "not launched"
+        )
+    path = profile.raw["llm"].get("adapter_path")
+    if not path:
+        raise MatrixError(f"{spec.profile}: a profile with llm.adapter needs llm.adapter_path")
+    env = dict(os.environ)
+    env["AI_MODULE_UV_ARGS"] = f"--with-editable {REPO / path}"  # el paquete del cliente
+    env["LLM_RUN_CAP_USD"] = f"{max(left, 0):.4f}"
+    return env
+
+
+def account(
+    spec: RunSpec,
+    profile: Profile,
+    args: argparse.Namespace,
+    folder: Path,
+    entry: dict[str, Any],
+) -> None:
+    """Coste real de la ejecución (tokens de la traza × precios del perfil) al libro de cuentas."""
+    if entry.get("status") != "ok":
+        entry["cost_unknown"] = True  # la traza no se copió: el coste se mira en la consola
+        return
+    cost = load_cost()
+    trace = folder / "runs" / spec.profile / spec.scenario / f"r{spec.rep}" / "llm_trace.jsonl"
+    total = cost.trace_cost(trace, profile.raw["llm"]["pricing"])
+    entry["cost_usd"] = round(total["cost_usd"], 5)
+    entry["estimated_calls"] = total["estimated_calls"]
+    entry["tokens"] = {k: total[k] for k in ("prompt", "cache_read", "cache_write", "output")}
+    entry["tokens"]["reasoning"] = total["reasoning"]
+    fatal = fatal_error(trace)
+    if fatal:
+        entry["fatal"] = fatal
+    ledger = cost.load_ledger(args.ledger)
+    ledger["budget_usd"] = args.budget_usd
+    ledger["entries"].append(
+        {
+            "kind": "run",
+            "experiment": args.id,
+            "profile": spec.profile,
+            "model": profile.model,
+            "scenario": spec.scenario,
+            "rep": spec.rep,
+            "cost_usd": entry["cost_usd"],
+            "estimated_calls": total["estimated_calls"],
+        }
+    )
+    cost.save_ledger(ledger, args.ledger)
+
+
+def fatal_error(trace: Path) -> str | None:
+    """Mensaje del primer error fatal del proveedor en la traza, si lo hay."""
+    for line in trace.read_text(encoding="utf-8").splitlines():
+        for call in json.loads(line).get("calls", []):
+            if "[FatalLlmError]" in (call.get("content") or ""):
+                return call["content"][:300]
+    return None
+
+
+def cost_note(entry: dict[str, Any]) -> str:
+    return f" · {entry['cost_usd']:.4f} USD" if "cost_usd" in entry else ""
+
+
+def stop_if_paid_run_failed(entry: dict[str, Any]) -> None:
+    """Un error fatal del proveedor o una ejecución fallida paran la matriz, sin reintentar."""
+    if entry.get("fatal"):
+        raise MatrixError(f"fatal error from the LLM provider, stopping: {entry['fatal']}")
+    if entry["status"] != "ok":
+        raise MatrixError(f"a paid run failed ({entry.get('error', 'no detail')}): stopping")
+
+
 def run_matrix(args: argparse.Namespace, backend: Backend) -> Path:
     profiles = {name: load_profile(name) for name in args.profile_list}
     folder = EXPERIMENTS / args.id
@@ -358,18 +481,29 @@ def run_matrix(args: argparse.Namespace, backend: Backend) -> Path:
         manifest = build_manifest(args.id, args, profiles, runs)
         save(folder, manifest)
     entries = {(e["profile"], e["scenario"], e["rep"]): e for e in manifest["runs"]}
+    require_budget(profiles, args.budget_usd)
     servers = ServerManager(backend)
     try:
         for spec in runs:
             entry = entries[(spec.profile, spec.scenario, spec.rep)]
             if entry["status"] == "ok":
                 continue
-            servers.ensure(profiles[spec.profile])
-            manifest["vllm_version"] = servers.version
+            profile = profiles[spec.profile]
+            env = None
+            if uses_adapter(profile):
+                servers.close(False)  # sin servidor local; si había uno de otro perfil, se para
+                env = paid_environment(spec, profile, args)
+            else:
+                servers.ensure(profile)
+                manifest["vllm_version"] = servers.version
             print(f"== {spec.profile} · {spec.scenario} · r{spec.rep}", flush=True)
-            entry.update(execute(spec, args, backend.llm_url, folder))
+            entry.update(execute(spec, args, backend.llm_url, folder, env))
+            if env is not None:
+                account(spec, profile, args, folder, entry)
             save(folder, manifest)
-            print(f"   {entry['status']} ({entry['wall_s']} s)", flush=True)
+            print(f"   {entry['status']} ({entry['wall_s']} s){cost_note(entry)}", flush=True)
+            if env is not None:
+                stop_if_paid_run_failed(entry)
             servers.check()
     finally:
         try:
@@ -396,6 +530,10 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--platform-port", type=int, help="puerto de la plataforma")
     parser.add_argument("--run-timeout", type=float, default=1800.0, help="segundos por ejecución")
     parser.add_argument("--dry-run", action="store_true", help="solo muestra el plan")
+    parser.add_argument(
+        "--budget-usd", type=float, help="tope de gasto de los perfiles de pago (todo el libro)"
+    )
+    parser.add_argument("--ledger", type=Path, help="libro de cuentas (por defecto, el de cost.py)")
     args = parser.parse_args(argv)
     if args.resume:
         manifest = json.loads((EXPERIMENTS / args.resume / "manifest.json").read_text("utf-8"))
@@ -413,6 +551,7 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
             "-fake" if args.fake else ""
         )
     args.platform_port = args.platform_port or (8199 if args.fake else 8100)
+    args.ledger = args.ledger or load_cost().LEDGER
     return args
 
 
@@ -425,8 +564,11 @@ def main(argv: list[str] | None = None) -> int:
             signature = profiles[spec.profile].server_signature()
             if signature != server:
                 profile = profiles[spec.profile]
-                print(f"server: start {profile.server['model']}")
-                print(f"  vllm {shlex.join(profile.serve_args())}")
+                if uses_adapter(profile):
+                    print(f"paid LLM: {profile.model} (no local server)")
+                else:
+                    print(f"server: start {profile.server['model']}")
+                    print(f"  vllm {shlex.join(profile.serve_args())}")
                 info = Assets(profile.assets_dir, profile).profile_info()
                 print(f"  llm model: {info['model']} · wait {info['wait_agent_timeout_s']:g} s")
                 for agent, effective in info["agents"].items():

@@ -975,8 +975,17 @@ def profile_lines(info: dict[str, Any]) -> list[str]:
         "razonamiento | invocación máx. | llamada máx. |",
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
+    if info.get("adapter"):
+        lines[1:1] = [
+            "- Cliente LLM alternativo (`llm.adapter`): temperature, top_p, top_k, repetition y "
+            "presence **no se envían**; los valores de la tabla son los de `agents.yaml`. "
+            "Razonamiento: modo y esfuerzo del perfil.",
+        ]
     for agent, a in info.get("agents", {}).items():
         reasoning = "n/d" if a.get("reasoning") is None else _yes_no(a["reasoning"])
+        if info.get("adapter"):
+            mode = a.get("thinking") or "por defecto"
+            reasoning = f"{mode}, esfuerzo {a.get('reasoning_effort') or 'n/d'}"
         lines.append(
             f"| {agent} | {a['temperature']:g} | {a['top_p']:g} | {a['top_k']} | "
             f"{a['repetition_penalty']:g} | {a['presence_penalty']:g} | {a['max_tokens']} | "

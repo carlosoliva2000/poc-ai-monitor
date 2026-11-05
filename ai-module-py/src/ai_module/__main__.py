@@ -12,7 +12,13 @@ import logging
 from pathlib import Path
 
 from .agent.assets import DEFAULT_ASSETS, Assets
-from .agent.llm import ModelMismatchError, OpenAiLlm, check_served_model
+from .agent.llm import (
+    LlmClient,
+    ModelMismatchError,
+    OpenAiLlm,
+    check_served_model,
+    load_adapter,
+)
 from .agent.profiles import DEFAULT_PROFILES, load_profile
 from .bus_client import DEFAULT_PLATFORM, BusClient, fetch_mission_plan
 from .detector import Detector
@@ -39,15 +45,31 @@ async def run(
         assets_dir = chosen.assets_dir  # un perfil puede pedir una copia congelada de los assets
     assets = Assets(assets_dir, chosen)
     url = llm_url or assets.llm.base_url
-    if not detector_only:
-        # en una prueba manual vLLM servía Qwen3 y el módulo arrancó con la configuración de
-        # Qwen2.5 sin avisar: la primera alerta salió como fallback
-        try:
-            await check_served_model(url, assets.llm.api_key, assets.llm.model, profile)
-        except ModelMismatchError as exc:
-            raise SystemExit(f"error: {exc}") from exc
-        log.info("LLM server checked: serves %s", assets.llm.model)
-    llm = OpenAiLlm(url, assets.llm.api_key, assets.llm.model)
+    llm: LlmClient
+    if assets.llm.adapter:
+        # cliente alternativo de un paquete aparte; comprueba por sí mismo su configuración
+        llm = load_adapter(
+            assets.llm.adapter,
+            model=assets.llm.model,
+            api_key_file=assets.llm.api_key_file,
+            pricing=assets.llm.pricing,
+        )
+        if not detector_only:
+            try:
+                await llm.check()  # type: ignore[attr-defined]
+            except ModelMismatchError as exc:
+                raise SystemExit(f"error: {exc}") from exc
+            log.info("LLM adapter checked: %s", assets.llm.model)
+    else:
+        if not detector_only:
+            # en una prueba manual vLLM servía Qwen3 y el módulo arrancó con la configuración de
+            # Qwen2.5 sin avisar: la primera alerta salió como fallback
+            try:
+                await check_served_model(url, assets.llm.api_key, assets.llm.model, profile)
+            except ModelMismatchError as exc:
+                raise SystemExit(f"error: {exc}") from exc
+            log.info("LLM server checked: serves %s", assets.llm.model)
+        llm = OpenAiLlm(url, assets.llm.api_key, assets.llm.model)
     detector = Detector()
 
     async def bootstrap_plan() -> None:
