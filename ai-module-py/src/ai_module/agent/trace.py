@@ -86,6 +86,11 @@ class InvocationTrace:
     memory: dict[str, Any] = field(default_factory=dict)
     """Con la memoria A (`per_run`): turno, tokens estimados antes y después de compactar y
     cuántos turnos pasaron al nivel A y al B. Vacío con `per_detection`."""
+    state_metrics: dict[str, Any] = field(default_factory=dict)
+    """Fase 14.3: lo que calculó el módulo (no el modelo) para la línea de estado de una
+    recuperación del GPS: ventana, `gps_max_step_m`, si hay salto y, al acabar la invocación,
+    qué veía el guardrail (`guardrail_view`: `jump`, `window_without_jump` o `no_metrics`).
+    Vacío en las invocaciones donde no hace falta. No cuenta como iteración ni como tool."""
     conversation_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:

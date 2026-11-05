@@ -164,5 +164,6 @@ def test_gps_alert_line_data_style_has_no_sentence_to_copy() -> None:
     s.apply(closed("ai-0008", t=50.0))
     assert s.describe_gps_alert(60.0, "data") == "yes — ai-0008 GPS_SPOOFING (closed 10 s ago)"
     assert "If this warning" in s.describe_gps_alert(60.0)  # `legacy`, por defecto
-    # la 14.1 adoptó `legacy`; la 14.2 lo amplía con la fase de la alerta (`phase`)
+    # la 14.1 adoptó `legacy`; la 14.2 lo amplía con la fase de la alerta (`phase`); la 14.3
+    # midió `recovery_data` (test_state_recovery.py) y no lo adoptó
     assert Assets().agent("monitor").state_line == "phase"

@@ -682,6 +682,13 @@ def agent_stats(trace: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
                 for r in t["guardrail_rejections"]
                 if r.get("tag") == "recovery_ack_no_metrics"
             ),
+            "state_jumps": sum(1 for t in records if (t.get("state_metrics") or {}).get("jump")),
+            "state_jump_unseen": sum(
+                1
+                for t in records
+                if (t.get("state_metrics") or {}).get("guardrail_view")
+                in ("window_without_jump", "no_metrics")
+            ),
             "reminders": sum(t["reminders"] for t in records),
             "fallbacks": sum(1 for t in records if t["fallback"]),
             "fallback_closes": sum(1 for t in records if t["fallback_close"]),
@@ -1088,6 +1095,12 @@ def phase_section(ev: Evaluation) -> list[str]:
         "veces · rechazos por no haber pedido get_track_metrics: "
         f"{monitor.get('recovery_ack_no_metrics', 0)}"
     )
+    if monitor.get("state_jumps"):
+        lines.append(
+            f"- Saltos del GPS que el módulo dio en el estado: {monitor['state_jumps']} · "
+            "invocaciones en que el guardrail, con la ventana que pidió el modelo, no lo veía: "
+            f"{monitor.get('state_jump_unseen', 0)}"
+        )
     return lines
 
 

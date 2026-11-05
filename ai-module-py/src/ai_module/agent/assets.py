@@ -83,8 +83,10 @@ class AgentConfig:
     """Interruptor del monitor (Fase 14.1): `get_track_metrics` entrega el bloque `now`. Sin la
     clave (los assets anteriores a la 14.1) se quita del resultado que ve el modelo."""
     state_line: str = "legacy"
-    """Forma de la línea «Recent GPS alert» del estado: `data` (alerta, causa y estado) o
-    `legacy` (con la frase de la recuperación; los assets anteriores a la Fase 14.1)."""
+    """Forma de la línea «Recent GPS alert» del estado: `data` (alerta, causa y estado),
+    `legacy` (con la frase de la recuperación; los assets anteriores a la Fase 14.1), `phase`
+    (Fase 14.2) o `recovery_data` (Fase 14.3: como `data` más la fase y, si el módulo ha visto el
+    salto del GPS, el salto y el id al que sustituye; sin frases que copiar)."""
     source_silent_own_alert: bool = True
     no_duplicate_cause: bool = True
     """Interruptor del monitor: un aviso `SOURCE_SILENT` nuevo lleva alerta propia (ni se

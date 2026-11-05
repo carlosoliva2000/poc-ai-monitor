@@ -70,6 +70,10 @@ STYLE_COUNTERS = (
     "foreign_source_in_close",
     "summary_missing_type",
     "monitor_talk_in_recommendations",
+    "agree_without_fix",
+    "close_without_cause_source",
+    "unsupported_figures",
+    "recovery_time_mismatch",
 )
 COMPASS = {
     name: i * 22.5
@@ -99,6 +103,8 @@ DASHES = dict.fromkeys(
     map(ord, "\u2010\u2011\u2012\u2013\u2014\u2015\u2212\ufe58\ufe63\uff0d"), "-"
 )
 NUM = r"(\d+(?:\.\d+)?)"
+# Unidad de longitud: «m», «meter(s)» y «metre(s)» (el 32B escribe «9.9 meters»), no «m/s».
+METRES = r"\s*(?:m|meters?|metres?)\b(?!/)"
 GAP = r"(?:[^.;]|(?<=\d)\.(?=\d))"  # texto hasta el fin de la frase, con decimales
 ENUMS = [
     "WIND",
@@ -264,6 +270,140 @@ def foreign_source_in_close(text: str, cause: str | None, sources: set[str]) -> 
     return [s for s in sentences(text) if WIND_TERM_RE.search(s)]
 
 
+# --- La hora de la recuperación del informe no es la del cierre (Fase 14.3) ---------------------
+# Heurística léxica en inglés sobre el Summary: una cláusula con «recover…» y una hora T+mm:ss que
+# es la del cierre de la anomalía y no la de su entrada en recuperación («entered recovery by
+# T+03:54» cuando entró a T+03:42). Se mira cada anomalía que pasó por `recovering`.
+
+RECOVERY_TIME_RE = re.compile(r"recover\w*[^.;]{0,50}?(T\+\d\d:\d\d)", re.I)
+
+
+def format_t(sim_time: float) -> str:
+    total = int(sim_time)
+    return f"T+{total // 60:02d}:{total % 60:02d}"
+
+
+def recovery_time_mismatch(text: str, recoveries: list[tuple[float, float | None]]) -> list[str]:
+    """Horas del resumen dadas como entrada en recuperación que son la del cierre. `recoveries`:
+    `(entrada en recuperación, cierre)` de cada anomalía que pasó por `recovering`."""
+    found: list[str] = []
+    for m in RECOVERY_TIME_RE.finditer(norm(text)):
+        stated = m.group(1)
+        for entered, closed in recoveries:
+            if closed is not None and stated == format_t(closed) != format_t(entered):
+                found.append(m.group(0))
+                break
+    return found
+
+
+# --- Cifras sin respaldo en las recomendaciones del informe (Fase 14.3) --------------------------
+# Una recomendación solo puede usar cifras que estén en lo que el agente de informe recibió (los
+# hechos del vuelo y el conocimiento operativo). Cuenta cifras con unidad (m, m/s, s, %, °…) que no
+# están en el prompt de la llamada del informe de misión: umbrales, plazos o límites inventados. No
+# ve acciones inventadas sin cifra («actualiza el firmware»): eso es de la rúbrica.
+
+UNIT_FIGURE_RE = re.compile(
+    r"(?<![\w.+:-])(\d+(?:\.\d+)?)\s*(?:%|°|(?:minutes?|min|m/s|km/h|km|meters?|metres?|seconds?|ms|hz|dbm|db|m|s)"
+    r"(?![\w/]))",
+    re.I,
+)
+ANY_NUMBER_RE = re.compile(r"(?<![\w.+:-])\d+(?:\.\d+)?")
+APPROX_RE = re.compile(r"(?:about|approximately|around|roughly|~|circa)\s*$", re.I)
+
+
+def prompt_numbers(text: str) -> set[float]:
+    """Todas las cifras de un texto (sin ids ni horas T+mm:ss, que llevan guion o dos puntos)."""
+    return {float(m.group(0)) for m in ANY_NUMBER_RE.finditer(norm(text))}
+
+
+def unsupported_figures(text: str, known: set[float]) -> list[str]:
+    """Cifras con unidad del texto que no están entre las cifras recibidas (`known`). Un entero
+    precedido de «about», «around»… cuenta como respaldado si redondea una cifra recibida."""
+    plain = norm(text)
+    found: list[str] = []
+    for m in UNIT_FIGURE_RE.finditer(plain):
+        value = float(m.group(1))
+        if any(abs(value - k) <= 0.05 for k in known):
+            continue
+        approx = APPROX_RE.search(plain[max(0, m.start() - 14) : m.start()])
+        if approx and value.is_integer() and any(round(k) == value for k in known):
+            continue
+        found.append(m.group(0).strip())
+    return found
+
+
+# --- El cierre dice qué volvió a la normalidad de la causa (Fase 14.3) ---------------------------
+# Heurística léxica en inglés sobre el motivo de un `AlertClosed`: un secuestro se cierra con el
+# enlace (controlador, latencia, señal); una causa del GPS, con GPS y radar; un fallo de sensor, con
+# que el sensor vuelve a informar. El viento y la causa desconocida no se miden.
+
+LINK_TERMS_RE = re.compile(r"\b(?:link|controller|latency|rssi|signal strength|gcs-\d+)\b", re.I)
+GPS_CAUSES = ("GPS_SPOOFING", "GPS_JAMMING")
+BACK_TERMS_RE = re.compile(
+    r"\b(?:report(?:s|ing|ed)?|resum\w+|back|available|operational|working|recover\w+|restor\w+"
+    r"|return\w*|normal)\b",
+    re.I,
+)
+
+
+def close_without_cause_source(text: str, cause: str | None) -> list[str]:
+    """El cierre (una entrada con el texto) si no menciona el dato de la causa de la alerta:
+    `HIJACK` sin el enlace o el controlador; una causa del GPS sin GPS y radar; `SENSOR_FAULT` sin
+    que el sensor vuelve a informar."""
+    plain = norm(text)
+    low = plain.lower()
+    if cause == "HIJACK":
+        missing = not LINK_TERMS_RE.search(plain)
+    elif cause in GPS_CAUSES:
+        missing = "gps" not in low or "radar" not in low
+    elif cause == "SENSOR_FAULT":
+        missing = not BACK_TERMS_RE.search(plain)
+    else:
+        missing = False
+    return [text] if missing else []
+
+
+# --- GPS y radar «coinciden» con el GPS sin fix (Fase 14.3) ------------------------------------
+# Sin fix, la posición del GPS es una estimación a estima: no hay comparación con el radar y un
+# texto no puede decir que coinciden. Heurística léxica en inglés sobre los textos del monitor
+# (alertas y cierres) escritos mientras la última posición del GPS no tenía fix.
+
+AGREE_RE = re.compile(
+    r"\bgps and radar\b(?:\s+[\w-]+){0,3}?\s+(?:agree|agrees|match|matches|coincide|coincides"
+    r"|are consistent)\b"
+)
+
+
+def agree_without_fix(text: str, gps_nofix: bool) -> list[str]:
+    """Frases que dan por coincidentes GPS y radar (sin negación ni pasado) cuando el GPS no tenía
+    fix en ese instante. Vacío si tenía fix."""
+    if not gps_nofix:
+        return []
+    found: list[str] = []
+    for sentence in sentences(text):
+        low = sentence.lower()
+        if PAST_RE.search(low):
+            continue
+        for m in AGREE_RE.finditer(low):
+            negated = re.search(r"\b(?:not|never|no longer)\b|n't", m.group(0))
+            if not negated and not NEGATION_RE.search(low[max(0, m.start() - 25) : m.start()]):
+                found.append(sentence)
+                break
+    return found
+
+
+def gps_without_fix_at(events: list[dict[str, Any]], at: float) -> bool:
+    """La última posición del GPS publicada hasta `at` no tiene fix (navega a estima)."""
+    last = None
+    for e in events:
+        if e.get("type") == "PositionUpdated" and e.get("source") == "d1-gps":
+            if e["sim_time"] <= at:
+                last = e
+            else:
+                break
+    return last is not None and last["payload"].get("fix") == "none"
+
+
 # --- Informe de misión: tipo de cada anomalía y jerga del monitor (Fase 14.2) ---------------------
 # Heurísticas léxicas en inglés. Una anomalía es una cadena de alertas: basta con que el Summary
 # nombre alguna de sus causas.
@@ -413,6 +553,8 @@ class Facts:
     window_distance: set[float] = field(default_factory=set)
     window_deviation: set[float] = field(default_factory=set)
     window_wind_speed: set[float] = field(default_factory=set)
+    gps_nofix: bool = False
+    """La última posición del GPS de la invocación no tenía fix (se saca de la línea temporal)."""
 
     def merge(self, other: "Facts") -> None:
         self.now_distance |= other.now_distance
@@ -489,7 +631,7 @@ def add_events(facts: Facts, result: dict[str, Any]) -> None:
 
 def add_prompt_numbers(facts: Facts, text: str) -> None:
     """Cifras en metros que ya vienen en un prompt (mensaje del detector, alertas inyectadas…)."""
-    for m in re.finditer(NUM + r"\s*m\b(?!/)", text):
+    for m in re.finditer(NUM + METRES, text):
         value = float(m.group(1))
         facts.distance.add(value)
         facts.deviation.add(value)
@@ -574,10 +716,12 @@ DIST_RE = re.compile(
     + GAP
     + r"{0,40}?"
     + NUM
-    + r"\s*m\b(?!/)"
+    + METRES
 )
 DISAGREED_M = 25.0  # `gps_radar.disagreed`: distancia máxima GPS–radar de la ventana ≥ 25 m
-DISAGREE_RE = re.compile(r"disagree\w*\s+(?:by\s+|of\s+)?" + NUM + r"\s*m\b(?!/)")
+DISAGREE_RE = re.compile(
+    r"disagree\w*\s+(?:by\s+|of\s+|\((?:distance|gap)(?:\s+of)?\s+)?" + NUM + METRES
+)  # «disagree by 9.9 m», «disagree of 9.9 m» y «disagree (distance 9.9 m)»
 NEGATION_RE = re.compile(r"(?:\bnot|\bno longer|n't|\bnever)\s+(?:\w+\s+)?$")
 NOT_WITH_DRIFT_RE = re.compile(
     r"(?:does not|doesn't|did not|do not|not)\s+(?:push|align|blow|point|go|explain|match)"
@@ -585,8 +729,8 @@ NOT_WITH_DRIFT_RE = re.compile(
 )
 DEV_GAP = r"[^.;,()=]"  # una desviación y su cifra van juntas: sin comas, paréntesis ni «=»
 DEV_RE = re.compile(
-    NUM + r"\s*m\b(?!/)\s+(?:away\s+)?(?:from|off)\s+(?:the\s+)?(?:planned\s+)?(?:route|plan)"
-    r"|(?:deviation|deviates|deviating)" + DEV_GAP + r"{0,40}?" + NUM + r"\s*m\b(?!/)"
+    NUM + METRES + r"\s+(?:away\s+)?(?:from|off)\s+(?:the\s+)?(?:planned\s+)?(?:route|plan)"
+    r"|(?:deviation|deviates|deviating)" + DEV_GAP + r"{0,40}?" + NUM + METRES
 )
 THRESHOLD_RE = re.compile(
     r"(?:below|under|above|over|less than|more than|within|up to|at most|at least)\s+$"
@@ -690,6 +834,9 @@ def measure_text(
     cause: str | None = None,
     sources: set[str] | None = None,
     chains: list[set[str]] | None = None,
+    is_close: bool = False,
+    known_figures: set[float] | None = None,
+    recoveries: list[tuple[float, float | None]] | None = None,
 ) -> Measured:
     names, enums, bools = find_names(text)
     grams = set(corpus)
@@ -708,12 +855,19 @@ def measure_text(
         findings.update(recommendation_style(text))
     if kind == "report.Summary" and chains is not None:
         findings["summary_missing_type"] = summary_missing_type(text, chains)
+    if kind == "report.Summary" and recoveries is not None:
+        findings["recovery_time_mismatch"] = recovery_time_mismatch(text, recoveries)
     if kind == "report.Recommendations":
         findings["monitor_talk_in_recommendations"] = monitor_talk(text)
+        if known_figures is not None:
+            findings["unsupported_figures"] = unsupported_figures(text, known_figures)
     if kind.startswith(("alert.", "end.")):
         findings["now_window_mix"] = now_window_mix(text, facts)
+        findings["agree_without_fix"] = agree_without_fix(text, facts.gps_nofix)
     if kind == "end.reason" and cause is not None:
         findings["foreign_source_in_close"] = foreign_source_in_close(text, cause, sources or set())
+    if is_close and cause is not None:
+        findings["close_without_cause_source"] = close_without_cause_source(text, cause)
     plain = norm(text)
     return Measured(
         scenario,
@@ -758,6 +912,7 @@ def measure_run(
     }
     alert_cause: dict[str, str] = {}
     alert_sources: dict[str, set[str]] = {}
+    chain_times: dict[str, dict[str, float | None]] = {}  # raíz -> recuperación y cierre
     chain_causes: dict[str, set[str]] = {}  # raíz de la cadena -> causas de sus alertas
     root_of: dict[str, str] = {}
     for e in events:
@@ -772,6 +927,13 @@ def measure_run(
             root = root_of.get(p.get("supersedes") or "", p["alert_id"])
             root_of[p["alert_id"]] = root
             chain_causes.setdefault(root, set()).add(p.get("cause", ""))
+            times = chain_times.setdefault(root, {"entered": None, "closed": None})
+            if p.get("phase") == "recovering" and times["entered"] is None:
+                times["entered"] = e["sim_time"]
+        elif e.get("type") == "AlertClosed":
+            root = root_of.get(e["payload"].get("alert_id") or "")
+            if root is not None:
+                chain_times[root]["closed"] = e["sim_time"]
 
     def run_facts(until: float | None, own: dict[str, Any] | None) -> tuple[Facts, list[str]]:
         facts = Facts()
@@ -791,6 +953,7 @@ def measure_run(
             if record is None or record.get("fallback") and payload.get("fallback"):
                 continue  # un fallback lo escribe el módulo, no el modelo
             facts = record_facts(record, with_prompts=False)
+            facts.gps_nofix = gps_without_fix_at(events, record["as_of"])
             prose = prompt_prose(record)
             names = (
                 ("summary", "explanation", "recommendation")
@@ -812,6 +975,7 @@ def measure_run(
                             prose,
                             alert_cause.get(payload.get("alert_id") or ""),
                             alert_sources.get(payload.get("alert_id") or "", set()),
+                            is_close=kind == "AlertClosed",
                         )
                     )
         elif kind == "AgentReply":
@@ -837,6 +1001,18 @@ def measure_run(
         for rec in records:
             if rec.get("agent") == "report":
                 facts.merge(record_facts(rec, with_prompts=True))
+        first_report = next((r for r in records if r.get("agent") == "report"), None)
+        known = (
+            prompt_numbers(
+                "\n".join(
+                    m["content"]
+                    for m in first_report.get("messages", [])
+                    if m.get("role") in ("system", "user") and isinstance(m.get("content"), str)
+                )
+            )
+            if first_report is not None
+            else None
+        )
         sections, seen = texts.model_report_sections(report.read_text(encoding="utf-8"))
         for title, body in sections.items():
             # la valoración y las recomendaciones técnicas son la autoevaluación del monitor, para
@@ -854,6 +1030,12 @@ def measure_run(
                     corpus,
                     prose,
                     chains=list(chain_causes.values()),
+                    known_figures=known,
+                    recoveries=[
+                        (t["entered"], t["closed"])
+                        for t in chain_times.values()
+                        if t["entered"] is not None
+                    ],
                 )
             )
         for label, (_, body) in sorted(seen.items()):

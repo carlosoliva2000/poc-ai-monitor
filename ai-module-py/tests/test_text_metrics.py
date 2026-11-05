@@ -284,6 +284,40 @@ def test_disagree_by_a_figure_that_only_exists_now_is_a_mix() -> None:
     assert mix("GPS and radar do not disagree by 9.9 m.") == 0  # negación
 
 
+def test_the_unit_may_be_written_meters_or_metres() -> None:
+    """El 32B escribe «9.9 meters»: con la unidad solo en «m» el contador no veía su frase (Fase
+    14.3). La misma frase con «m» y con «meters» se cuenta igual, y «m/s» no es una longitud."""
+    phrase = "GPS and radar disagree by 9.9 {u}, suggesting the GPS position is unreliable."
+    for unit in ("m", "meters", "metres", "meter"):
+        assert mix(phrase.format(u=unit)) == 1, unit
+    assert mix("The deviation is now 53.0 meters from the route.") == 1
+    assert mix("The GPS and radar now agree (distance 9.9 meters).") == 0
+    assert mix("The wind is now 2.3 m/s, calm.") == 0
+
+
+def test_disagree_followed_by_the_distance_in_brackets_is_also_a_mix() -> None:
+    """«GPS and radar disagree (distance 5.1 m)» es el mismo error que «disagree by 5.1 m»."""
+    both = tm.Facts(window_distance={60.0}, now_distance={5.1})
+    text = "The GPS has jumped 90 m. GPS and radar disagree (distance 5.1 m)."
+    assert len(tm.now_window_mix(text, both)) == 1
+    assert tm.now_window_mix("GPS and radar agree (distance 5.1 m).", both) == []
+
+
+def test_figures_written_in_meters_are_checked_like_those_in_m() -> None:
+    """Las cifras en «meters» entran también en los errores de cifra, no solo en la mezcla."""
+    facts = tm.Facts(distance={9.9}, deviation={73.9})
+    wrong = tm.check_numbers(
+        "GPS and radar distance of 31.0 meters; the drone is 12.0 meters off the planned route.",
+        facts,
+    )
+    assert len(wrong["gps_radar_distance"]) == 1 and len(wrong["deviation"]) == 1
+    right = tm.check_numbers(
+        "GPS and radar distance of 9.9 meters; the drone is 73.9 meters off the planned route.",
+        facts,
+    )
+    assert not right["gps_radar_distance"] and not right["deviation"]
+
+
 def test_consistent_statements_are_not_a_mix() -> None:
     for text in (
         "The GPS and radar now agree (distance 9.9 m).",  # presente con la cifra de now
@@ -391,3 +425,149 @@ def test_report_counters_apply_to_their_sections_only() -> None:
     totals = tm.summarize([summary, rec])
     assert totals["summary_missing_type"] == 1 and totals["monitor_talk_in_recommendations"] == 1
     assert totals["total_leaks"] == 0 and totals["total_errors"] == 0
+
+
+# --- GPS y radar «coinciden» sin fix (Fase 14.3) ---
+
+
+def test_agreement_is_claimed_while_the_gps_has_no_fix() -> None:
+    nofix = "The GPS and radar positions agree now, but the GPS is degraded."
+    assert tm.agree_without_fix(nofix, True) == [nofix]
+    assert tm.agree_without_fix("GPS and radar now agree (distance 9.9 m).", True) != []
+    assert tm.agree_without_fix(nofix, False) == []  # con fix, es una comparación válida
+
+
+def test_agreement_with_a_negation_or_in_the_past_is_not_claimed() -> None:
+    for text in (
+        "GPS and radar disagree by 26.2 m.",
+        "GPS and radar do not agree.",
+        "GPS and radar agreed before the loss.",
+        "GPS and radar no longer agree.",
+        "The GPS has no fix and its position is only an estimate.",
+    ):
+        assert tm.agree_without_fix(text, True) == [], text
+
+
+def test_the_fix_is_read_from_the_last_gps_position_up_to_the_invocation() -> None:
+    def gps(t: float, fix: str) -> dict:
+        return {
+            "type": "PositionUpdated",
+            "source": "d1-gps",
+            "sim_time": t,
+            "payload": {"fix": fix},
+        }
+
+    events = [gps(244.0, "3d"), gps(245.0, "none"), gps(290.0, "3d")]
+    assert tm.gps_without_fix_at(events, 245.8) is True
+    assert tm.gps_without_fix_at(events, 244.5) is False
+    assert tm.gps_without_fix_at(events, 290.4) is False
+    assert tm.gps_without_fix_at([], 10.0) is False
+
+
+# --- El cierre dice qué volvió a la normalidad de la causa (Fase 14.3) ---
+
+GPS_ONLY_CLOSE = (
+    "The deviation from the route has decreased to 3.1 m (GPS) and 4.7 m (radar), and GPS and "
+    "radar now agree. The situation has returned to normal."
+)
+
+
+def test_a_hijack_closed_with_gps_and_radar_but_not_the_link_is_flagged() -> None:
+    assert tm.close_without_cause_source(GPS_ONLY_CLOSE, "HIJACK") == [GPS_ONLY_CLOSE]
+    link = "The command link is normal again: GCS-1 is in control (latency 52 ms, -64 dBm)."
+    assert tm.close_without_cause_source(link, "HIJACK") == []
+    controller = "The controller is the mission's again and the drone is back on the route."
+    assert tm.close_without_cause_source(controller, "HIJACK") == []
+
+
+def test_a_gps_cause_needs_gps_and_radar_in_the_close() -> None:
+    for cause in ("GPS_SPOOFING", "GPS_JAMMING"):
+        assert tm.close_without_cause_source(GPS_ONLY_CLOSE, cause) == []
+        wind = "The wind is from NW (336°), pushing SE, at 2.3 m/s."
+        assert tm.close_without_cause_source(wind, cause) == [wind]
+        only_gps = "The GPS is back, 2.9 m from the route."
+        assert tm.close_without_cause_source(only_gps, cause) == [only_gps]
+
+
+def test_a_sensor_fault_needs_the_sensor_to_report_again() -> None:
+    assert (
+        tm.close_without_cause_source("The GPS reports again (gps-000300).", "SENSOR_FAULT") == []
+    )
+    assert tm.close_without_cause_source("The radar is available again.", "SENSOR_FAULT") == []
+    wind = "The wind is from NW (298°), pushing SE."
+    assert tm.close_without_cause_source(wind, "SENSOR_FAULT") == [wind]
+
+
+def test_wind_and_unknown_closes_are_not_measured_and_only_closures_count() -> None:
+    for cause in ("WIND", "UNKNOWN"):
+        assert tm.close_without_cause_source("Back to normal.", cause) == []
+    kwargs = {
+        "scenario": "demo", "ref": "ai-0001", "facts": tm.Facts(), "existing_ids": set(),
+        "corpus": set(), "prose": [], "cause": "HIJACK", "sources": set(),
+    }  # fmt: skip
+    closed = tm.measure_text(kind="end.reason", text=GPS_ONLY_CLOSE, is_close=True, **kwargs)
+    ack = tm.measure_text(kind="end.reason", text=GPS_ONLY_CLOSE, is_close=False, **kwargs)
+    assert closed.counts()["close_without_cause_source"] == 1
+    assert "close_without_cause_source" not in ack.counts()  # un reconocimiento no es un cierre
+
+
+# --- Cifras sin respaldo en las recomendaciones del informe (Fase 14.3) ---
+
+KNOWN = tm.prompt_numbers(
+    "Detector det-0010 ROUTE_DEVIATION at T+03:42 (value 73.9 m, threshold 30.0 m); GPS jump "
+    "67.9 m; wind 2.3 m/s; GPS and radar distance 9.9 m; controller GCS-1, latency 51.8 ms."
+)
+
+
+def test_prompt_numbers_skip_ids_and_times() -> None:
+    assert {73.9, 30.0, 67.9, 2.3, 9.9, 51.8} <= KNOWN
+    assert 10.0 not in KNOWN and 3.0 not in KNOWN and 42.0 not in KNOWN  # det-0010 y T+03:42
+
+
+def test_invented_thresholds_and_limits_are_unsupported_figures() -> None:
+    for text in (
+        "Review the wind data if wind exceeds 7 m/s.",
+        "Check that GPS and radar converge within 10 m.",
+        "Hold position for 30 s before resuming.",  # 30 s no es 30.0 m: otra unidad, pero 30.0 sí
+        "Keep the link above 80%.",
+    ):
+        flagged = tm.unsupported_figures(text, KNOWN)
+        # «30 s» coincide con el 30.0 de la cifra recibida: se cuenta por el valor, no por la unidad
+        assert len(flagged) == (0 if "30 s" in text else 1), text
+
+
+def test_figures_that_are_in_the_data_are_supported() -> None:
+    for text in (
+        "The GPS jumped 67.9 m: check the radar position, 73.9 m from the route.",
+        "Verify the link, latency reached 51.8 ms and the wind was 2.3 m/s.",
+        "The distance was about 10 m when it recovered.",  # redondea 9.9
+        "At T+03:42 the drone was off route.",  # una hora no es una cifra con unidad
+        "Verify the command link of ai-0010.",
+    ):
+        assert tm.unsupported_figures(text, KNOWN) == [], text
+    assert tm.unsupported_figures("The distance was 10 m.", KNOWN) == ["10 m"]  # sin «about»
+
+
+# --- La hora de la recuperación del informe no es la del cierre (Fase 14.3) ---
+
+RECOVERIES = [(222.0, 234.0)]  # entró en recuperación a T+03:42 y se cerró a T+03:54
+
+
+def test_the_closing_time_given_as_the_recovery_time_is_flagged() -> None:
+    wrong = "GPS spoofing at T+03:12, which entered recovery by T+03:54."
+    assert tm.recovery_time_mismatch(wrong, RECOVERIES) == ["recovery by T+03:54"]
+    ending = "A GPS loss ending in recovery at T+03:54, resolved later."
+    assert len(tm.recovery_time_mismatch(ending, RECOVERIES)) == 1
+
+
+def test_the_right_times_are_not_flagged() -> None:
+    for text in (
+        "It entered recovery at T+03:42 and closed at T+03:54.",
+        "GPS spoofing at T+03:12, which recovered at T+03:42; closed at T+03:54.",
+        "No recovery to tell.",
+        "It was closed at T+03:54.",  # sin la palabra recovery
+    ):
+        assert tm.recovery_time_mismatch(text, RECOVERIES) == [], text
+    assert tm.recovery_time_mismatch("recovery at T+03:54", []) == []  # nada que contrastar
+    # si entrada y cierre coinciden, no hay confusión posible
+    assert tm.recovery_time_mismatch("recovery at T+03:54", [(234.0, 234.0)]) == []

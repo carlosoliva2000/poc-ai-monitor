@@ -33,7 +33,7 @@
     "type": "function",
     "function": {
       "name": "get_track_metrics",
-      "description": "Computes trajectory metrics between two instants from the GPS and the radar: deviation of each source from the planned route, distance between GPS and radar, drift direction, course of travel versus the bearing to the next waypoint, mean speed and the wind of the same window (mean speed, maximum gust, where it pushes and difference with the drift). It also returns the ids of the events used, to cite them as evidence, and a `now` block with how things are right now (last 10 seconds): current GPS–radar distance and whether they agree, current deviation of the GPS and of the radar, and the current wind already interpreted (where it comes from and where it pushes).",
+      "description": "Computes trajectory metrics between two instants from the GPS and the radar: deviation of each source from the planned route, distance between GPS and radar, drift direction, course of travel versus the bearing to the next waypoint, mean speed and the wind of the same window (mean speed, maximum gust, where it pushes and difference with the drift). It also returns the ids of the events used, to cite them as evidence, and a `now` block with how things are right now (last 10 seconds): the fix of the GPS, current GPS–radar distance and whether they agree, current deviation of the GPS and of the radar, and the current wind already interpreted (where it comes from and where it pushes). When the GPS has no fix its position is only an estimate: the current GPS–radar distance, whether they agree and the current GPS deviation are then null.",
       "parameters": {
         "type": "object",
         "properties": {

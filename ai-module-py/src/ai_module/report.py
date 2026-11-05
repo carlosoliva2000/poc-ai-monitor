@@ -82,7 +82,9 @@ class ReportAgent:
             "sim_time": f"{now:g}",
             "flight_summary": compact_json(summary) if summary else "not available",
             "labels": ", ".join(a.label for a in facts.anomalies) or "none",
-            "anomalies": anomalies_for_llm(facts, mission=narrative.annex),
+            "anomalies": anomalies_for_llm(
+                facts, mission=narrative.annex, records=rt.trace.records
+            ),
             "assessment_facts": assessment_facts(facts, rt.trace.records, aids),
         }
         labels = [a.label for a in facts.anomalies]

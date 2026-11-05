@@ -37,6 +37,8 @@ class RunRecord:
     """Llamadas al LLM de la traza, por agente."""
     durations: list[float] = field(default_factory=list)
     """Duración de las invocaciones del monitor con LLM."""
+    iterations: list[int] = field(default_factory=list)
+    """Iteraciones de cada invocación del monitor con LLM (vacío si la traza no las guarda)."""
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -58,6 +60,8 @@ def load_runs(folder: Path) -> tuple[dict[str, Any], list[RunRecord]]:
                 record.calls.setdefault(t["agent"], []).extend(t["calls"])
                 if t["agent"] == "monitor" and not t.get("deterministic"):
                     record.durations.append(t["duration_s"])
+                    if t.get("iterations") is not None:
+                        record.iterations.append(int(t["iterations"]))
         else:
             record.status = "missing" if record.status == "ok" else record.status
         records.append(record)
@@ -133,6 +137,10 @@ def recovery_cell(runs: list[RunRecord]) -> str:
         e["agents"].get("monitor", {}).get("recovery_ack_no_metrics", 0) for e in measured
     )
     text += f" · veto {vetoes} · sin métricas {no_metrics}"
+    unseen = sum(e["agents"].get("monitor", {}).get("state_jump_unseen", 0) for e in measured)
+    jumps = sum(e["agents"].get("monitor", {}).get("state_jumps", 0) for e in measured)
+    if jumps:  # solo con `state_line: recovery_data` (Fase 14.3)
+        text += f" · estado con salto {jumps}, guardrail sin verlo {unseen}"
     return text
 
 
@@ -235,12 +243,22 @@ def latency(runs: list[RunRecord]) -> str:
     return f"{per_call} · inv. {fmt(p50, ' s')} / {fmt(p95, ' s')}"
 
 
+def iterations_cell(runs: list[RunRecord]) -> str:
+    """Iteraciones por invocación del monitor con LLM: p50 / p95 / máx (`max_iterations` es el
+    tope: una invocación que lo alcanza acaba en fallback). `n/d` si las trazas no las guardan."""
+    values = [i for r in runs for i in r.iterations]
+    if not values:
+        return "n/d"
+    return f"{percentile(values, 0.5):g} / {percentile(values, 0.95):g} / {max(values)}"
+
+
 HEADERS = [
     "Perfil", "Aciertos (✅ por etiqueta)", "1 cadena", "Falsas alarmas", "Fallbacks",
     "Alertas abiertas", "Frases que contradicen", "Checks≠tools", "Recuperación sin fase",
     "No latinos (monitor / informe / chats)",
     "Rechazos guardrails",
     "Cortes por longitud (monitor / informe / chats)", "Latencia monitor p50 / p95",
+    "Iteraciones monitor p50 / p95 / máx",
     "Tokens por ejecución (prompt / respuesta / razonamiento)", "Estabilidad",
 ]  # fmt: skip
 
@@ -262,6 +280,7 @@ def row(profile: str, runs: list[RunRecord], planned: int) -> list[str]:
         str(sum(agent_total(runs, a, "rejections") for a in NON_LATIN_AGENTS)),
         length_cuts(runs),
         latency(runs),
+        iterations_cell(runs),
         mean_tokens(runs),
         stability(runs, planned),
     ]
@@ -284,7 +303,8 @@ def render(manifest: dict[str, Any], records: list[RunRecord]) -> str:
         "",
         "Los contadores (falsas alarmas, fallbacks, alertas abiertas, frases, rechazos, cortes, "
         "no latinos) son **sumas de las N repeticiones**; los tokens, la media por ejecución; "
-        "la latencia, percentiles de todas las llamadas del monitor (y de sus invocaciones).",
+        "la latencia, percentiles de todas las llamadas del monitor (y de sus invocaciones); las"
+        " iteraciones, percentiles de las invocaciones del monitor con LLM.",
     ]
     for scenario in scenarios:
         lines += [

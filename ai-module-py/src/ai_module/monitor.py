@@ -22,12 +22,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from poc_contracts.enums import ActivityState, AgentName, EventType
+from poc_contracts.enums import ActivityState, AgentName, AlertStatus, EventType
 from poc_contracts.envelope import Envelope
 
 from .agent.assets import AgentConfig, render, sections
 from .agent.engine import AbortInvocation, AgentEngine, EngineResult, compact_json
 from .agent.guardrails import (
+    RECOVERY_STEP_M,
     InvocationFacts,
     Verdict,
     check_acknowledge,
@@ -99,6 +100,9 @@ class Invocation:
     history_ids: set[str] = field(default_factory=set)
     """Con la memoria A: ids que solo se ven en el historial de turnos anteriores (no son
     evidencia válida hasta que el modelo vuelva a pedir el dato en esta invocación)."""
+    state_jump_m: float | None = None
+    """Salto del GPS (≥ 30 m) que el módulo ha visto antes de la primera llamada al modelo, para la
+    línea de estado (`state_line: recovery_data`, Fase 14.3). `None` si no hay o no se calculó."""
 
     def unanswered(self) -> list[Pending]:
         return [p for p in self.pending if not p.answered]
@@ -255,6 +259,7 @@ class Monitor:
     async def _invoke_llm(self, inv: Invocation) -> None:
         rt, cfg = self.rt, self.config
         trace = inv.trace
+        await self._state_metrics(inv)
         objective = self._objective(inv)
         inv.seen_ids |= set(ID_RE.findall(objective))
         system = rt.assets.system_prompt(cfg)
@@ -334,12 +339,66 @@ class Monitor:
             trace.end_reason = "error"
             trace.messages = messages
             trace.guardrail_rejections.append({"tool": "engine", "errors": [str(exc)]})
+        self._note_guardrail_view(inv)
         try:
             await self._guarantee(inv, result)
         finally:
             await rt.activity(AgentName.MONITOR, ActivityState.FINISHED, inv.invocation_id, first)
             if memory is not None:
                 self._remember(memory, inv, messages, chars_start)
+
+    async def _state_metrics(self, inv: Invocation) -> None:
+        """Fase 14.3 (`state_line: recovery_data`): ante un aviso de `ROUTE_DEVIATION` con la alerta
+        del GPS abierta y activa, el módulo pide `get_track_metrics` a la plataforma (la ventana de
+        la skill: desde 30 s antes del aviso, con el corte temporal) para que el estado diga como
+        dato si el GPS ha saltado a su posición real. Es una llamada de datos del módulo, sin LLM:
+        entra en la duración de la invocación, no en las iteraciones, y no cambia ningún guardrail
+        (estos deciden con lo que pide el modelo). Si falla, el estado sale sin salto."""
+        rt = self.rt
+        if self.config.state_line != "recovery_data":
+            return
+        route = [
+            p
+            for p in inv.pending
+            if p.kind in ("raised", "updated") and p.event.payload.get("rule") == "ROUTE_DEVIATION"
+        ]
+        alert = rt.state.recent_gps_alert(inv.as_of)
+        if (
+            not route
+            or alert is None
+            or alert.status != AlertStatus.OPEN
+            or alert.phase != "active"
+        ):
+            return
+        since = max(min(p.event.sim_time for p in route) - 30.0, 0.0)
+        args = {"since": since, "until": inv.as_of}
+        try:
+            result = await rt.platform_call(rt.platform_url, "get_track_metrics", args)
+        except Exception as exc:  # la llamada es una ayuda: sin ella, el estado no lleva el salto
+            log.warning("state metrics unavailable: %s", exc)
+            inv.trace.state_metrics = {**args, "error": str(exc)}
+            return
+        step = result.get("gps_max_step_m") if isinstance(result, dict) else None
+        jump = step is not None and step >= RECOVERY_STEP_M
+        inv.state_jump_m = step if jump else None
+        inv.trace.state_metrics = {**args, "gps_max_step_m": step, "jump": jump}
+
+    @staticmethod
+    def _note_guardrail_view(inv: Invocation) -> None:
+        """Si el estado dio un salto, anota qué veía el guardrail al acabar la invocación (las
+        últimas métricas que pidió el modelo): `jump`, `window_without_jump` (otra ventana) o
+        `no_metrics`. No cambia ningún guardrail: solo se cuenta."""
+        state = inv.trace.state_metrics
+        if not state.get("jump"):
+            return
+        seen = inv.facts.metrics
+        if seen is None:
+            view = "no_metrics"
+        elif (seen.get("gps_max_step_m") or 0.0) >= RECOVERY_STEP_M:
+            view = "jump"
+        else:
+            view = "window_without_jump"
+        state["guardrail_view"] = view
 
     def _memory(self) -> MonitorMemory | None:
         """La memoria A (se crea la primera vez que hace falta), o `None` con `per_detection`."""
@@ -399,7 +458,9 @@ class Monitor:
                 open_alerts=rt.state.describe_open_alerts(),
                 open_detections=rt.state.describe_open_detections(),
                 last_decisions=rt.state.describe_decisions(),
-                gps_alert_recent=rt.state.describe_gps_alert(inv.as_of, cfg.state_line),
+                gps_alert_recent=rt.state.describe_gps_alert(
+                    inv.as_of, cfg.state_line, inv.state_jump_m
+                ),
             )
         ]
         ids = list(dict.fromkeys(p.detection_id for p in inv.pending))

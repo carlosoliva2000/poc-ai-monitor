@@ -31,7 +31,7 @@ Respond with **only** these three sections, with these exact headings and in thi
 …
 
 ## Recommendations
-1. What to do or check about the drone, the route, the link, the radar or the GPS, and why.
+1. What to do or check about the drone, the route, the link, the radar or the GPS, and why, only from what the data or the notes support.
 2. …
 ```
 
@@ -40,3 +40,4 @@ Respond with **only** these three sections, with these exact headings and in thi
 - Do not write times, severities, statuses or ids that are not in the data; the module provides the facts.
 - Do not copy the JSON of the data: turn it into sentences.
 - Say what is uncertain only if the data supports it. No embellishments or conclusions that do not come from the data.
+- In the recommendations use only figures that are in the data or in the notes; set no thresholds or deadlines of your own.

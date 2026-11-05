@@ -244,15 +244,29 @@ class MonitorState:
     def gps_alert_recent(self, now: float, grace_s: float = 60.0) -> bool:
         return self.recent_gps_alert(now, grace_s) is not None
 
-    def describe_gps_alert(self, now: float, style: str = "legacy") -> str:
+    def describe_gps_alert(
+        self, now: float, style: str = "legacy", jump_m: float | None = None
+    ) -> str:
         """La línea fija del estado del prompt. Estilo `data`: «yes — ai-0008 GPS_SPOOFING (open)»
         o «no». Estilo `legacy` (assets anteriores a la Fase 14.1): añade «If this warning is the
         GPS recovery: cause GPS_SPOOFING, supersedes ai-0008». Estilo `phase` (Fase 14.2): como
         `legacy`, pero con la fase de la alerta y «phase recovering» en la frase; una alerta que
-        ya está en recuperación no la lleva."""
+        ya está en recuperación no la lleva. Estilo `recovery_data` (Fase 14.3): solo datos. La
+        alerta, su causa, su estado y su fase y, si el módulo ha visto un salto del GPS de 30 m o
+        más (`jump_m`) con la alerta abierta y activa, el salto y el id al que sustituye; sin
+        frases que copiar."""
         alert = self.recent_gps_alert(now)
         if alert is None:
             return "no"
+        if style == "recovery_data":
+            if alert.status == AlertStatus.OPEN:
+                state = f"open, {alert.phase}"
+            else:
+                state = f"closed {now - (alert.closed_at or now):.0f} s ago, {alert.phase}"
+            line = f"yes — {alert.alert_id} {alert.cause} ({state})"
+            if jump_m is not None and alert.status == AlertStatus.OPEN and alert.phase == "active":
+                line += f"; GPS jump {jump_m:.1f} m; replaces {alert.alert_id}"
+            return line
         if alert.status == AlertStatus.OPEN:
             state, supersedes = "open", f"supersedes {alert.alert_id}"
         else:

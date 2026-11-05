@@ -7,7 +7,7 @@ Your response to each warning is one of three tool calls: `publish_alert` (new a
 - `high`: the person in charge has to act now: the position or the control of the drone may be unreliable or in somebody else's hands (hijacking, spoofing, GPS loss with the drone drifting off).
 When the situation improves (a recovery, a deviation that goes down) the severity goes down with it.
 
-**Phase.** `active` while the problem of the episode goes on; `recovering` when it is over and the situation is going back to normal (so far only in the recovery of the GPS). The cause stays the one of the episode; the severity is the risk now, so in a recovery it is `low` or `medium`, never `high`.
+**Phase.** `active` while the problem of the episode goes on; `recovering` when it is over and the situation is going back to normal (so far only in the recovery of the GPS). The cause stays the one of the episode; the severity is the risk now, so in a recovery it is `low` or `medium`, never `high`. In a recovery the severity is the risk now: while the drone is still far from the route there is something to watch (`medium`); when it is already close to the route and GPS and radar agree, watching is enough (`low`).
 
 **Confidence** depends on how many independent sources support the cause (GPS, radar, weather station, command link) and on whether anything contradicts it. 0.8 or more: two or more independent sources support it and nothing contradicts it. Between 0.5 and 0.7: one source, or the support is partial. Less than 0.5: a conjecture. Each contradiction lowers it. Choose it for each case; do not repeat the same value out of habit.
 

@@ -283,3 +283,76 @@ def test_parse_annex_reads_the_assessment_and_the_technical_recommendations() ->
     assert parse_annex("sin títulos") == ("", "")
     # el apartado del anexo no cuenta como informe de misión
     assert Narrative(assessment="a", annex=True).empty and not Narrative(assessment="a").empty
+
+
+# --- Horas y cifras del informe de misión (Fase 14.3) ---
+
+
+def recovery_state() -> MonitorState:
+    """Spoofing (alta, 101 s) → recuperación (media, 131 s), cerrada a 150 s; el `ROUTE_DEVIATION`
+    que la provocó llegó a 73,9 m."""
+    reset_ids()
+    state = MonitorState()
+    state.apply(detection_event("raised", "det-0001", 100.0, rule="SOURCE_DISCREPANCY"))
+    state.apply(alert("ai-0002", ["det-0001"], cause="GPS_SPOOFING", t=101.0))
+    state.apply(detection_event("raised", "det-0003", 130.0))
+    state.apply(
+        alert(
+            "ai-0004", ["det-0003"], cause="GPS_SPOOFING", supersedes="ai-0002", t=131.0,
+            severity="medium", phase="recovering",
+        )
+    )  # fmt: skip
+    cleared = detection_event("cleared", "det-0003", 145.0)
+    cleared.payload["max_value"] = 73.9
+    state.apply(cleared)
+    state.apply(detection_event("cleared", "det-0001", 149.0, rule="SOURCE_DISCREPANCY"))
+    state.apply(closed("ai-0004", t=150.0))
+    return state
+
+
+def monitor_record(alert_id: str, *steps: float | None) -> dict:
+    calls = [
+        {"tool_calls": [{"name": "get_track_metrics", "result": {"gps_max_step_m": step}}]}
+        for step in steps
+    ]
+    return {"agent": "monitor", "published": [{"event_id": alert_id}], "calls": calls}
+
+
+def test_the_recovery_time_is_not_the_closing_time() -> None:
+    [anomaly] = build_facts(recovery_state()).anomalies
+    assert anomaly.recovery_at == 131.0 and anomaly.closed_at == 150.0
+    assert anomaly.max_route_deviation_m == 73.9
+    assert build_facts(spoofing_state()).anomalies[1].recovery_at is None  # sin fase recovering
+
+
+def test_the_mission_data_names_each_time_and_keeps_the_jump_apart_from_the_deviation() -> None:
+    facts = build_facts(recovery_state())
+    records = [monitor_record("ai-0004", 4.0, 67.9)]  # lo último que vio el monitor
+    text = anomalies_for_llm(facts, mission=True, records=records)
+    assert "- Times: detected at T+01:40; entered recovery at T+02:11; closed at T+02:30." in text
+    assert "- Largest distance from the planned route seen by the detector: 73.9 m." in text
+    assert "- GPS position jump when the GPS came back: 67.9 m (" in text
+    assert "not a distance from the route" in text
+    # sin trazas no hay salto que contar, pero las horas y la desviación sí
+    plain = anomalies_for_llm(facts, mission=True)
+    assert "GPS position jump" not in plain and "entered recovery at T+02:11" in plain
+    # el anexo (autoevaluación) no recibe estas líneas
+    assert "- Times:" not in anomalies_for_llm(facts, records=records)
+
+
+def test_an_open_anomaly_says_it_is_still_open() -> None:
+    state = recovery_state()
+    state.alerts["ai-0004"].status = type(state.alerts["ai-0002"].status)("open")
+    state.alerts["ai-0004"].closed_at = None
+    text = anomalies_for_llm(build_facts(state), mission=True)
+    assert "entered recovery at T+02:11; still open at the end of the flight." in text
+
+
+def test_the_jump_comes_from_the_invocation_that_published_the_alert() -> None:
+    from ai_module.report_facts import recovery_jump_m
+
+    records = [monitor_record("ai-0002", 5.0), monitor_record("ai-0004", 4.0, 90.0, None)]
+    assert recovery_jump_m(records, "ai-0004") == 90.0  # el último valor que no es `None`
+    assert recovery_jump_m(records, "ai-0002") == 5.0
+    assert recovery_jump_m(records, "ai-9999") is None
+    assert recovery_jump_m([monitor_record("ai-0004")], "ai-0004") is None  # sin métricas

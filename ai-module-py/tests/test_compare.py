@@ -175,3 +175,43 @@ def test_two_experiments_are_joined_with_their_ids_in_the_profile_names(tmp_path
     assert sorted(r.profile for r in records) == ["e10/t0", "e8-base/t0"]
     text = write_merged(folders, tmp_path / "joint.md").read_text()
     assert "`e10/t0`" in text and "`e8-base/t0`" in text
+
+
+# --- Iteraciones por invocación del monitor (Fase 14.3) ---
+
+
+def test_the_iterations_column_gives_p50_p95_and_max_and_tolerates_old_traces(
+    tmp_path: Path,
+) -> None:
+    run = eval_json([label("A1")])
+    folder = make_experiment(tmp_path, {("p", "wind", 1): run, ("old", "wind", 1): run})
+    # la traza de `p` guarda las iteraciones de 4 invocaciones; la de `old`, ninguna
+    traces = [{"agent": "monitor", "deterministic": False, "duration_s": 5.0, "calls": [],
+               "iterations": n} for n in (2, 4, 4, 11)]  # fmt: skip
+    traces.append(
+        {"agent": "monitor", "deterministic": True, "duration_s": 0.0, "calls": [], "iterations": 0}
+    )  # una determinista no cuenta
+    path = folder / "runs" / "p" / "wind" / "r1" / "llm_trace.jsonl"
+    path.write_text("\n".join(json.dumps(t) for t in traces) + "\n")
+    text = write_compare(folder).read_text()
+    rows = {
+        line.split("|")[1].strip(): line for line in text.splitlines() if line.startswith("| `")
+    }
+    assert "Iteraciones monitor p50 / p95 / máx" in text
+    assert "| 4 / 11 / 11 |" in rows["`p`"]
+    assert "| n/d |" in rows["`old`"]
+
+
+def test_the_recovery_cell_counts_state_jumps_the_guardrail_did_not_see(tmp_path: Path) -> None:
+    monitor = {"rejections": 0, "length_cuts": 0, "prompt_tokens": 1, "completion_tokens": 1,
+               "state_jumps": 2, "state_jump_unseen": 1}  # fmt: skip
+    data = eval_json([label("A1")], recovery_misses=[])
+    data["agents"] = {**data["agents"], "monitor": {**data["agents"]["monitor"], **monitor}}
+    plain = eval_json([label("A1")], recovery_misses=[])
+    folder = make_experiment(tmp_path, {("p", "demo", 1): data, ("q", "demo", 1): plain})
+    text = write_compare(folder).read_text()
+    rows = {
+        line.split("|")[1].strip(): line for line in text.splitlines() if line.startswith("| `")
+    }
+    assert "estado con salto 2, guardrail sin verlo 1" in rows["`p`"]
+    assert "estado con salto" not in rows["`q`"]

@@ -14,6 +14,7 @@ from .enums import (
     Cause,
     CompletionReason,
     EventType,
+    GpsFix,
     Severity,
     ToolSource,
     Trend,
@@ -168,19 +169,24 @@ class GpsRadarFact(_Model):
 
 
 class NowFacts(_Model):
-    """Hechos de «ahora» de `get_track_metrics` (v0.13): las últimas muestras de los últimos 10 s
-    antes del instante efectivo, no agregados de la ventana. Cada valor es `None` si no hay
-    muestra de su fuente en ese tramo (el viento mira los últimos 30 s)."""
+    """Hechos de «ahora» de `get_track_metrics` (v0.13; `gps_fix`, v0.15): las últimas muestras de
+    los últimos 10 s antes del instante efectivo, no agregados de la ventana. Cada valor es `None`
+    si no hay muestra de su fuente en ese tramo (el viento mira los últimos 30 s)."""
 
     as_of: float
     """Instante efectivo (`until` recortado al instante actual de la simulación)."""
     window_s: float
+    gps_fix: GpsFix | None = None
+    """`fix` de la última posición del GPS (v0.15), `None` si no hay muestra. Con `none` la posición
+    es una estimación (navegación a estima): no es una medida, así que la distancia al radar y la
+    desviación del GPS de «ahora» van a `None`."""
     gps_radar_distance_m: float | None
-    """Distancia entre la última medida del radar y el GPS interpolado a su instante."""
+    """Distancia entre la última medida del radar y el GPS interpolado a su instante (solo con
+    posiciones con fix)."""
     gps_radar_agree: bool | None
-    """`gps_radar_distance_m` < 25 m. `None` si falta una de las dos fuentes."""
+    """`gps_radar_distance_m` < 25 m. `None` si falta una fuente o el GPS no tiene fix."""
     gps_deviation_from_plan_m: float | None
-    """Desviación respecto al plan de la última posición del GPS."""
+    """Desviación respecto al plan de la última posición del GPS (`None` si no tiene fix)."""
     radar_deviation_from_plan_m: float | None
     wind_speed_mps: float | None
     """Velocidad y racha del último `WindReported`."""

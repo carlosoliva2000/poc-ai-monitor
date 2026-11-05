@@ -1,5 +1,14 @@
 {
   "$defs": {
+    "GpsFix": {
+      "enum": [
+        "none",
+        "2d",
+        "3d"
+      ],
+      "title": "GpsFix",
+      "type": "string"
+    },
     "GpsRadarFact": {
       "additionalProperties": false,
       "description": "Hecho calculado sobre `gps_radar_distance_m`.",
@@ -47,7 +56,7 @@
     },
     "NowFacts": {
       "additionalProperties": false,
-      "description": "Hechos de «ahora» de `get_track_metrics` (v0.13): las últimas muestras de los últimos 10 s\nantes del instante efectivo, no agregados de la ventana. Cada valor es `None` si no hay\nmuestra de su fuente en ese tramo (el viento mira los últimos 30 s).",
+      "description": "Hechos de «ahora» de `get_track_metrics` (v0.13; `gps_fix`, v0.15): las últimas muestras de\nlos últimos 10 s antes del instante efectivo, no agregados de la ventana. Cada valor es `None`\nsi no hay muestra de su fuente en ese tramo (el viento mira los últimos 30 s).",
       "properties": {
         "as_of": {
           "title": "As Of",
@@ -56,6 +65,17 @@
         "window_s": {
           "title": "Window S",
           "type": "number"
+        },
+        "gps_fix": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GpsFix"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "gps_radar_distance_m": {
           "anyOf": [

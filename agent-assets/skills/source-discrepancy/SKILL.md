@@ -8,7 +8,7 @@ description: Use it when the detector raises SOURCE_DISCREPANCY (GPS and radar d
 
 Context: the radar has no bias (it says where the drone really is); the drone navigates with its GPS, so if the GPS lies the drone **really drifts off** while the GPS looks perfect. A spoofing does not degrade the fix (`3d`, ~14 satellites, `hdop` ~1); a GPS loss does (`fix: none`, `sats` 0, `hdop` 99.9).
 
-Window or now: decide and fill in `checks` with the facts of the window of `get_track_metrics`; to say how things are at this moment (do GPS and radar agree now, how far off the route each one is now), use its `now` block, not the mean or the maximum of the window (which tell what happened, in the past tense). Never write that GPS and radar disagree by the distance of `now`.
+Window or now: decide and fill in `checks` with the facts of the window of `get_track_metrics`; to say how things are at this moment (do GPS and radar agree now, how far off the route each one is now), use its `now` block, not the mean or the maximum of the window (which tell what happened, in the past tense). Never write that GPS and radar disagree by the distance of `now`. If `now` says the GPS has no fix, its position is only an estimate: there is no GPS–radar comparison or GPS deviation for the present, and the radar is the reference.
 
 ## 0. Is there already an open GPS alert that explains it?
 If a `GPS_JAMMING` or `SENSOR_FAULT` alert of the GPS is open and the `GPS_DEGRADED` detection is still open, this discrepancy is a consequence of the GPS loss, not a new problem.

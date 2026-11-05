@@ -966,3 +966,31 @@ def test_a_fallback_recovery_is_a_miss_and_the_veto_counts_come_from_the_trace(
     md = render_markdown(ev)
     assert "Veto del reconocimiento de la recuperación: 1 veces" in md
     assert "rechazos por no haber pedido get_track_metrics: 1" in md
+
+
+def test_the_state_jumps_the_guardrail_did_not_see_are_counted_apart(tmp_path: Path) -> None:
+    """Fase 14.3: el módulo dio el salto en el estado; si el guardrail, con la ventana que pidió el
+    modelo, no lo veía (`window_without_jump` o `no_metrics`), se cuenta aparte."""
+    b = demo_run(tmp_path, phases="recovering")
+    state = {"since": 192.0, "until": 222.0, "gps_max_step_m": 67.9, "jump": True}
+    recovery_trace(
+        b,
+        [metrics_message(67.9)],
+        state_metrics={**state, "guardrail_view": "window_without_jump"},
+    )
+    b.trace.append(
+        trace_record(causation_ids=["det-0021"], state_metrics={**state, "guardrail_view": "jump"})
+    )
+    b.trace.append(trace_record(causation_ids=["det-0022"], state_metrics={"jump": False}))
+    ev = evaluate(b.write())
+    monitor = ev.agents["monitor"]
+    assert monitor["state_jumps"] == 2 and monitor["state_jump_unseen"] == 1
+    md = render_markdown(ev)
+    assert "Saltos del GPS que el módulo dio en el estado: 2" in md
+    assert "no lo veía: 1" in md
+
+
+def test_a_run_without_state_jumps_says_nothing_about_them(tmp_path: Path) -> None:
+    ev = evaluate(demo_run(tmp_path, phases="recovering").write())
+    assert ev.agents.get("monitor", {}).get("state_jumps", 0) == 0
+    assert "Saltos del GPS que el módulo dio" not in render_markdown(ev)

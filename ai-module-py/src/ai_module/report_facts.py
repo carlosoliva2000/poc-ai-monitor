@@ -105,6 +105,23 @@ class Anomaly:
         return self.last.closed_at
 
     @property
+    def recovery_at(self) -> float | None:
+        """Hora en que la cadena entró en recuperación (su primera alerta `recovering`), distinta
+        de la hora de cierre (Fase 14.3)."""
+        return next((a.sim_time for a in self.chain if a.phase == "recovering"), None)
+
+    @property
+    def max_route_deviation_m(self) -> float | None:
+        """Mayor desviación respecto a la ruta que vio el detector en esta anomalía (valor máximo
+        de sus `ROUTE_DEVIATION`; el valor al abrir si aún no se ha cerrado), en metros."""
+        values = [
+            d.max_value if d.max_value is not None else d.value
+            for d in self.detections
+            if d.rule == "ROUTE_DEVIATION" and d.unit == "m"
+        ]
+        return max(values, default=None)
+
+    @property
     def changes(self) -> str:
         """Qué cambió entre la primera alerta y la última."""
         changes = []
@@ -329,10 +346,46 @@ def assemble(
 # --- Lo que se le entrega al LLM ---------------------------------------------------------------
 
 
-def anomalies_for_llm(facts: ReportFacts, mission: bool = False) -> str:
+def _mission_times(anomaly: Anomaly) -> str:
+    """Las horas de la anomalía, cada una con su nombre: detección, entrada en recuperación y
+    cierre son tres momentos distintos (Fase 14.3)."""
+    parts = [f"detected at {format_t(anomaly.detected_at)}"]
+    if anomaly.recovery_at is not None:
+        parts.append(f"entered recovery at {format_t(anomaly.recovery_at)}")
+    if anomaly.closed_at is not None:
+        parts.append(f"closed at {format_t(anomaly.closed_at)}")
+    else:
+        parts.append("still open at the end of the flight")
+    return "- Times: " + "; ".join(parts) + "."
+
+
+def _mission_figures(anomaly: Anomaly, records: list[dict[str, Any]] | None) -> list[str]:
+    """La desviación máxima respecto a la ruta y el salto del GPS, con nombres que no se
+    confunden: el salto es lo que se movió la posición del GPS de golpe al volver, no la distancia
+    a la ruta."""
+    lines = []
+    deviation = anomaly.max_route_deviation_m
+    if deviation is not None:
+        lines.append(
+            f"- Largest distance from the planned route seen by the detector: {num(deviation)} m."
+        )
+    if anomaly.recovery_at is not None and records:
+        jump = recovery_jump_m(records, anomaly.last.alert_id)
+        if jump is not None:
+            lines.append(
+                f"- GPS position jump when the GPS came back: {num(jump)} m (how far the GPS "
+                "position moved at once; it is not a distance from the route)."
+            )
+    return lines
+
+
+def anomalies_for_llm(
+    facts: ReportFacts, mission: bool = False, records: list[dict[str, Any]] | None = None
+) -> str:
     """Cada anomalía con lo que dijo el monitor y lo que vio el detector, para «qué se vio».
-    Para el informe de misión (`mission`) sin la hora de la primera alerta ni las de la cadena:
-    no hay retrasos que comentar."""
+    Para el informe de misión (`mission`) sin la hora de la primera alerta ni las de la cadena
+    (no hay retrasos que comentar), pero con las horas de detección, recuperación y cierre por
+    separado y, con las trazas (`records`), el salto del GPS aparte de la desviación máxima."""
     if not facts.anomalies:
         return "There were no alerts."
     blocks = []
@@ -342,6 +395,9 @@ def anomalies_for_llm(facts: ReportFacts, mission: bool = False) -> str:
             f"### {anomaly.label} · {cause_name(anomaly.first.cause)} — detection at "
             f"{format_t(anomaly.detected_at)}{first_alert}, {anomaly.status}"
         ]
+        if mission:
+            lines.append(_mission_times(anomaly))
+            lines += _mission_figures(anomaly, records)
         for d in anomaly.detections:
             peak = f", maximum {num(d.max_value)} {d.unit}" if d.max_value is not None else ""
             source = f" {d.source}" if d.source else ""
@@ -473,6 +529,29 @@ def assessment_facts(
     lines += ["", "### Active model aids"]
     lines += [f"- {name}" for name in stats.aids] or ["- None."]
     return "\n".join(lines)
+
+
+def recovery_jump_m(records: list[dict[str, Any]], alert_id: str) -> float | None:
+    """El salto del GPS (`gps_max_step_m`: cuánto se movió su posición de golpe al volver) que vio
+    el monitor al publicar la alerta: lo último que devolvió `get_track_metrics` en la invocación
+    que la publicó (Fase 14.3). `None` si no lo pidió o no hubo salto que contar."""
+    for record in records:
+        if record["agent"] != "monitor" or not any(
+            p.get("event_id") == alert_id for p in record.get("published", [])
+        ):
+            continue
+        step: float | None = None
+        for call in record.get("calls", []):
+            for tool in call.get("tool_calls") or []:
+                result = tool.get("result")
+                if (
+                    tool["name"] == "get_track_metrics"
+                    and isinstance(result, dict)
+                    and result.get("gps_max_step_m") is not None
+                ):
+                    step = float(result["gps_max_step_m"])
+        return step
+    return None
 
 
 def _wall(records: list[dict[str, Any]], alert_id: str) -> str:

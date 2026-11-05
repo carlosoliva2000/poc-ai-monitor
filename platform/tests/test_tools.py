@@ -442,3 +442,62 @@ def test_now_shows_the_gps_back_on_the_radar_after_the_spoofing(runs_dir: Path) 
     )
     assert metrics.gps_radar is not None and metrics.gps_radar.disagreed is True
     assert metrics.now is not None and metrics.now.gps_radar_agree is True
+
+
+# --- `now` con el GPS sin fix (v0.15) ---
+
+
+def now_of(ctx: ToolContext, since: float, until: float):
+    metrics = TrackMetrics.model_validate(
+        call_tool(ctx, "get_track_metrics", {"since": since, "until": until})
+    )
+    assert metrics.now is not None
+    return metrics, metrics.now
+
+
+def test_now_says_the_fix_and_keeps_the_comparison_while_the_gps_has_it(runs_dir: Path) -> None:
+    _, ctx = at(runs_dir, "demo", 150.0)
+    _, now = now_of(ctx, 140, 150)
+    assert now.gps_fix == "3d"
+    assert now.gps_radar_distance_m is not None and now.gps_radar_agree is True
+    assert now.gps_deviation_from_plan_m is not None
+
+
+def test_now_without_a_gps_fix_does_not_compare_an_estimated_position(runs_dir: Path) -> None:
+    """Con la pérdida del GPS (245–290 s en `faults`) el GPS publica la posición a estima, que
+    nunca puede decirse que «coincide» con el radar: `now` lo dice y vacía lo que depende de ella.
+    Los agregados de la ventana (`disagreed`, `gps_max_step_m`) no cambian."""
+    _, ctx = at(runs_dir, "faults", 250.3)
+    metrics, now = now_of(ctx, 230, 250.3)
+    assert now.gps_fix == "none"
+    assert now.gps_radar_distance_m is None and now.gps_radar_agree is None
+    assert now.gps_deviation_from_plan_m is None
+    assert now.radar_deviation_from_plan_m is not None  # la del radar se queda
+    assert now.wind is not None  # el resto de `now` no cambia
+    # la ventana sigue usando todas las posiciones del GPS, con o sin fix
+    assert metrics.gps_radar is not None and metrics.gps_radar.disagreed is False
+    assert metrics.gps_max_step_m is not None and metrics.gps_available is True
+
+
+def test_now_returns_to_the_comparison_once_the_fix_is_back(runs_dir: Path) -> None:
+    _, ctx = at(runs_dir, "faults", 290.9)  # el fix vuelve a 290 s con el salto a la posición real
+    _, now = now_of(ctx, 260, 290.9)
+    assert now.gps_fix == "3d"
+    assert now.gps_radar_distance_m is not None and now.gps_radar_agree is True
+    assert now.gps_deviation_from_plan_m is not None and now.gps_deviation_from_plan_m > 60
+
+
+def test_the_window_aggregates_of_the_gps_loss_do_not_depend_on_the_fix(runs_dir: Path) -> None:
+    """El criterio de la fase y del guardrail (`disagreed`, salto de 90 m) sale de la ventana, con
+    las posiciones sin fix incluidas: v0.15 no lo cambia."""
+    _, ctx = at(runs_dir, "faults", 290.9)
+    metrics, _ = now_of(ctx, 260, 290.9)
+    assert metrics.gps_radar is not None and metrics.gps_radar.disagreed is True
+    assert metrics.gps_max_step_m is not None and metrics.gps_max_step_m > 80
+
+
+def test_now_with_the_gps_silent_has_no_fix_to_report(runs_dir: Path) -> None:
+    _, ctx = at(runs_dir, "faults", 311.0)  # el GPS calla de 300 a 312 s
+    _, now = now_of(ctx, 305, 311.0)
+    assert now.gps_fix is None
+    assert now.gps_radar_distance_m is None and now.gps_deviation_from_plan_m is None

@@ -19,14 +19,17 @@ Cálculos (todo sale de `PositionUpdated` del GPS y `TrackUpdated` del radar en 
   `drift_vs_wind_deg` la diferencia absoluta (0 a 180) con `drift_direction_deg`.
 - `now` (v0.13): la última muestra de los últimos 10 s antes de `until` (distancia GPS–radar,
   si coinciden ahora, desviación del GPS y del radar, último viento ya interpretado en texto),
-  para contar «cómo está ahora» frente a los agregados de la ventana.
+  para contar «cómo está ahora» frente a los agregados de la ventana. Desde la v0.15 lleva
+  `gps_fix` y, si la última posición del GPS no tiene fix (es una estimación a estima), la
+  distancia GPS–radar, si coinciden y la desviación del GPS van a `None`; para interpolar el GPS
+  solo se usan posiciones con fix. Los agregados de la ventana no cambian.
 """
 
 import math
 from bisect import bisect_left
 from collections.abc import Sequence
 
-from poc_contracts.enums import EventType, Trend
+from poc_contracts.enums import EventType, GpsFix, Trend
 from poc_contracts.envelope import Envelope
 from poc_contracts.tools import (
     GetTrackMetricsArgs,
@@ -190,9 +193,13 @@ def _now_facts(ctx: ToolContext, route: list[Point], until: float) -> NowFacts:
         since=since - MAX_INTERP_GAP_S,
         until=until,
     )
-    series = _samples(gps_context)
+    # una posición sin fix es una estimación a estima, no una medida: no sirve para comparar
+    with_fix = [e for e in gps_context if e.payload.get("fix") != GpsFix.NONE]
+    gps_fix = GpsFix(gps_last[0].payload["fix"]) if gps_last else None
+    has_fix = gps_fix is not None and gps_fix != GpsFix.NONE
+    series = _samples(with_fix)
     distance: float | None = None
-    if radar_last:
+    if radar_last and has_fix:
         t, rx, ry = _samples(radar_last)[0]
         pos = _interpolate(series, [s[0] for s in series], t)
         if pos is not None:
@@ -221,9 +228,10 @@ def _now_facts(ctx: ToolContext, route: list[Point], until: float) -> NowFacts:
     return NowFacts(
         as_of=until,
         window_s=NOW_WINDOW_S,
+        gps_fix=gps_fix,
         gps_radar_distance_m=distance,
         gps_radar_agree=None if distance is None else distance < DISAGREED_M,
-        gps_deviation_from_plan_m=deviation(gps_last),
+        gps_deviation_from_plan_m=deviation(gps_last) if has_fix else None,
         radar_deviation_from_plan_m=deviation(radar_last),
         wind_speed_mps=speed,
         wind_gust_mps=gust,
