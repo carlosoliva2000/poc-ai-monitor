@@ -238,9 +238,10 @@ def test_get_events_args() -> None:
     assert GetEventsArgs.model_validate({"source": "gps"}).last_n == 10
     assert GetEventsArgs.model_validate({"source": "gps", "last_n": 500}).last_n == 50
     assert GetEventsArgs.model_validate({"source": "gps", "last_n": 0}).last_n == 1
-    for bad in ({"source": "sim"}, {"source": "gps", "type": "Nope"}, {}):
+    for bad in ({"source": "sim"}, {"source": "gps", "type": "Nope"}):
         with pytest.raises(ValidationError):
             GetEventsArgs.model_validate(bad)
+    assert GetEventsArgs.model_validate({}).source is None  # v0.17: sin `source`, todas
 
 
 def test_publish_alert_args_and_result() -> None:

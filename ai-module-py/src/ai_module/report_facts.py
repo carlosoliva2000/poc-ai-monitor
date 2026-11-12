@@ -14,6 +14,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
+from .link_log import LinkChange, LinkLog
 from .monitor_state import CHECK_LABELS, AlertRecord, DetectionRecord, MonitorState
 from .outbox import format_t
 
@@ -83,6 +84,9 @@ class Anomaly:
     chain: list[AlertRecord]
     """De la primera alerta a la vigente."""
     detections: list[DetectionRecord]
+    link_back: LinkChange | None = None
+    """Fase 15.1: el primer `LinkStatus` con el controlador de la misión tras el cambio de
+    controlador de la anomalía (un secuestro). `None` si no hubo o el interruptor está apagado."""
 
     @property
     def first(self) -> AlertRecord:
@@ -167,7 +171,9 @@ class ReportFacts:
     """`alert_id` → etiqueta de su anomalía (`A1`…)."""
 
 
-def build_facts(state: MonitorState) -> ReportFacts:
+def build_facts(state: MonitorState, link_log: LinkLog | None = None) -> ReportFacts:
+    """`link_log` (Fase 15.1, `report.link_back_time`): con él, cada anomalía con una
+    `LINK_ANOMALY` lleva la hora a la que el enlace volvió al controlador de la misión."""
     anomalies: list[Anomaly] = []
     for head in (a for a in state.alerts.values() if a.superseded_by is None):
         chain = [head]
@@ -175,7 +181,11 @@ def build_facts(state: MonitorState) -> ReportFacts:
             chain.append(state.alerts[chain[-1].supersedes])  # type: ignore[index]
         chain.reverse()
         detections = sorted(state.detections_of(head.alert_id), key=lambda d: d.since)
-        anomalies.append(Anomaly("", chain, detections))
+        link_back = None
+        if link_log is not None:
+            starts = [d.since for d in detections if d.rule == "LINK_ANOMALY"]
+            link_back = link_log.back_after(min(starts)) if starts else None
+        anomalies.append(Anomaly("", chain, detections, link_back))
     anomalies.sort(key=lambda a: (a.first.sim_time, a.first.alert_id))
     labels: dict[str, str] = {}
     for number, anomaly in enumerate(anomalies, 1):
@@ -233,6 +243,12 @@ def timeline_table(state: MonitorState, facts: ReportFacts, summary: dict[str, A
                 )
             )
     for anomaly in facts.anomalies:
+        if anomaly.link_back is not None:
+            what = (
+                f"Command link back to {anomaly.link_back.controller_id} "
+                f"({anomaly.link_back.event_id}; {anomaly.label})"
+            )
+            rows.append((anomaly.link_back.sim_time, 1, "Link", what))
         for alert in anomaly.chain:
             replaces = f", supersedes {alert.supersedes}" if alert.supersedes else ""
             what = (
@@ -350,6 +366,11 @@ def _mission_times(anomaly: Anomaly) -> str:
     """Las horas de la anomalía, cada una con su nombre: detección, entrada en recuperación y
     cierre son tres momentos distintos (Fase 14.3)."""
     parts = [f"detected at {format_t(anomaly.detected_at)}"]
+    if anomaly.link_back is not None:
+        parts.append(
+            f"command link back to {anomaly.link_back.controller_id} at "
+            f"{format_t(anomaly.link_back.sim_time)}"
+        )
     if anomaly.recovery_at is not None:
         parts.append(f"entered recovery at {format_t(anomaly.recovery_at)}")
     if anomaly.closed_at is not None:
@@ -377,6 +398,37 @@ def _mission_figures(anomaly: Anomaly, records: list[dict[str, Any]] | None) -> 
                 "position moved at once; it is not a distance from the route)."
             )
     return lines
+
+
+def describe_alert_phases(facts: ReportFacts) -> str:
+    """Fase de cada alerta con su hora, una línea por anomalía, para el chat del informe (Fase
+    15.1, `chat.alert_phases`): «active from T+03:12 (ai-0004, high); in recovery from T+03:42
+    (ai-0005, medium); closed at T+03:54». Así el chat sabe en qué fase estaba cada anomalía en un
+    instante, y no atribuye a la causa lo que ocurre en su recuperación."""
+    if not facts.anomalies:
+        return "There were no alerts."
+    lines = []
+    for anomaly in facts.anomalies:
+        steps = [
+            f"{'in recovery' if a.phase == 'recovering' else 'active'} from {format_t(a.sim_time)} "
+            f"({a.alert_id}, {severity_name(a.severity)})"
+            for a in anomaly.chain
+        ]
+        if anomaly.link_back is not None:
+            steps.insert(
+                1 if len(steps) > 1 else len(steps),
+                f"the command link was back to {anomaly.link_back.controller_id} at "
+                f"{format_t(anomaly.link_back.sim_time)}",
+            )
+        end = (
+            f"closed at {format_t(anomaly.closed_at)}"
+            if anomaly.closed_at is not None
+            else "still open at the end"
+        )
+        lines.append(
+            f"- {anomaly.label} · {cause_name(anomaly.first.cause)}: {'; '.join(steps)}; {end}."
+        )
+    return "\n".join(lines)
 
 
 def anomalies_for_llm(

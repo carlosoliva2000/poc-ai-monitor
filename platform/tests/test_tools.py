@@ -47,11 +47,16 @@ def test_time_cut_for_every_tool(runs_dir: Path) -> None:
     assert metrics["until"] == now
     assert metrics["last_seen_sim_time"]["gps"] == 200.0
     assert metrics["samples"]["gps"] == 200
-    # una ventana entera en el futuro queda vacía
-    future = call_tool(ctx, "get_track_metrics", {"since": 300, "until": 400})
-    assert future["samples"] == {"gps": 0, "radar": 0} and not future["gps_available"]
-    assert future["until"] == now
-    assert call_tool(ctx, "get_events", {"source": "gps", "since": 300})["events"] == []
+    # una ventana que empieza en el futuro se rechaza (v0.17) y dice el instante de partida
+    with pytest.raises(ToolFailure, match=r"after the current time T\+03:20 \(200\.\d+ s\)"):
+        call_tool(ctx, "get_track_metrics", {"since": 300, "until": 400})
+    with pytest.raises(ToolFailure, match="starts at or before"):
+        call_tool(ctx, "get_events", {"source": "gps", "since": "T+05:00"})
+    # un `until` futuro se recorta y la respuesta lo dice
+    assert metrics["until_clipped_to"] == now
+    clipped = call_tool(ctx, "get_events", {"source": "gps", "last_n": 1, "until": 1e9})
+    assert clipped["until_clipped_to"] == now and "clipped" in clipped["note"]
+    assert call_tool(ctx, "get_events", {"source": "gps", "last_n": 1})["until_clipped_to"] is None
 
 
 def test_tools_never_expose_sim_domain_or_truth(runs_dir: Path) -> None:
@@ -109,7 +114,7 @@ def test_get_events_compact_format_and_limits(runs_dir: Path) -> None:
 
 
 def test_bad_arguments_and_unknown_tool(runs_dir: Path) -> None:
-    _, ctx = at(runs_dir, "nominal", 5.0)
+    _, ctx = at(runs_dir, "nominal", 20.0)
     with pytest.raises(ToolFailure, match="invalid arguments"):
         call_tool(ctx, "get_events", {"source": "sim"})
     with pytest.raises(ToolFailure, match="invalid arguments"):
@@ -118,6 +123,8 @@ def test_bad_arguments_and_unknown_tool(runs_dir: Path) -> None:
         call_tool(ctx, "publish_alert", {})
     with pytest.raises(ToolFailure, match="since"):
         call_tool(ctx, "get_track_metrics", {"since": 10, "until": 5})
+    with pytest.raises(ToolFailure, match=r"T\+mm:ss"):
+        call_tool(ctx, "get_events", {"source": "gps", "since": "yesterday"})
 
 
 def test_mission_plan_and_next_waypoint(runs_dir: Path) -> None:
@@ -502,3 +509,109 @@ def test_now_with_the_gps_silent_has_no_fix_to_report(runs_dir: Path) -> None:
     _, now = now_of(ctx, 305, 311.0)
     assert now.gps_fix is None
     assert now.gps_radar_distance_m is None and now.gps_deviation_from_plan_m is None
+
+
+# --- v0.17: tendencia respecto a la ruta en los últimos segundos (`now.route_trend`) ---
+
+
+def route_trend(runs_dir: Path, scenario: str, seconds: float) -> dict:
+    _, ctx = at(runs_dir, scenario, seconds)
+    metrics = call_tool(ctx, "get_track_metrics", {"since": max(seconds - 30.0, 0.0), "until": 1e9})
+    TrackMetrics.model_validate(metrics)
+    return metrics["now"]
+
+
+def test_route_trend_follows_the_hijack_turnaround(runs_dir: Path) -> None:
+    """El secuestro se aleja hasta ~T+06:23 y luego el dron vuelve hacia la ruta, aunque el `trend`
+    de la ventana de 30 s siga diciendo `increasing`."""
+    away = route_trend(runs_dir, "hijack", 380.0)
+    assert (away["route_trend"], away["route_trend_source"]) == ("moving_away", "gps")
+    assert away["route_change_m"] > 50
+    back = route_trend(runs_dir, "hijack", 385.0)  # T+06:25, cuando vuelve el enlace
+    assert back["route_trend"] == "approaching" and back["route_change_m"] < -20
+    later = route_trend(runs_dir, "hijack", 388.0)
+    assert later["route_trend"] == "approaching"
+    window = call_tool(
+        at(runs_dir, "hijack", 388.0)[1], "get_track_metrics", {"since": 358.0, "until": 388.0}
+    )
+    assert window["gps_deviation_from_plan_m"]["trend"] == "increasing"  # la ventana se queda atrás
+
+
+def test_route_trend_is_steady_in_a_nominal_flight(runs_dir: Path) -> None:
+    now = route_trend(runs_dir, "nominal", 300.0)
+    assert (now["route_trend"], now["route_trend_source"]) == ("steady", "gps")
+    assert abs(now["route_change_m"]) < 15  # ruido: el umbral de «steady» sube con la ventana corta
+
+
+def test_route_trend_after_the_gps_recovery_ignores_the_jump(runs_dir: Path) -> None:
+    """Con el engaño en marcha el GPS discrepa del radar: la tendencia sale del radar. Al volver el
+    GPS de golpe a la posición real (el salto no es «alejarse») la tendencia es la del dron."""
+    spoofed = route_trend(runs_dir, "demo", 224.0)
+    assert (spoofed["route_trend"], spoofed["route_trend_source"]) == ("moving_away", "radar")
+    back = route_trend(runs_dir, "demo", 232.0)
+    assert (back["route_trend"], back["route_trend_source"]) == ("approaching", "gps")
+
+
+def test_route_trend_without_gps_uses_the_radar_and_is_null_without_both(runs_dir: Path) -> None:
+    now = route_trend(runs_dir, "faults", 311.0)  # el GPS calla de 300 a 312 s
+    assert now["route_trend_source"] == "radar" and now["route_trend"] is not None
+    _, ctx = at(runs_dir, "nominal", 1.0)
+    early = call_tool(ctx, "get_track_metrics", {"since": 0, "until": 1.0})["now"]
+    assert early["route_trend"] is None and early["route_change_m"] is None
+    assert early["route_trend_source"] is None
+
+
+# --- v0.17: tiempos en texto, `last_s` y `source: all` ---
+
+
+def test_clock_times_are_the_same_as_seconds(runs_dir: Path) -> None:
+    _, ctx = at(runs_dir, "demo", 200.3)
+    by_text = call_tool(
+        ctx, "get_events", {"source": "gps", "since": "T+01:30", "until": "T+01:50", "last_n": 50}
+    )
+    by_seconds = call_tool(
+        ctx, "get_events", {"source": "gps", "since": 90, "until": 110, "last_n": 50}
+    )
+    assert [e["event_id"] for e in by_text["events"]] == [
+        e["event_id"] for e in by_seconds["events"]
+    ]
+    assert by_text["events"][0]["t"] >= "T+01:30"
+    metrics = call_tool(ctx, "get_track_metrics", {"since": "01:30", "until": "01:50"})
+    assert (metrics["since"], metrics["until"]) == (90.0, 110.0)
+
+
+def test_last_s_counts_back_from_now(runs_dir: Path) -> None:
+    player, ctx = at(runs_dir, "demo", 200.3)
+    result = call_tool(ctx, "get_events", {"source": "gps", "last_s": "1m30s", "last_n": 50})
+    times = [e["sim_time"] for e in result["events"]]
+    assert min(times) >= player.sim_time - 90 and max(times) <= player.sim_time
+    assert len(times) == 50 and result["truncated"] is True  # 90 posiciones, tope de 50
+    metrics = call_tool(ctx, "get_track_metrics", {"last_s": 60})
+    assert metrics["until"] == player.sim_time
+    assert metrics["since"] == pytest.approx(player.sim_time - 60)
+    with pytest.raises(ToolFailure, match="last_s or since"):
+        call_tool(ctx, "get_events", {"source": "gps", "last_s": 60, "since": 10})
+
+
+def test_source_all_is_every_source_in_time_order_with_its_feed(runs_dir: Path) -> None:
+    _, ctx = at(runs_dir, "demo", 200.3)
+    result = call_tool(ctx, "get_events", {"since": 90, "until": 110})
+    events = result["events"]
+    assert [e["sim_time"] for e in events] == sorted(e["sim_time"] for e in events)
+    feeds = {e["feed"] for e in events}
+    assert {"gps", "radar", "meteo", "link"} <= feeds and "operator" not in feeds
+    for feed in feeds:  # hasta 3 por fuente si no se pidió `last_n`
+        assert sum(1 for e in events if e["feed"] == feed) <= 3
+    assert result["truncated"] is True and "most recent events of each source" in result["note"]
+    assert all("sim" not in e["type"].lower() for e in events)
+    explicit = call_tool(
+        ctx, "get_events", {"source": "all", "since": 90, "until": 110, "last_n": 1}
+    )
+    assert max(sum(1 for e in explicit["events"] if e["feed"] == f) for f in feeds) == 1
+
+
+def test_source_all_never_passes_the_time_cut_or_the_cap(runs_dir: Path) -> None:
+    player, ctx = at(runs_dir, "demo", 200.3)
+    everything = call_tool(ctx, "get_events", {"last_n": 50, "until": 1e9})
+    assert all(e["sim_time"] <= player.sim_time for e in everything["events"])
+    assert len(everything["events"]) <= 60 and everything["truncated"] is True

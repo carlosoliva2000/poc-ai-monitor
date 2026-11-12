@@ -22,11 +22,33 @@ from .agent.engine import AgentEngine
 from .agent.llm import Messages
 from .agent.tools import Toolbox
 from .agent.trace import InvocationTrace
+from .chat_facts import describe_monitor_decisions
 from .outbox import format_t
 from .report import ReportAgent
+from .report_facts import build_facts, describe_alert_phases
 from .runtime import Runtime
 
 log = logging.getLogger(__name__)
+
+MONITOR_DECISIONS_SECTION = (
+    "## What the monitor did (its latest decisions, in order)\n"
+    "A question about what the monitor looked at or published, or why it did, is answered from "
+    "these decisions and nothing else: say which warning made it look (the detector's own words "
+    "and the time) and what it looked at then. Do not run a new query for it and do not describe "
+    "how things are now unless the question asks for it: a new query shows the present, not what "
+    "the monitor saw at that moment.\n"
+    "{decisions}"
+)
+
+ALERT_PHASES_SECTION = (
+    "## Phase of each alert (from the monitor)\n"
+    "Each anomaly with the phase it was in and since when. A question about a given moment is "
+    "answered with the phase in force then: while an alert is active the problem of its cause is "
+    "going on; from the time it is in recovery the problem is over and what follows (the GPS back "
+    "at its real position, the drone still off the route) is the aftermath, not the cause itself. "
+    "When the moment asked about falls inside the period of an alert, say which phase it was in.\n"
+    "{phases}"
+)
 
 _AGENT = {
     ConversationId.MONITOR: (AgentName.CHAT_MONITOR, "chat_monitor"),
@@ -94,6 +116,21 @@ class Chat:
         }
         if self.conversation == ConversationId.REPORT:
             values["report_markdown"] = self.report.markdown if self.report else ""
+            # Fase 15.1 (`chat.alert_phases`): la fase de cada alerta con su hora, para no
+            # atribuir a la causa lo que pasa en su recuperación
+            values["alert_phases_section"] = ""
+            if rt.assets.chat_switch("alert_phases"):
+                link_log = rt.link_log if rt.assets.report_link_back_time else None
+                phases = describe_alert_phases(build_facts(rt.state, link_log))
+                section = ALERT_PHASES_SECTION.format(phases=phases)
+                values["alert_phases_section"] = section + "\n\n"
+        values["monitor_decisions_section"] = ""
+        if self.conversation == ConversationId.MONITOR and rt.assets.chat_switch(
+            "monitor_decisions"
+        ):
+            decisions = describe_monitor_decisions(rt.trace.records, rt.state)
+            section = MONITOR_DECISIONS_SECTION.format(decisions=decisions)
+            values["monitor_decisions_section"] = section + "\n\n"
         tools_on = rt.assets.chat_tools_enabled
         if self.conversation == ConversationId.MONITOR or not tools_on:
             # el chat del monitor lleva siempre sus alertas con los `checks` y los últimos hechos
@@ -107,8 +144,11 @@ class Chat:
             *self.history,
             {"role": "user", "content": question},
         ]
-        # el chat del monitor, como el monitor, no ve más allá de «ahora»
-        capped = now if self.conversation == ConversationId.MONITOR else None
+        # el chat del monitor, como el monitor, no ve más allá de «ahora»; con `window_rules`
+        # (Fase 15.1) también el del informe: todas las llamadas de una pregunta salen del mismo
+        # instante, y con el ejercicio terminado es el último (el de `SimulationFinished`)
+        window_rules = rt.assets.chat_switch("window_rules")
+        capped = now if self.conversation == ConversationId.MONITOR or window_rules else None
         toolbox = Toolbox(
             rt.assets,
             cfg.skills,
@@ -116,6 +156,7 @@ class Chat:
             as_of=capped,
             platform_call=rt.platform_call,
             on_skill=lambda name: trace.skills_loaded.append({"name": name, "by": "model"}),
+            window_rules=window_rules,
         )
         schemas = rt.assets.tool_schemas(cfg.active_tools) if tools_on else []
         engine = AgentEngine(rt.llm, cfg, schemas, toolbox)
@@ -153,6 +194,7 @@ class Chat:
                 [],
                 "error",
             )
+        trace.events_after_as_of = toolbox.after_as_of
         reply = await self._reply(event, text, tool_names)
         trace.published.append(
             {"event_id": reply.event_id, "type": "AgentReply", "causation_id": event.event_id}

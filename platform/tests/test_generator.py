@@ -16,7 +16,7 @@ from poc_contracts.envelope import EventDraft
 from poc_contracts.run_files import LabelsFile, PlanFile, TruthFile
 
 SENSOR_TYPES = {"PositionUpdated", "TrackUpdated", "WindReported", "LinkStatus", "BatteryStatus"}
-ALL = ["demo", "demo-battery", "faults", "hijack", "nominal", "spoofing", "wind"]
+ALL = ["demo", "demo-battery", "demo-meteo", "faults", "hijack", "nominal", "spoofing", "wind"]
 
 
 def test_all_scenarios_in_the_repo_are_the_seven_expected() -> None:
@@ -265,4 +265,29 @@ def test_demo_battery_is_demo_without_the_silenced_battery_events(runs_dir: Path
         ("A2", "gps_spoofing", None),
         ("A3", "hijack", None),
         ("F1", "source_silent", "battery"),
+    ]
+
+
+def test_demo_meteo_is_demo_without_the_silenced_weather_station(runs_dir: Path) -> None:
+    """`demo-meteo` = `demo` + la estación meteorológica callada desde T+25 s: mismos eventos,
+    menos los `WindReported` de ese tramo, más `FaultInjected`/`FaultCleared`."""
+
+    def load(name: str) -> list[dict]:
+        return [json.loads(x) for x in (runs_dir / name / "events.jsonl").read_text().splitlines()]
+
+    demo, meteo = load("demo"), load("demo-meteo")
+    expected = [e for e in demo if not (e["type"] == "WindReported" and e["sim_time"] >= 25.0)]
+    got = [e for e in meteo if e["type"] not in ("FaultInjected", "FaultCleared")]
+    assert got == expected
+    faults = [e for e in meteo if e["type"] in ("FaultInjected", "FaultCleared")]
+    assert [(e["type"], e["payload"]["source"], e["payload"]["origin"]) for e in faults] == [
+        ("FaultInjected", "meteo", "scenario"),
+        ("FaultCleared", "meteo", "scenario"),
+    ]
+    labels = json.loads((runs_dir / "demo-meteo" / "labels.json").read_text())["labels"]
+    assert [(lb["id"], lb["type"], lb["source"]) for lb in labels] == [
+        ("A1", "wind", None),
+        ("A2", "gps_spoofing", None),
+        ("A3", "hijack", None),
+        ("F1", "source_silent", "meteo"),
     ]

@@ -39,7 +39,7 @@ from .agent.guardrails import (
     fill_link_anomalous,
 )
 from .agent.llm import Messages
-from .agent.tools import Toolbox, strip_computed_facts, strip_now_facts
+from .agent.tools import Toolbox, strip_computed_facts, strip_now_facts, strip_route_trend
 from .agent.trace import InvocationTrace
 from .monitor_memory import MonitorMemory, chars_of
 from .outbox import format_t
@@ -190,6 +190,8 @@ class Monitor:
             detection_id = event.payload["detection_id"]
             if event.type == EventType.DETECTION_CLEARED and detection_id in awaiting:
                 break
+            if self.config.as_of_from_warning and batch and event.sim_time != batch[0].sim_time:
+                break  # Fase 15.1: solo avisos del mismo instante (lo que juntaría una pausa)
             if event.type != EventType.DETECTION_CLEARED:
                 awaiting.add(detection_id)
             batch.append(self.queue.popleft())
@@ -200,7 +202,13 @@ class Monitor:
     async def handle_batch(self, batch: list[Envelope]) -> None:
         rt = self.rt
         invocation_id = rt.ids.next("inv")
-        as_of = max([rt.clock.now(), *(e.sim_time for e in batch)])
+        if self.config.as_of_from_warning:
+            # Fase 15.1: la invocación mira el mundo en el instante del aviso (el del último del
+            # lote), no cuando le toca el turno: así lo que contesta no depende de si la
+            # simulación se pausó o de lo que tardó la cola
+            as_of = max(e.sim_time for e in batch)
+        else:
+            as_of = max([rt.clock.now(), *(e.sim_time for e in batch)])
         trace = InvocationTrace(
             invocation_id=invocation_id,
             agent="monitor",
@@ -211,6 +219,11 @@ class Monitor:
             guided_mode=self.config.guided_skills,
             aids=self.config.aids(),
         )
+        trace.warnings = [
+            f"{e.payload['detection_id']} {e.payload.get('rule', '')} {KIND_OF_TYPE[e.type]}"
+            + (f" ({e.payload['message']})" if e.payload.get("message") else "")
+            for e in batch
+        ]
         started = time.monotonic()
         pending = await self._triage(batch, as_of, trace)
         inv = Invocation(invocation_id, as_of, pending, trace)
@@ -319,6 +332,7 @@ class Monitor:
             },
             platform_call=rt.platform_call,
             on_skill=lambda name: trace.skills_loaded.append({"name": name, "by": "model"}),
+            window_rules=cfg.as_of_from_warning,
         )
 
         async def execute(name: str, args: dict[str, Any]) -> Any:
@@ -337,6 +351,8 @@ class Monitor:
                 result = strip_computed_facts(result)  # el módulo los conserva para los checks
             elif name == "get_track_metrics" and not cfg.now_facts:
                 result = strip_now_facts(result)
+            elif name == "get_track_metrics" and not self._shows_route_trend(inv):
+                result = strip_route_trend(result)
             inv.seen_ids |= set(ID_RE.findall(compact_json(result)))
             return result
 
@@ -360,6 +376,7 @@ class Monitor:
             trace.end_reason = "error"
             trace.messages = messages
             trace.guardrail_rejections.append({"tool": "engine", "errors": [str(exc)]})
+        trace.events_after_as_of = toolbox.after_as_of
         self._note_guardrail_view(inv)
         self._note_model_view(inv)
         try:
@@ -368,6 +385,14 @@ class Monitor:
             await rt.activity(AgentName.MONITOR, ActivityState.FINISHED, inv.invocation_id, first)
             if memory is not None:
                 self._remember(memory, inv, messages, chars_start)
+
+    def _shows_route_trend(self, inv: Invocation) -> bool:
+        """Fase 15.1 (`monitor.now_route_trend`): `all` en todas las invocaciones; `link_recovery`,
+        solo cuando alguno de los avisos es la recuperación de un secuestro."""
+        mode = self.config.now_route_trend
+        return mode == "all" or (
+            mode == "link_recovery" and any(p.link_recovery for p in inv.pending)
+        )
 
     def _route_deviation_warnings(self, inv: Invocation) -> list[Pending]:
         """Los avisos `raised` o `updated` de `ROUTE_DEVIATION` del lote."""

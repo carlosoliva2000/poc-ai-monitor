@@ -1,5 +1,22 @@
 {
   "$defs": {
+    "EventSource": {
+      "description": "`source` de `get_events` (v0.17): las fuentes de `ToolSource` o `all` (todas a la vez).",
+      "enum": [
+        "all",
+        "gps",
+        "radar",
+        "meteo",
+        "link",
+        "battery",
+        "mission",
+        "detector",
+        "monitor",
+        "operator"
+      ],
+      "title": "EventSource",
+      "type": "string"
+    },
     "EventType": {
       "description": "Tipos de evento (último segmento del topic sin la versión).",
       "enum": [
@@ -35,28 +52,20 @@
       ],
       "title": "EventType",
       "type": "string"
-    },
-    "ToolSource": {
-      "description": "Valores del parámetro `source` de `get_events` (nunca el dominio `sim`).",
-      "enum": [
-        "gps",
-        "radar",
-        "meteo",
-        "link",
-        "battery",
-        "mission",
-        "detector",
-        "monitor",
-        "operator"
-      ],
-      "title": "ToolSource",
-      "type": "string"
     }
   },
   "additionalProperties": false,
   "properties": {
     "source": {
-      "$ref": "#/$defs/ToolSource"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EventSource"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "type": {
       "anyOf": [
@@ -97,11 +106,20 @@
       ],
       "default": null,
       "title": "Until"
+    },
+    "last_s": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last S"
     }
   },
-  "required": [
-    "source"
-  ],
   "title": "GetEventsArgs",
   "type": "object"
 }

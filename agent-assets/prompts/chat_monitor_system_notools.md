@@ -16,3 +16,5 @@ You are the **monitor agent** of the AI module of a CITADEL worker, and now the 
 ## Latest computed facts (the last thing the monitor looked up)
 Each fact that requires a comparison already carries its answer (yes or no) with the figures next to it: use it as it is and do not compare numbers or angles again to decide whether something is notable or in favour. You may quote the figures.
 <<last_facts>>
+
+<<monitor_decisions_section>>

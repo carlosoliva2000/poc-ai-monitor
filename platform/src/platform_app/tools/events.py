@@ -1,6 +1,6 @@
 """Tools `get_events`, `get_mission_plan` y `get_my_alerts`."""
 
-from poc_contracts.enums import AlertStatus, EventType
+from poc_contracts.enums import AlertStatus, EventSource, EventType, ToolSource
 from poc_contracts.envelope import Envelope
 from poc_contracts.payloads import AlertClosed, AnomalyDetected, MissionPlanned
 from poc_contracts.tools import (
@@ -15,29 +15,83 @@ from poc_contracts.tools import (
 )
 from poc_contracts.topics import TOOL_SOURCE_TO_ENVELOPE_SOURCE
 
-from .context import ToolContext, ToolFailure, format_t
+from .context import ToolContext, ToolFailure, format_t, resolve_window
 
 
-def compact(event: Envelope) -> CompactEvent:
-    """Id, tipo, `sim_time`, `t` y los campos del payload (sin el resto del sobre)."""
+def compact(event: Envelope, feed: ToolSource | None = None) -> CompactEvent:
+    """Id, tipo, `sim_time`, `t` y los campos del payload (sin el resto del sobre); en
+    `source: all`, además `feed` (la fuente del evento, v0.17: `source` es del payload)."""
+    extra = {"feed": feed.value} if feed is not None else {}
     return CompactEvent(
         event_id=event.event_id,
         type=event.type,
         sim_time=event.sim_time,
         t=format_t(event.sim_time),
         **event.payload,
+        **extra,
     )
+
+
+ALL_DEFAULT_PER_SOURCE = 3
+MAX_ALL_EVENTS = (
+    60  # tope de `source: all`: el módulo recorta a ~4000 caracteres lo que se devuelve
+)
+SOURCE_ORDER = {source: index for index, source in enumerate(ToolSource)}
 
 
 def get_events(ctx: ToolContext, args: GetEventsArgs) -> GetEventsResult:
-    found, truncated = ctx.events(
-        source=TOOL_SOURCE_TO_ENVELOPE_SOURCE[args.source],
-        type=args.type,
-        since=args.since,
-        until=args.until,
-        limit=args.last_n,
+    since, until, clipped = resolve_window(ctx, args.since, args.until, args.last_s)
+    notes: list[str] = []
+    if clipped is not None:
+        notes.append(
+            f"until was later than the current time: it was clipped to {format_t(clipped)}"
+        )
+    if args.source in (None, EventSource.ALL):
+        events, truncated = _all_sources(ctx, args, since, until)
+        if truncated:
+            notes.append(
+                "showing only the most recent events of each source (use one source or a "
+                "narrower window to see more)"
+            )
+    else:
+        found, truncated = ctx.events(
+            source=TOOL_SOURCE_TO_ENVELOPE_SOURCE[ToolSource(args.source)],
+            type=args.type,
+            since=since,
+            until=until,
+            limit=args.last_n,
+        )
+        events = [compact(e) for e in found]
+    return GetEventsResult(
+        events=events,
+        truncated=truncated,
+        until_clipped_to=clipped,
+        note="; ".join(notes) or None,
     )
-    return GetEventsResult(events=[compact(e) for e in found], truncated=truncated)
+
+
+def _all_sources(
+    ctx: ToolContext, args: GetEventsArgs, since: float | None, until: float | None
+) -> tuple[list[CompactEvent], bool]:
+    """Los eventos de todas las fuentes de la ventana (v0.17), por tiempo y cada uno con su
+    fuente (`feed`): hasta `last_n` por fuente (3 si no se pidió) y `MAX_ALL_EVENTS` en total."""
+    per_source = args.last_n if "last_n" in args.model_fields_set else ALL_DEFAULT_PER_SOURCE
+    collected: list[tuple[float, int, int, Envelope, ToolSource]] = []
+    truncated = False
+    for source in ToolSource:
+        found, cut = ctx.events(
+            source=TOOL_SOURCE_TO_ENVELOPE_SOURCE[source],
+            type=args.type,
+            since=since,
+            until=until,
+            limit=per_source,
+        )
+        truncated = truncated or cut
+        collected += [(e.sim_time, SOURCE_ORDER[source], e.seq, e, source) for e in found]
+    collected.sort(key=lambda row: row[:3])
+    if len(collected) > MAX_ALL_EVENTS:
+        collected, truncated = collected[len(collected) - MAX_ALL_EVENTS :], True
+    return [compact(e, feed=source) for *_, e, source in collected], truncated
 
 
 def mission_planned(ctx: ToolContext) -> MissionPlanned:

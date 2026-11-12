@@ -325,3 +325,17 @@ def test_the_now_block_is_stripped_when_now_facts_is_off() -> None:
     assert "now" not in strip_now_facts(result) and "gps_radar" in strip_now_facts(result)
     assert "now" not in strip_computed_facts(result)  # sin hechos calculados tampoco hay `now`
     assert strip_now_facts("text") == "text"
+
+
+def test_the_route_trend_is_stripped_when_now_route_trend_is_off() -> None:
+    """Fase 15.1 (contrato v0.17): sin `monitor.now_route_trend` el modelo no ve la tendencia."""
+    from ai_module.agent.tools import strip_route_trend
+
+    now = {"as_of": 1.0, "gps_fix": "3d", "route_trend": "approaching", "route_change_m": -12.0,
+           "route_trend_source": "gps"}  # fmt: skip
+    result = {"since": 0, "now": now}
+    stripped = strip_route_trend(result)
+    assert stripped["now"] == {"as_of": 1.0, "gps_fix": "3d"} and result["now"] is now
+    assert strip_route_trend({"since": 0}) == {"since": 0} and strip_route_trend("text") == "text"
+    assert Assets().agent("monitor").now_route_trend == "link_recovery"
+    assert Assets(REPO / "agent-assets-v13").agent("monitor").now_route_trend == "off"

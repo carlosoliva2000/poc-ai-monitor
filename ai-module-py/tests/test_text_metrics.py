@@ -618,3 +618,42 @@ def test_the_radar_reporting_is_read_from_the_last_track_up_to_the_invocation() 
     assert tm.radar_reporting_at(events, 251.0) is False
     assert tm.radar_reporting_at(events, 241.0) is False  # aún no había pistas
     assert tm.radar_reporting_at([], 10.0) is False
+
+
+# --- La hora de vuelta del enlace del informe no es la del cierre (Fase 15.1) ---
+
+LINK_RETURNS = [(380.0, 441.0)]  # el enlace volvió a T+06:20; la anomalía se cerró a T+07:21
+
+
+def test_the_closing_time_given_as_the_link_return_time_is_flagged() -> None:
+    wrong = (
+        "The drone remained off-route until T+07:21, when the hijack was resolved and the link "
+        "returned to GCS-1."
+    )
+    assert len(tm.recovery_time_mismatch(wrong, [], LINK_RETURNS)) == 1
+    other = "The link returned to GCS-1 at T+07:21."
+    assert len(tm.recovery_time_mismatch(other, [], LINK_RETURNS)) == 1
+
+
+def test_the_right_link_return_time_is_not_flagged() -> None:
+    for text in (
+        "The link returned to GCS-1 at T+06:20 and the drone came back to the route by T+07:21.",
+        "At T+06:20, when the link returned to GCS-1, the drone was still 686 m off route.",
+        "The hijack was closed at T+07:21.",  # no habla del enlace
+        "The link was hijacked at T+05:35.",
+    ):
+        assert tm.recovery_time_mismatch(text, [], LINK_RETURNS) == [], text
+    assert tm.recovery_time_mismatch("the link returned at T+07:21", [], []) == []
+    assert (
+        tm.recovery_time_mismatch("the link returned at T+07:21", []) == []
+    )  # sin dato, sin juicio
+
+
+def test_link_return_times_come_from_the_first_link_event_with_the_mission_controller() -> None:
+    def status(t: float, controller: str) -> dict:
+        return {"type": "LinkStatus", "sim_time": t, "payload": {"controller_id": controller}}
+
+    events = [status(330.0, "GCS-1"), status(335.0, "UNK-4F2A"), status(375.0, "UNK-4F2A"),
+              status(380.0, "GCS-1"), status(385.0, "GCS-1")]  # fmt: skip
+    assert tm.link_return_times(events) == [380.0]
+    assert tm.link_return_times([status(1.0, "GCS-1"), status(6.0, "GCS-1")]) == []

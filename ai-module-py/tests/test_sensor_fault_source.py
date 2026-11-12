@@ -288,3 +288,61 @@ def test_replay_with_the_switch_keeps_the_battery_and_the_discrepancy_apart() ->
     assert recent.alert_id == "ai-2"  # la recuperación sigue a la alerta de la discrepancia
     assert any("supersedes ai-2" in e for e in verdict.errors)
     assert not any("ai-1" in e for e in verdict.errors)  # y nunca a la de la batería
+
+
+# --- Fase 15.1: `LINK_ANOMALY` es de la fuente `link`, no de posición ---
+
+
+def link_state(source: str, rule: str = "SOURCE_SILENT") -> MonitorState:
+    """Un `SENSOR_FAULT` abierto (`ai-1`) por una detección de `source` (`det-1`)."""
+    s = MonitorState(sensor_fault_per_source=True)
+    s.apply(detection_event("raised", "det-1", 5.0, rule=rule, source=source))
+    s.apply(alert("ai-1", ["det-1"], cause="SENSOR_FAULT", t=6.0))
+    return s
+
+
+def test_a_link_anomaly_is_the_link_source_of_a_sensor_fault() -> None:
+    s = link_state("link", rule="LINK_ANOMALY")
+    assert s.fault_sources(s.alerts["ai-1"]) == {"link"}
+    assert "SENSOR_FAULT of the command link" in s.describe_open_alerts()
+    assert not s.is_gps_alert(s.alerts["ai-1"])
+
+
+def test_a_silent_link_and_a_later_link_anomaly_are_the_same_problem() -> None:
+    s = link_state("link")  # SOURCE_SILENT del enlace
+    s.apply(detection_event("raised", "det-2", 30.0, rule="LINK_ANOMALY", source="link"))
+    assert not s.foreign_sensor_fault(s.alerts["ai-1"], "det-2")
+    assert acknowledge(s, "det-2", "ai-1").ok
+
+
+@pytest.mark.parametrize(
+    ("source", "rule"),
+    [("radar", "SOURCE_SILENT"), ("gps", "SOURCE_SILENT"), ("battery", "SOURCE_SILENT"),
+     ("gps", "GPS_DEGRADED"), (None, "SOURCE_DISCREPANCY")],
+)  # fmt: skip
+def test_a_sensor_fault_of_another_source_does_not_absorb_a_link_anomaly(source, rule) -> None:
+    s = link_state(source, rule=rule)  # p. ej. un secuestro con el radar callado
+    s.apply(detection_event("raised", "det-2", 30.0, rule="LINK_ANOMALY", source="link"))
+    assert s.foreign_sensor_fault(s.alerts["ai-1"], "det-2")
+    verdict = acknowledge(s, "det-2", "ai-1")
+    assert not verdict.ok and verdict.tag == TAG_FOREIGN_FAULT
+
+
+def test_a_link_fault_is_foreign_to_position_and_to_other_sources() -> None:
+    s = link_state("link", rule="LINK_ANOMALY")
+    for i, (rule, source) in enumerate(
+        (("SOURCE_DISCREPANCY", None), ("ROUTE_DEVIATION", None), ("GPS_DEGRADED", "gps"),
+         ("SOURCE_SILENT", "radar"), ("SOURCE_SILENT", "battery"))
+    ):  # fmt: skip
+        s.apply(detection_event("raised", f"det-7{i}", 9.0, rule=rule, source=source))
+        assert s.foreign_sensor_fault(s.alerts["ai-1"], f"det-7{i}")
+    s.apply(detection_event("raised", "det-80", 9.0, rule="SOURCE_SILENT", source="link"))
+    assert not s.foreign_sensor_fault(s.alerts["ai-1"], "det-80")
+
+
+def test_the_link_anomaly_without_the_switch_keeps_the_old_behaviour() -> None:
+    s = MonitorState(sensor_fault_per_source=False)
+    s.apply(detection_event("raised", "det-1", 5.0, rule="SOURCE_SILENT", source="radar"))
+    s.apply(alert("ai-1", ["det-1"], cause="SENSOR_FAULT", t=6.0))
+    s.apply(detection_event("raised", "det-2", 30.0, rule="LINK_ANOMALY", source="link"))
+    assert not s.foreign_sensor_fault(s.alerts["ai-1"], "det-2")

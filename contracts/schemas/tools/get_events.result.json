@@ -79,6 +79,30 @@
     "truncated": {
       "title": "Truncated",
       "type": "boolean"
+    },
+    "until_clipped_to": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Until Clipped To"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Note"
     }
   },
   "required": [

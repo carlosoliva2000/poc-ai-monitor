@@ -82,6 +82,18 @@ class AgentConfig:
     now_facts: bool = False
     """Interruptor del monitor (Fase 14.1): `get_track_metrics` entrega el bloque `now`. Sin la
     clave (los assets anteriores a la 14.1) se quita del resultado que ve el modelo."""
+    as_of_from_warning: bool = False
+    """Interruptor del monitor (Fase 15.1): el `as_of` de una invocación es el `sim_time` del
+    aviso (el del último del lote) y los lotes solo juntan avisos del mismo instante; con él, las
+    tools de datos aplican las reglas de ventana (tiempos en texto, `last_s`, `since` futuro
+    rechazado)."""
+    now_route_trend: str = "off"
+    """Interruptor del monitor (Fase 15.1, contrato v0.17): el bloque `now` de `get_track_metrics`
+    lleva `route_trend`, `route_change_m` y `route_trend_source`. `off` (sin la clave): se
+    quitan del resultado que ve el modelo; `link_recovery`: solo en la recuperación del
+    secuestro, que es donde hace falta (con ellos en todas las invocaciones el diagnóstico del
+    spoofing de `demo-battery` falló en 3 de 8 ejecuciones y en 0 de 6 sin ellos); `all`: en
+    todas (`true`)."""
     state_line: str = "legacy"
     """Forma de la línea «Recent GPS alert» del estado: `data` (alerta, causa y estado),
     `legacy` (con la frase de la recuperación; los assets anteriores a la Fase 14.1), `phase`
@@ -206,7 +218,12 @@ class AgentConfig:
             "llm_timeout_s": self.llm_timeout_s,
             "aids": self.aids() if self.name == "monitor" else None,
             **(
-                {"now_facts": self.now_facts, "state_line": self.state_line}
+                {
+                    "now_facts": self.now_facts,
+                    "now_route_trend": self.now_route_trend,
+                    "as_of_from_warning": self.as_of_from_warning,
+                    "state_line": self.state_line,
+                }
                 if self.name == "monitor"
                 else {}
             ),
@@ -232,6 +249,24 @@ def _memory_mode(agent: str, value: object) -> str:
     if mode not in MEMORY_MODES:
         raise AssetError(f"monitor.memory must be one of {MEMORY_MODES}, not {mode!r}")
     return mode
+
+
+def _route_trend_mode(value: object) -> str:
+    """`monitor.now_route_trend`: `false` → `off`, `true` → `all`, o `link_recovery`."""
+    if value in (False, None, "off"):
+        return "off"
+    if value in (True, "all"):
+        return "all"
+    if value == "link_recovery":
+        return "link_recovery"
+    raise AssetError(
+        f"monitor.now_route_trend: invalid value {value!r} (false, link_recovery, true)"
+    )
+
+
+OPTIONAL_MARKERS = {"alert_phases_section": "", "monitor_decisions_section": ""}
+"""Secciones de los prompts de los chats que dependen de un interruptor (Fase 15.1): sin valor,
+vacías."""
 
 
 def render(template: str, **values: object) -> str:
@@ -329,6 +364,17 @@ class Assets:
             "agents": {name: self.agent(name).effective() for name in self._raw["agents"]},
         }
 
+    def chat_switch(self, name: str) -> bool:
+        """Interruptor `chat.<name>` (Fase 15.1: `alert_phases`, `monitor_decisions`); sin la
+        clave, apagado."""
+        return bool(self._raw.get("chat", {}).get(name, False))
+
+    @property
+    def report_link_back_time(self) -> bool:
+        """Interruptor `report.link_back_time` (Fase 15.1): el informe da la hora a la que el enlace
+        volvió al controlador de la misión (sin la clave, apagado)."""
+        return bool(self._raw.get("report", {}).get("link_back_time", False))
+
     @property
     def chat_tools_enabled(self) -> bool:
         """Interruptor `chat.tools_enabled`: si los chats reciben tools (por defecto sí)."""
@@ -390,6 +436,8 @@ class Assets:
             coherence_guardrail=bool(spec.get("coherence_guardrail", True)),
             computed_facts=bool(spec.get("computed_facts", True)),
             now_facts=bool(spec.get("now_facts", False)),
+            now_route_trend=_route_trend_mode(spec.get("now_route_trend", False)),
+            as_of_from_warning=bool(spec.get("as_of_from_warning", False)),
             state_line=str(spec.get("state_line", "legacy")),
             source_silent_own_alert=bool(spec.get("source_silent_own_alert", True)),
             no_duplicate_cause=bool(spec.get("no_duplicate_cause", True)),
@@ -432,6 +480,7 @@ class Assets:
             parts.append(self.prompt(agent.output_prompt))
         text = "\n\n".join(p.strip() for p in parts)
         values = {
+            **OPTIONAL_MARKERS,
             "skills_index": self.skills_index(agent.skills),
             "max_iterations": agent.max_iterations,
             **values,

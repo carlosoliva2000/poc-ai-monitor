@@ -284,16 +284,47 @@ def format_t(sim_time: float) -> str:
     return f"T+{total // 60:02d}:{total % 60:02d}"
 
 
-def recovery_time_mismatch(text: str, recoveries: list[tuple[float, float | None]]) -> list[str]:
+# Fase 15.1: lo mismo para la vuelta del enlace de un secuestro. La hora de vuelta es la del primer
+# `LinkStatus` con el controlador de la misión; el cierre de la anomalía llega mucho después (el
+# resumen decía «remained off-route until T+07:21, when the hijack was resolved and the link
+# returned to GCS-1»: T+07:21 es la vuelta a la ruta; el enlace volvió a T+06:20). Dos órdenes:
+# «the link returned … at T+mm:ss» y «T+mm:ss, when … the link returned».
+LINK_BACK_RES = (
+    re.compile(
+        r"\blink\b[^.;]{0,50}?(?:return|back|restor|regain)\w*[^.;]{0,50}?(T\+\d\d:\d\d)", re.I
+    ),
+    re.compile(
+        r"(T\+\d\d:\d\d)[^.;]{0,30}?\b(?:when|as|after)\b[^.;]{0,60}?\blink\b[^.;]{0,30}?"
+        r"(?:return|back|restor|regain)",
+        re.I,
+    ),
+)
+
+
+def recovery_time_mismatch(
+    text: str,
+    recoveries: list[tuple[float, float | None]],
+    link_returns: list[tuple[float, float | None]] | None = None,
+) -> list[str]:
     """Horas del resumen dadas como entrada en recuperación que son la del cierre. `recoveries`:
-    `(entrada en recuperación, cierre)` de cada anomalía que pasó por `recovering`."""
+    `(entrada en recuperación, cierre)` de cada anomalía que pasó por `recovering`. Fase 15.1:
+    `link_returns`, `(vuelta del enlace, cierre)` de cada secuestro, para las horas dadas como
+    vuelta del enlace que son la del cierre."""
     found: list[str] = []
-    for m in RECOVERY_TIME_RE.finditer(norm(text)):
+    plain = norm(text)
+    for m in RECOVERY_TIME_RE.finditer(plain):
         stated = m.group(1)
         for entered, closed in recoveries:
             if closed is not None and stated == format_t(closed) != format_t(entered):
                 found.append(m.group(0))
                 break
+    for regex in LINK_BACK_RES:
+        for m in regex.finditer(plain):
+            stated = m.group(1)
+            for back, closed in link_returns or []:
+                if closed is not None and stated == format_t(closed) != format_t(back):
+                    found.append(m.group(0))
+                    break
     return found
 
 
@@ -881,6 +912,7 @@ def measure_text(
     is_close: bool = False,
     known_figures: set[float] | None = None,
     recoveries: list[tuple[float, float | None]] | None = None,
+    link_returns: list[tuple[float, float | None]] | None = None,
 ) -> Measured:
     names, enums, bools = find_names(text)
     grams = set(corpus)
@@ -900,7 +932,7 @@ def measure_text(
     if kind == "report.Summary" and chains is not None:
         findings["summary_missing_type"] = summary_missing_type(text, chains)
     if kind == "report.Summary" and recoveries is not None:
-        findings["recovery_time_mismatch"] = recovery_time_mismatch(text, recoveries)
+        findings["recovery_time_mismatch"] = recovery_time_mismatch(text, recoveries, link_returns)
     if kind == "report.Recommendations":
         findings["monitor_talk_in_recommendations"] = monitor_talk(text)
         if known_figures is not None:
@@ -937,6 +969,25 @@ def monitor_record_for(records: list[dict[str, Any]], event_id: str) -> dict[str
     return None
 
 
+def link_return_times(events: list[dict[str, Any]]) -> list[float]:
+    """Horas a las que el enlace vuelve al controlador de la misión (el primero visto) tras haber
+    estado otro: el `sim_time` de ese `LinkStatus`, no el cierre de la `LINK_ANOMALY`."""
+    mission: str | None = None
+    away = False
+    back: list[float] = []
+    for e in events:
+        if e.get("type") != "LinkStatus":
+            continue
+        controller = e["payload"].get("controller_id")
+        mission = mission or controller
+        if controller != mission:
+            away = True
+        elif away:
+            back.append(float(e["sim_time"]))
+            away = False
+    return back
+
+
 def measure_run(
     source: "texts.Source", scenario: str, folder: Path, corpus: set[tuple[str, ...]]
 ) -> list[Measured]:
@@ -960,6 +1011,12 @@ def measure_run(
     chain_times: dict[str, dict[str, float | None]] = {}  # raíz -> recuperación y cierre
     chain_causes: dict[str, set[str]] = {}  # raíz de la cadena -> causas de sus alertas
     root_of: dict[str, str] = {}
+    chain_dets: dict[str, set[str]] = {}  # raíz de la cadena -> sus detecciones
+    link_det_since = {
+        e["payload"]["detection_id"]: e["sim_time"]
+        for e in events
+        if e.get("type") == "DetectionRaised" and e["payload"].get("rule") == "LINK_ANOMALY"
+    }
     for e in events:
         if e.get("type") == "AnomalyDetected":
             p = e["payload"]
@@ -972,6 +1029,7 @@ def measure_run(
             root = root_of.get(p.get("supersedes") or "", p["alert_id"])
             root_of[p["alert_id"]] = root
             chain_causes.setdefault(root, set()).add(p.get("cause", ""))
+            chain_dets.setdefault(root, set()).update(p.get("detection_ids", []))
             times = chain_times.setdefault(root, {"entered": None, "closed": None})
             if p.get("phase") == "recovering" and times["entered"] is None:
                 times["entered"] = e["sim_time"]
@@ -979,6 +1037,14 @@ def measure_run(
             root = root_of.get(e["payload"].get("alert_id") or "")
             if root is not None:
                 chain_times[root]["closed"] = e["sim_time"]
+
+    returns = link_return_times(events)
+    link_returns: list[tuple[float, float | None]] = []
+    for root, dets in chain_dets.items():  # secuestros: (vuelta del enlace, cierre de la cadena)
+        starts = [link_det_since[d] for d in dets if d in link_det_since]
+        back = next((t for t in returns if starts and t > min(starts)), None)
+        if back is not None:
+            link_returns.append((back, chain_times[root]["closed"]))
 
     def run_facts(until: float | None, own: dict[str, Any] | None) -> tuple[Facts, list[str]]:
         facts = Facts()
@@ -1082,6 +1148,7 @@ def measure_run(
                         for t in chain_times.values()
                         if t["entered"] is not None
                     ],
+                    link_returns=link_returns,
                 )
             )
         for label, (_, body) in sorted(seen.items()):

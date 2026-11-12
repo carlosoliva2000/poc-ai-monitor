@@ -66,7 +66,7 @@ class ReportAgent:
         await rt.activity(AgentName.REPORT, ActivityState.STARTED, invocation_id, finished_id)
         markdown = ""
         summary: dict[str, Any] | None = None
-        facts = build_facts(rt.state)
+        facts = build_facts(rt.state, rt.link_log if rt.assets.report_link_back_time else None)
         aids = rt.assets.agent("monitor").aids()
         narrative = Narrative(annex=bool(cfg.annex_system_prompt and cfg.annex_objective_prompt))
         try:

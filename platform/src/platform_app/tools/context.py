@@ -59,6 +59,26 @@ class ToolContext:
         return found[0] if found else None
 
 
+def resolve_window(
+    ctx: ToolContext, since: float | None, until: float | None, last_s: float | None
+) -> tuple[float | None, float | None, float | None]:
+    """Ventana de una tool con el instante actual como partida (contrato v0.17): `last_s` son los
+    últimos segundos hasta ahora; un `since` posterior a ahora se **rechaza** (así el modelo corrige
+    en vez de concluir «no hay eventos»); un `until` posterior se recorta. Devuelve
+    `(since, until, until_clipped_to)`; el último solo si hubo recorte."""
+    now = ctx.now()
+    if last_s is not None:
+        since, until = max(now - last_s, 0.0), now
+    if since is not None and since > now:
+        raise ToolFailure(
+            f"The start {format_t(since)} ({since:g} s) is after the current time "
+            f"{format_t(now)} ({now:g} s): nothing has happened there yet. Ask for a window "
+            f"that starts at or before {now:g} s"
+        )
+    clipped = now if until is not None and until > now else None
+    return since, until, clipped
+
+
 def format_t(sim_time: float) -> str:
     """`T+mm:ss` (los minutos pueden pasar de 99)."""
     total = int(sim_time)

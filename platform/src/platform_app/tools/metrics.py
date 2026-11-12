@@ -28,8 +28,9 @@ Cálculos (todo sale de `PositionUpdated` del GPS y `TrackUpdated` del radar en 
 import math
 from bisect import bisect_left
 from collections.abc import Sequence
+from typing import Literal
 
-from poc_contracts.enums import EventType, GpsFix, Trend
+from poc_contracts.enums import EventType, GpsFix, RouteTrend, Trend
 from poc_contracts.envelope import Envelope
 from poc_contracts.tools import (
     GetTrackMetricsArgs,
@@ -43,7 +44,7 @@ from poc_contracts.tools import (
 )
 
 from ..geometry import Point, bearing_deg, closest_on_route
-from .context import ToolContext, ToolFailure
+from .context import ToolContext, ToolFailure, resolve_window
 from .events import mission_planned, next_waypoint
 
 GPS_SOURCE = "d1-gps"
@@ -61,6 +62,14 @@ DISAGREED_M = 25.0  # GPS y radar discrepan si la distancia máxima de la ventan
 NOW_WINDOW_S = 10.0  # tramo de los hechos de «ahora»: la última muestra de los últimos 10 s
 NOW_WIND_WINDOW_S = 30.0  # el viento llega cada 10 s: se mira más atrás para tener el último
 COMPASS_POINTS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+ROUTE_STEADY_M = 5.0  # v0.17: cambio de la desviación en 10 s por debajo del cual «se mantiene»
+ROUTE_STEADY_SIGMAS = 2.0  # ...o este múltiplo del ruido de la pendiente, si es mayor
+GPS_SIGMA_M = 1.5  # ruido típico de cada fuente (generador), para saber cuándo un cambio es ruido
+RADAR_SIGMA_M = 5.0
+ROUTE_TREND_GPS_WINDOW_S = 4.0  # «últimos segundos»: con 10 s el giro (el pico) llega con retraso
+ROUTE_JUMP_M = 30.0  # un aumento de la desviación de golpe así de grande es el salto del GPS
+MIN_ROUTE_TREND_SAMPLES = 3
+MIN_ROUTE_TREND_SPAN_S = 3.0
 MAX_STEP_GAP_S = 1.5  # solo se comparan muestras consecutivas del GPS a esta distancia o menos
 
 Sample = tuple[float, float, float]  # (sim_time, x, y)
@@ -166,6 +175,30 @@ def _max_step(times: list[float], deviation: list[float]) -> float | None:
     return round(max(steps + [0.0]), 1)
 
 
+def _route_change(
+    samples: list[Sample], route: list[Point], sigma_m: float
+) -> tuple[float, float] | None:
+    """Cambio estimado de la desviación respecto a la ruta en `NOW_WINDOW_S` (pendiente de mínimos
+    cuadrados × 10 s; negativo = se acerca) y su umbral de «se mantiene» (el mayor entre
+    `ROUTE_STEADY_M` y 2 desviaciones típicas de la pendiente por el ruido `sigma_m` de la fuente).
+    Solo con las muestras posteriores al último salto de `ROUTE_JUMP_M` (el GPS que vuelve de golpe
+    a la posición real no es «alejarse»). `None` con menos de 3 muestras o de 3 s de tramo."""
+    times = [t for t, _, _ in samples]
+    dev = [closest_on_route((x, y), route)[1] for _, x, y in samples]
+    start = 0
+    for i in range(1, len(dev)):
+        if times[i] - times[i - 1] <= MAX_STEP_GAP_S and dev[i] - dev[i - 1] >= ROUTE_JUMP_M:
+            start = i
+    times, dev = times[start:], dev[start:]
+    if len(dev) < MIN_ROUTE_TREND_SAMPLES or times[-1] - times[0] < MIN_ROUTE_TREND_SPAN_S:
+        return None
+    mean_t, mean_d = sum(times) / len(times), sum(dev) / len(dev)
+    spread = sum((t - mean_t) ** 2 for t in times)
+    slope = sum((t - mean_t) * (d - mean_d) for t, d in zip(times, dev, strict=True)) / spread
+    noise = sigma_m * NOW_WINDOW_S / math.sqrt(spread)
+    return round(slope * NOW_WINDOW_S, 1), max(ROUTE_STEADY_M, ROUTE_STEADY_SIGMAS * noise)
+
+
 def _compass(deg: float) -> str:
     return COMPASS_POINTS[int(((deg % 360.0) + 22.5) // 45.0) % 8]
 
@@ -211,6 +244,29 @@ def _now_facts(ctx: ToolContext, route: list[Point], until: float) -> NowFacts:
         _, x, y = _samples(events)[0]
         return round(closest_on_route((x, y), route)[1], 1)
 
+    # v0.17: tendencia de la ruta en los últimos segundos; el GPS con fix, salvo que discrepe del
+    # radar (entonces el GPS puede mentir) o no tenga muestras suficientes: entonces el radar
+    window_gps = [s for s in series if s[0] >= until - ROUTE_TREND_GPS_WINDOW_S]
+    radar_window, _ = ctx.events(
+        source=RADAR_SOURCE, type=EventType.TRACK_UPDATED, since=since, until=until
+    )
+    found: tuple[float, float] | None = None
+    source: Literal["gps", "radar"] | None = None
+    if has_fix and (distance is None or distance < DISAGREED_M):
+        found, source = _route_change(window_gps, route, GPS_SIGMA_M), "gps"
+    if found is None:
+        found, source = _route_change(_samples(radar_window), route, RADAR_SIGMA_M), "radar"
+    trend: RouteTrend | None = None
+    change: float | None = None
+    if found is None:
+        source = None
+    else:
+        change, steady_below = found
+        if abs(change) < steady_below:
+            trend = RouteTrend.STEADY
+        else:
+            trend = RouteTrend.MOVING_AWAY if change > 0 else RouteTrend.APPROACHING
+
     wind_last, _ = ctx.events(
         source=METEO_SOURCE,
         type=EventType.WIND_REPORTED,
@@ -237,25 +293,30 @@ def _now_facts(ctx: ToolContext, route: list[Point], until: float) -> NowFacts:
         wind_gust_mps=gust,
         wind_from_deg=from_deg,
         wind=text,
+        route_trend=trend,
+        route_change_m=change,
+        route_trend_source=source,
     )
 
 
 def get_track_metrics(ctx: ToolContext, args: GetTrackMetricsArgs) -> TrackMetrics:
-    if args.since > args.until:
+    since, requested, clipped = resolve_window(ctx, args.since, args.until, args.last_s)
+    assert since is not None and requested is not None  # el modelo de argumentos lo garantiza
+    if since > requested:
         raise ToolFailure("`since` cannot be greater than `until`")
     plan = mission_planned(ctx)
     route: list[Point] = [(w.x, w.y) for w in plan.waypoints]
-    until = ctx.cutoff(args.until)
+    until = ctx.cutoff(requested)
 
     gps_events, _ = ctx.events(
-        source=GPS_SOURCE, type=EventType.POSITION_UPDATED, since=args.since, until=until
+        source=GPS_SOURCE, type=EventType.POSITION_UPDATED, since=since, until=until
     )
     radar_events, _ = ctx.events(
-        source=RADAR_SOURCE, type=EventType.TRACK_UPDATED, since=args.since, until=until
+        source=RADAR_SOURCE, type=EventType.TRACK_UPDATED, since=since, until=until
     )
     gps, radar = _samples(gps_events), _samples(radar_events)
     meteo_events, _ = ctx.events(
-        source=METEO_SOURCE, type=EventType.WIND_REPORTED, since=args.since, until=until
+        source=METEO_SOURCE, type=EventType.WIND_REPORTED, since=since, until=until
     )
 
     gps_dev = [closest_on_route((x, y), route)[1] for _, x, y in gps]
@@ -265,7 +326,7 @@ def get_track_metrics(ctx: ToolContext, args: GetTrackMetricsArgs) -> TrackMetri
     gps_context, _ = ctx.events(
         source=GPS_SOURCE,
         type=EventType.POSITION_UPDATED,
-        since=args.since - MAX_INTERP_GAP_S,
+        since=since - MAX_INTERP_GAP_S,
         until=until,
     )
     gps_series = _samples(gps_context)
@@ -300,8 +361,9 @@ def get_track_metrics(ctx: ToolContext, args: GetTrackMetricsArgs) -> TrackMetri
     last_ids = [e[-1].event_id for e in (gps_events, radar_events) if e]
     gps_radar_stat = _stat(distances)
     return TrackMetrics(
-        since=args.since,
+        since=since,
         until=until,
+        until_clipped_to=clipped,
         gps_deviation_from_plan_m=_stat(gps_dev),
         radar_deviation_from_plan_m=_stat(radar_dev),
         gps_radar_distance_m=gps_radar_stat,

@@ -46,6 +46,8 @@ AID_KEYS = (
     "coherence_guardrail",
     "computed_facts",
     "now_facts",
+    "now_route_trend",
+    "as_of_from_warning",
     "source_silent_own_alert",
     "no_duplicate_cause",
     "recovery_ack_veto",
@@ -73,7 +75,8 @@ ALLOWED = {
     "llm": ("model", "base_url", "api_key"),
     "sampling": (*SAMPLING_KEYS, *REASONING_KEYS),
     "agents": AGENT_NAMES,
-    "chat": ("tools_enabled",),
+    "chat": ("tools_enabled", "alert_phases", "monitor_decisions", "window_rules"),
+    "report": ("link_back_time",),
     "platform": ("wait_agent_timeout_s",),
 }
 # Modelos híbridos de 27B que cuelgan vLLM y han tirado Windows: no se sirven.
@@ -191,6 +194,7 @@ class Profile:
             spec.update(sampling)
             spec.update(self.raw.get("agents", {}).get(name, {}))
         out.setdefault("chat", {}).update(self.raw.get("chat", {}))
+        out.setdefault("report", {}).update(self.raw.get("report", {}))
         monitor = out["agents"]["monitor"]
         wait = self.wait_agent_timeout_s
         if float(monitor.get("max_invocation_s", 60)) + PLATFORM_MARGIN_S >= wait:

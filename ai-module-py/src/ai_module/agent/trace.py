@@ -100,6 +100,11 @@ class InvocationTrace:
     recuperación del GPS: ventana, `gps_max_step_m`, si hay salto y, al acabar la invocación,
     qué veía el guardrail (`guardrail_view`: `jump`, `window_without_jump` o `no_metrics`).
     Vacío en las invocaciones donde no hace falta. No cuenta como iteración ni como tool."""
+    warnings: list[str] = field(default_factory=list)
+    """Fase 15.1: los avisos del lote (`det-0007 LINK_ANOMALY raised`), para el chat del monitor."""
+    events_after_as_of: int = 0
+    """Fase 15.1: eventos de resultados de tools de datos posteriores al `as_of` de la
+    invocación. Debe ser 0: el corte temporal."""
     conversation_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:

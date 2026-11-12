@@ -78,6 +78,11 @@ class AlertRecord:
     checks: dict | None = None
     phase: str = "active"
     """Fase de la alerta (v0.14): `active` o `recovering`."""
+    as_of: float | None = None
+    closed_as_of: float | None = None
+    """Fase 15.1: el instante «de partida» con el que el monitor publicó la alerta y la cerró
+    (`as_of_sim_time`), frente a `sim_time` y `closed_at` (cuándo salió el evento, que sin pausa es
+    mucho después del aviso)."""
     opened_by: set[str] = field(default_factory=set)
     """Detecciones con las que se abrió el episodio (las de su primera alerta y las de las que
     sustituye); no incluye las que se le reconocen después. Fase 15: de ellas sale la fuente de un
@@ -97,12 +102,20 @@ SOURCE_NAMES = {
 
 
 class MonitorState:
-    def __init__(self, last_decisions: int = 3, sensor_fault_per_source: bool = False) -> None:
+    def __init__(
+        self,
+        last_decisions: int = 3,
+        sensor_fault_per_source: bool = False,
+        as_of_times: bool = False,
+    ) -> None:
         """`sensor_fault_per_source` (Fase 15, `monitor.sensor_fault_per_source`): un `SENSOR_FAULT`
         es de una sola fuente, la de las detecciones que lo abrieron; las que se le reconocen
         después no lo cambian."""
         self.last_decisions = last_decisions
         self.sensor_fault_per_source = sensor_fault_per_source
+        self.as_of_times = as_of_times
+        """Fase 15.1 (`monitor.as_of_from_warning`): «cerrada hace 60 s» se mide con los instantes
+        de partida de las invocaciones y no con el de publicación, que sin pausa llega tarde."""
         self.reset()
 
     def reset(self) -> None:
@@ -178,6 +191,7 @@ class MonitorState:
             checks=p.checks.model_dump() if p.checks else None,
             phase=p.phase.value,
             opened_by=set(p.detection_ids),
+            as_of=p.as_of_sim_time,
         )
         previous = self.alerts.get(p.supersedes) if p.supersedes else None
         if previous is not None:
@@ -198,6 +212,7 @@ class MonitorState:
             f"({p.severity.value}, confidence {p.confidence:g})"
             + (f", {p.phase.value}" if p.phase.value != "active" else "")
             + (f", supersedes {p.supersedes}" if p.supersedes else ""),
+            p.as_of_sim_time,
         )
 
     def _on_closed(self, event: EventDraft) -> None:
@@ -206,7 +221,8 @@ class MonitorState:
         if alert is not None:
             alert.status = AlertStatus.CLOSED
             alert.closed_at = event.sim_time
-        self._decide(event.sim_time, f"alert {p.alert_id} closed")
+            alert.closed_as_of = p.as_of_sim_time
+        self._decide(event.sim_time, f"alert {p.alert_id} closed", p.as_of_sim_time)
 
     def _on_ack(self, event: EventDraft) -> None:
         p = DetectionAcknowledged.model_validate(event.payload)
@@ -216,10 +232,16 @@ class MonitorState:
             record.alert_id = alert.alert_id
             alert.detection_ids.add(p.detection_id)
         target = f"alert {p.alert_id}" if p.alert_id else "no alert"
-        self._decide(event.sim_time, f"{p.detection_id} → acknowledged ({target})")
+        self._decide(
+            event.sim_time, f"{p.detection_id} → acknowledged ({target})", p.as_of_sim_time
+        )
 
-    def _decide(self, sim_time: float, text: str) -> None:
-        self.decisions.append(f"{format_t(sim_time)} {text}")
+    def _decide(self, sim_time: float, text: str, as_of: float | None = None) -> None:
+        """Con `as_of_times` (Fase 15.1) la hora es el instante de partida de la decisión: sin
+        pausa, la de publicación llega mucho después del aviso y el prompt de la siguiente
+        invocación mostraría decisiones «del futuro»."""
+        when = as_of if self.as_of_times and as_of is not None else sim_time
+        self.decisions.append(f"{format_t(when)} {text}")
 
     # --- Consultas ------------------------------------------------------------------------
 
@@ -265,14 +287,16 @@ class MonitorState:
 
     def fault_sources(self, alert: AlertRecord) -> set[str]:
         """Fuentes de un `SENSOR_FAULT` según las detecciones que lo abrieron: la fuente de un
-        `SOURCE_SILENT`, `gps` en un `GPS_DEGRADED` y `position` (GPS o radar) en una discrepancia
-        o una desviación de la ruta."""
+        `SOURCE_SILENT`, `gps` en un `GPS_DEGRADED`, `link` en un `LINK_ANOMALY` y `position`
+        (GPS o radar) en una discrepancia o una desviación de la ruta."""
         out: set[str] = set()
         for d in self._origin_detections(alert):
             if d.rule == "SOURCE_SILENT" and d.source:
                 out.add(d.source)
             elif d.rule == "GPS_DEGRADED":
                 out.add("gps")
+            elif d.rule == "LINK_ANOMALY":
+                out.add("link")  # Fase 15.1: el enlace es su propia fuente, no la posición
             elif d.rule in POSITION_RULES:
                 out.add("position")
         return out
@@ -291,6 +315,8 @@ class MonitorState:
             return detection.source not in sources and not (
                 detection.source in ("gps", "radar") and "position" in sources
             )
+        if detection.rule == "LINK_ANOMALY":  # Fase 15.1: del enlace, como su silencio
+            return "link" not in sources
         return not sources & {"gps", "radar", "position"}
 
     def describe_fault_sources(self, alert: AlertRecord) -> str:
@@ -332,7 +358,10 @@ class MonitorState:
                 continue
             if alert.status == AlertStatus.OPEN:
                 return alert
-            if alert.closed_at is not None and now - alert.closed_at <= grace_s:
+            closed = alert.closed_at
+            if self.as_of_times and alert.closed_as_of is not None:
+                closed = alert.closed_as_of
+            if closed is not None and now - closed <= grace_s:
                 recent = alert
         return recent
 

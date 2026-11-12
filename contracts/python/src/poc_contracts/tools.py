@@ -6,20 +6,30 @@ validan en la plataforma (argumentos de las tools de datos) y en el módulo de I
 
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from .enums import (
     AlertPhase,
     AlertStatus,
     Cause,
     CompletionReason,
+    EventSource,
     EventType,
     GpsFix,
+    RouteTrend,
     Severity,
-    ToolSource,
     Trend,
 )
 from .payloads import AlertChecks, MissionPlanned, Summary
+from .times import parse_duration_or_none, parse_sim_time_or_none
 
 
 class _Model(BaseModel):
@@ -41,17 +51,45 @@ class NoArgs(_Model):
     """`get_mission_plan` y `get_flight_summary` no reciben argumentos."""
 
 
+SimTime = Annotated[float | None, BeforeValidator(parse_sim_time_or_none)]
+"""Un instante: segundos o `T+mm:ss` / `mm:ss` / `T+h:mm:ss` (v0.17); lo convierte el código."""
+LastSeconds = Annotated[float | None, BeforeValidator(parse_duration_or_none)]
+"""Una ventana hacia atrás desde «ahora»: `60`, `"90s"`, `"1:30"`, `"1m30s"` (v0.17)."""
+
+
 class GetEventsArgs(_Model):
-    source: ToolSource
+    source: EventSource | None = None
+    """Sin `source` o `all` (v0.17): los eventos de todas las fuentes, con su fuente, hasta
+    `last_n` por fuente (3 si no se da `last_n`)."""
     type: EventType | None = None
     last_n: Annotated[int, AfterValidator(_clamp_last_n)] = 10
-    since: float | None = None
-    until: float | None = None
+    since: SimTime = None
+    until: SimTime = None
+    last_s: LastSeconds = None
+    """v0.17: ventana de los últimos `last_s` segundos hasta «ahora» (`since` = ahora − `last_s`).
+    No se combina con `since`."""
+
+    @model_validator(mode="after")
+    def _window(self) -> "GetEventsArgs":
+        if self.last_s is not None and self.since is not None:
+            raise ValueError("use either last_s or since/until, not both")
+        return self
 
 
 class GetTrackMetricsArgs(_Model):
-    since: float
-    until: float
+    since: SimTime = None
+    until: SimTime = None
+    last_s: LastSeconds = None
+    """v0.17: los últimos `last_s` segundos hasta «ahora»; sustituye a `since` y `until`."""
+
+    @model_validator(mode="after")
+    def _window(self) -> "GetTrackMetricsArgs":
+        if self.last_s is not None:
+            if self.since is not None:
+                raise ValueError("use either last_s or since/until, not both")
+        elif self.since is None or self.until is None:
+            raise ValueError("give since and until, or last_s")
+        return self
 
 
 class GetMyAlertsArgs(_Model):
@@ -113,6 +151,11 @@ class CompactEvent(BaseModel):
 class GetEventsResult(_Model):
     events: list[CompactEvent]
     truncated: bool
+    until_clipped_to: float | None = None
+    """v0.17: si `until` pedía algo posterior al instante de partida, el instante al que se
+    recortó."""
+    note: str | None = None
+    """v0.17: aviso en `source: all` (cuántos eventos por fuente se muestran) o al recortar."""
 
 
 class MissionPlanResult(MissionPlanned):
@@ -194,6 +237,15 @@ class NowFacts(_Model):
     wind_from_deg: float | None
     wind: str | None
     """El viento ya interpretado, p. ej. «from NW (326°), pushing SE» (o «calm»)."""
+    route_trend: RouteTrend | None = None
+    """v0.17: si el dron se acerca o se aleja de la ruta **en los últimos segundos** (no en toda la
+    ventana: el `trend` de la ventana de 30 s incluye lo que pasó antes). `None` si no hay muestras
+    suficientes."""
+    route_change_m: float | None = None
+    """Cambio estimado de la desviación respecto a la ruta en 10 s (negativo: se acerca)."""
+    route_trend_source: Literal["gps", "radar"] | None = None
+    """Fuente de la tendencia: el GPS con fix (sin contar el salto de la recuperación) o, si no
+    sirve o discrepa del radar, el radar."""
 
 
 class TrackMetrics(_Model):
@@ -202,6 +254,9 @@ class TrackMetrics(_Model):
 
     since: float
     until: float
+    until_clipped_to: float | None = None
+    """v0.17: si `until` pedía algo posterior al instante de partida, el instante al que se
+    recortó (igual que `until`; solo aparece cuando hubo recorte)."""
     gps_deviation_from_plan_m: MetricStat | None
     radar_deviation_from_plan_m: MetricStat | None
     gps_radar_distance_m: MetricStat | None

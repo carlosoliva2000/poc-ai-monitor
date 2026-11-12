@@ -60,6 +60,20 @@ BATTERY_SCRIPT_QUESTIONS = (
     "monitor:400:Open an alert for the battery",
     f"report:end:{FINAL_QUESTION}",
     "report:end:What did the GPS do at T+03:42?",
+    # Fase 15.1: el chat del informe atribuyó al spoofing la desviación de la recuperación del GPS
+    "report:end:What was happening to the GPS at T+03:42?",
+    # Fase 15.1, paso 5: tiempos, «los últimos», ventanas hacia atrás, todas las fuentes y las
+    # decisiones del monitor (mismos instantes que en la demo del 06/11/2026)
+    "monitor:465:Why did you look on the link?",
+    "report:end:What happened between T+01:30 and T+01:50?",
+    "report:end:What was the last battery status reported?",
+    "report:end:Give me the last 3 link events",
+    "report:end:What was the second-to-last GPS position?",
+    "report:end:What happened in the last 90 seconds?",
+    "report:end:What is the general state of the exercise right now?",
+    # con el ejercicio ya terminado, el chat del monitor también contesta con el último instante
+    "monitor:end:Why did you look on the link?",
+    "monitor:end:What is the state of the link now?",
 )
 DEFAULT_ASKS = {"demo": list(SCRIPT_QUESTIONS), "demo-battery": list(BATTERY_SCRIPT_QUESTIONS)}
 OTHER_ASKS = [f"report:end:{FINAL_QUESTION}"]
@@ -303,10 +317,12 @@ def run_command(spec: RunSpec, args: argparse.Namespace, llm_url: str | None) ->
     asks = args.ask or ([] if args.no_ask else DEFAULT_ASKS.get(spec.scenario, OTHER_ASKS))
     command = [
         "uv", "run", "--project", "platform", "python", "-m", "platform_app.run",
-        "--scenario", spec.scenario, "--speed", SPEED, "--wait-agent", "--evaluate",
+        "--scenario", spec.scenario, "--speed", args.speed or SPEED, "--evaluate",
         "--profile", spec.profile, "--port", str(args.platform_port),
         "--timeout", str(args.run_timeout),
     ]  # fmt: skip
+    if not args.no_wait_agent:
+        command.append("--wait-agent")
     if llm_url:
         command += ["--llm-url", llm_url]
     for ask in asks:
@@ -403,6 +419,11 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--keep-server", action="store_true", help="no parar el servidor al final")
     parser.add_argument("--ask", action="append", help="pregunta CONVERSACIÓN:CUÁNDO:TEXTO")
     parser.add_argument("--no-ask", action="store_true", help="sin preguntas a los chats")
+    parser.add_argument(
+        "--no-wait-agent", action="store_true",
+        help="sin «esperar al agente» (el reproductor no se pausa con cada aviso)",
+    )  # fmt: skip
+    parser.add_argument("--speed", help="velocidad del reproductor (por defecto 16, la máxima)")
     parser.add_argument("--platform-port", type=int, help="puerto de la plataforma")
     parser.add_argument("--run-timeout", type=float, default=1800.0, help="segundos por ejecución")
     parser.add_argument("--dry-run", action="store_true", help="solo muestra el plan")

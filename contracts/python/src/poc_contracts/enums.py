@@ -27,6 +27,21 @@ class ToolSource(StrEnum):
     OPERATOR = "operator"
 
 
+class EventSource(StrEnum):
+    """`source` de `get_events` (v0.17): las fuentes de `ToolSource` o `all` (todas a la vez)."""
+
+    ALL = "all"
+    GPS = "gps"
+    RADAR = "radar"
+    METEO = "meteo"
+    LINK = "link"
+    BATTERY = "battery"
+    MISSION = "mission"
+    DETECTOR = "detector"
+    MONITOR = "monitor"
+    OPERATOR = "operator"
+
+
 class EventType(StrEnum):
     """Tipos de evento (último segmento del topic sin la versión)."""
 
@@ -106,6 +121,14 @@ class Trend(StrEnum):
     INCREASING = "increasing"
     DECREASING = "decreasing"
     STABLE = "stable"
+
+
+class RouteTrend(StrEnum):
+    """Si el dron se acerca o se aleja de la ruta en los últimos segundos (v0.17, `now`)."""
+
+    APPROACHING = "approaching"
+    MOVING_AWAY = "moving_away"
+    STEADY = "steady"
 
 
 class CompletionReason(StrEnum):

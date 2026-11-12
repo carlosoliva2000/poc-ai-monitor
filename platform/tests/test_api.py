@@ -337,7 +337,16 @@ def test_wait_agent_through_the_websocket(client: TestClient) -> None:
 def test_scenarios(client: TestClient) -> None:
     body = client.get("/api/scenarios").json()
     names = [s["name"] for s in body["scenarios"]]
-    assert names == ["demo", "demo-battery", "faults", "hijack", "nominal", "spoofing", "wind"]
+    assert names == [
+        "demo",
+        "demo-battery",
+        "demo-meteo",
+        "faults",
+        "hijack",
+        "nominal",
+        "spoofing",
+        "wind",
+    ]
     demo = body["scenarios"][0]
     assert demo["generated"] is True and demo["duration_s"] == pytest.approx(556.3)
     assert demo["description"]
@@ -411,7 +420,7 @@ def test_tools_endpoint(client: TestClient) -> None:
     assert client.post("/api/tools/get_flight_summary").json()["ok"] is True
     metrics = client.post("/api/tools/get_track_metrics", json={"since": 0, "until": 9999}).json()
     assert metrics["ok"] and metrics["result"]["until"] == pytest.approx(40.5)
-    for body in ({"source": "sim"}, {}, {"source": "gps", "last_n": "x"}):
+    for body in ({"source": "sim"}, {"since": "tomorrow"}, {"source": "gps", "last_n": "x"}):
         bad = client.post("/api/tools/get_events", json=body).json()
         assert bad["ok"] is False and bad["error"].startswith("invalid arguments")
     assert client.post("/api/tools/nope", json={}).json()["ok"] is False

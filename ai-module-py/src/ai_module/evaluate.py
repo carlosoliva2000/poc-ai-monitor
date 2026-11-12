@@ -716,6 +716,7 @@ def agent_stats(trace: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
                 for c in calls
                 if not c["tool_calls"] and looks_like_text_tool_call(c.get("content"))
             ),
+            "events_after_as_of": sum(t.get("events_after_as_of", 0) for t in records),
             "foreign_fault_rejections": sum(
                 1
                 for t in records
@@ -1308,6 +1309,8 @@ def agents_section(ev: Evaluation) -> list[str]:
             f"- Llamadas por tool: {tools} · escritas como texto en vez de como tool call: "
             f"{s['text_tool_calls']} · rechazos por mezclar fuentes de un fallo de sensor: "
             f"{s['foreign_fault_rejections']}",
+            f"- Eventos de tools de datos posteriores al `as_of` de la invocación (corte temporal; "
+            f"debe ser 0): {s['events_after_as_of']}",
             f"- Skills cargadas por el modelo: {s['skills_by_model']} · precargadas por el modo "
             f"guiado: {s['skills_guided']}",
             f"- JSON inválido: {s['invalid_json']} · rechazos de guardrails: {s['rejections']} · "

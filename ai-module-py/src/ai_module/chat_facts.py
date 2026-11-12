@@ -6,9 +6,11 @@ guardrail del monitor para los `checks` de las alertas (`metric_facts`), y las c
 mantienen para que pueda darlas. Sin nombres de campos.
 """
 
+import json
 from typing import Any
 
 from .agent.guardrails import link_is_anomalous, metric_facts
+from .monitor_state import MonitorState
 from .outbox import format_t
 
 
@@ -122,3 +124,70 @@ def describe_link(events: list[dict[str, Any]] | None, note: str) -> str:
         parts.append(f"latency between {_n(min(latency), 0)} and {_n(max(latency), 0)} ms")
     parts.append(note)
     return f"- The command link is anomalous: {_yes_no(anomalous)} ({'; '.join(parts)})."
+
+
+RESPONSE_TOOLS = ("publish_alert", "acknowledge_detection", "close_alert")
+
+
+def _tool_summary(name: str, arguments: str) -> str:
+    """Una llamada a una tool de datos en pocas palabras: qué miró y en qué ventana."""
+    try:
+        args = json.loads(arguments) if arguments else {}
+    except ValueError:
+        args = {}
+    if not isinstance(args, dict):
+        args = {}
+    if name == "load_skill":
+        return f"skill {args.get('name')}"
+
+    def when(key: str) -> str:
+        value = args.get(key)
+        return format_t(float(value)) if isinstance(value, int | float) else str(value)
+
+    window = ""
+    if args.get("since") is not None and args.get("until") is not None:
+        window = f" {when('since')}–{when('until')}"
+    elif args.get("last_n") is not None:
+        window = f" (last {args['last_n']})"
+    if name == "get_events":
+        return f"{args.get('source', 'all')} events{window}"
+    if name == "get_track_metrics":
+        return f"trajectory metrics{window}"
+    return name.removeprefix("get_").replace("_", " ")
+
+
+def describe_monitor_decisions(
+    records: list[dict[str, Any]], state: MonitorState, limit: int = 8
+) -> str:
+    """Las últimas decisiones del monitor para su chat (Fase 15.1, `chat.monitor_decisions`): por
+    invocación, a qué instante, qué aviso la provocó, qué consultó y qué publicó. Así «¿por qué
+    miraste el enlace?» se contesta con lo que hizo entonces y no con una consulta de ahora."""
+    lines = []
+    for record in [r for r in records if r.get("agent") == "monitor"][-limit:]:
+        calls = [t for c in record.get("calls", []) for t in c.get("tool_calls") or []]
+        looked = [
+            _tool_summary(t["name"], t.get("arguments") or "")
+            for t in calls
+            if t.get("name") not in RESPONSE_TOOLS
+        ]
+        published = []
+        for item in record.get("published", []):
+            alert = state.alerts.get(item.get("event_id", ""))
+            if item.get("type") == "AnomalyDetected" and alert is not None:
+                phase = "" if alert.phase == "active" else f" {alert.phase}"
+                published.append(f"alert {alert.alert_id} {alert.cause} {alert.severity}{phase}")
+            elif item.get("type") == "AlertClosed":
+                published.append("closed an alert")
+            elif item.get("type") == "DetectionAcknowledged":
+                published.append("acknowledged the warning without a new alert")
+        warnings = ", ".join(record.get("warnings") or record.get("causation_ids") or [])
+        how = (
+            "answered by the module without consulting the model"
+            if record.get("deterministic")
+            else f"looked at: {'; '.join(looked) or 'nothing'}"
+        )
+        lines.append(
+            f"- {format_t(float(record.get('as_of', 0.0)))} · warning {warnings} · {how} · "
+            f"published: {'; '.join(published) or 'nothing'}"
+        )
+    return "\n".join(lines) if lines else "The monitor has not made any decision yet."

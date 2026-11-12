@@ -21,6 +21,7 @@ from .agent.trace import TraceWriter
 from .bus_client import call_platform_tool
 from .chat_facts import describe_link, describe_metrics
 from .ids import IdAllocator
+from .link_log import LinkLog
 from .monitor_state import MonitorState
 from .outbox import EventFactory
 
@@ -75,11 +76,17 @@ class Runtime:
     last_link: list[dict[str, Any]] | None = None
     """Últimos eventos de enlace que miró el monitor (para los chats sin tools)."""
     last_link_note: str = ""
+    link_log: LinkLog = field(default_factory=LinkLog)
+    """Controlador de la misión y cambios de controlador del enlace (Fase 15.1, para el informe)."""
 
     def __post_init__(self) -> None:
         self.factory = EventFactory(self.ids)
         monitor = self.assets.agent("monitor")
-        self.state = MonitorState(monitor.last_decisions_in_state, monitor.sensor_fault_per_source)
+        self.state = MonitorState(
+            monitor.last_decisions_in_state,
+            monitor.sensor_fault_per_source,
+            monitor.as_of_from_warning,
+        )
 
     # --- Ejecución actual -----------------------------------------------------------------
 
@@ -120,6 +127,7 @@ class Runtime:
         self.scenario = self.run_id = None
         self.last_metrics = None
         self.last_link = None
+        self.link_log.reset()
         self.trace.path = None
         self.trace.records.clear()
 

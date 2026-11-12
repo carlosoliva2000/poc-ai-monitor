@@ -115,6 +115,16 @@ def test_the_questions_are_the_script_in_demo_and_one_final_question_elsewhere()
     assert wind[wind.index("--profile") + 1] == "actual"
 
 
+def test_no_wait_agent_and_speed_are_options_of_the_run() -> None:
+    """Fase 15.1: la equivalencia compara «esperar al agente» a 16× con 16× sin esperar."""
+    args = run_matrix.parse(
+        ["--profiles", "actual", "--scenarios", "demo", "--id", "t", "--no-wait-agent",
+         "--speed", "8"]
+    )  # fmt: skip
+    command = run_matrix.run_command(run_matrix.RunSpec("actual", "demo", 1), args, None)
+    assert "--wait-agent" not in command and command[command.index("--speed") + 1] == "8"
+
+
 @pytest.mark.e2e
 def test_full_matrix_with_the_fake_llm_two_models_two_repetitions() -> None:
     folder = run_matrix.EXPERIMENTS / "pytest-fake"

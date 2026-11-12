@@ -85,6 +85,8 @@ class AiModule:
         rt.factory.observe(event)
         rt.clock.observe(event.sim_time)
         rt.index.add(event)
+        if event.type == EventType.LINK_STATUS:
+            rt.link_log.observe(event)
 
         if self.monitor and event.source == "ai-detector":
             self.monitor.submit(event)

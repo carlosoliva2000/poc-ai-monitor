@@ -35,6 +35,19 @@ llm:
 # Fase 15 y el perfil `actual-textos-v13`) no reciben tools y su sistema lleva los mismos datos.
 chat:
   tools_enabled: true
+  # Fase 15.1: el chat del informe recibe la fase de cada alerta con su hora (sin la clave, no)
+  alert_phases: true
+  # Fase 15.1: los chats calculan las ventanas con el código (tiempos en texto, `last_s`, `since`
+  # futuro rechazado) y todas sus llamadas salen del mismo instante
+  window_rules: true
+  # Fase 15.1: el chat del monitor recibe sus decisiones (aviso, qué miró, qué publicó) con su hora
+  monitor_decisions: true
+
+# Interruptores del informe. `link_back_time` (Fase 15.1): el informe da la hora a la que el enlace
+# volvió al controlador de la misión (el primer LinkStatus con él), con nombre propio y distinta de
+# la entrada en recuperación y del cierre.
+report:
+  link_back_time: true
 
 agents:
   monitor:
@@ -63,6 +76,8 @@ agents:
     coherence_guardrail: true   # los checks deben coincidir con las tools y la causa ser coherente
     computed_facts: true        # get_track_metrics entrega notable, with_drift, disagreed, etc.
     now_facts: true             # get_track_metrics entrega el bloque `now` (hechos de «ahora»; Fase 14.1)
+    as_of_from_warning: true    # el as_of de la invocación es el sim_time del aviso, con o sin pausa; ventanas por código (Fase 15.1)
+    now_route_trend: link_recovery   # `now` dice si el dron se acerca o se aleja de la ruta, solo en la recuperación del secuestro (Fase 15.1, contrato v0.17)
     # Línea «Recent GPS alert» del estado: `legacy` = con la frase «If this warning is the GPS
     # recovery: cause X, supersedes Y»; `data` = solo alerta, causa y estado («yes — ai-0008
     # GPS_SPOOFING (open)»). Medido en la Fase 14.1: con `data`, el modelo dejó de publicar la

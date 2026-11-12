@@ -164,6 +164,45 @@
             }
           ],
           "title": "Wind"
+        },
+        "route_trend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RouteTrend"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "route_change_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route Change M"
+        },
+        "route_trend_source": {
+          "anyOf": [
+            {
+              "enum": [
+                "gps",
+                "radar"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route Trend Source"
         }
       },
       "required": [
@@ -180,6 +219,16 @@
       ],
       "title": "NowFacts",
       "type": "object"
+    },
+    "RouteTrend": {
+      "description": "Si el dron se acerca o se aleja de la ruta en los últimos segundos (v0.17, `now`).",
+      "enum": [
+        "approaching",
+        "moving_away",
+        "steady"
+      ],
+      "title": "RouteTrend",
+      "type": "string"
     },
     "SampleCounts": {
       "additionalProperties": false,
@@ -316,6 +365,18 @@
     "until": {
       "title": "Until",
       "type": "number"
+    },
+    "until_clipped_to": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Until Clipped To"
     },
     "gps_deviation_from_plan_m": {
       "anyOf": [

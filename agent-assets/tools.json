@@ -3,21 +3,22 @@
     "type": "function",
     "function": {
       "name": "get_events",
-      "description": "Returns events that have already happened from a source, from oldest to newest. It never returns events later than the current time. Use it to see specific data (positions, wind, link, detections, your own alerts or operator messages).",
+      "description": "Returns events that have already happened, from oldest to newest. It never returns events later than the current time. Use it to see specific data (positions, wind, link, detections, your own alerts or operator messages). Choose the window by what the question gives: no time at all (the last one, the last three, the most recent; for the one before the last, ask for 2 and take the first) -> last_n; a moment or an interval with clock times -> since and until; an interval counted back from now (the last minute, the last 90 seconds) -> last_s. Use source all only when it is not clear which source the question is about or when the general state of the exercise is asked; if the question is about one source, give that source.",
       "parameters": {
         "type": "object",
         "properties": {
           "source": {
             "type": "string",
-            "enum": ["gps", "radar", "meteo", "link", "battery", "mission", "detector", "monitor", "operator"],
-            "description": "gps = PositionUpdated of the drone; radar = TrackUpdated of the ground radar; meteo = WindReported; link = LinkStatus of the command link; battery = BatteryStatus; mission = mission events; detector = rule-based detections; monitor = alerts published by the monitor; operator = operator messages"
+            "enum": ["all", "gps", "radar", "meteo", "link", "battery", "mission", "detector", "monitor", "operator"],
+            "description": "all = the events of every source together, ordered by time, each with its source (a few per source, and it says so if there are more); gps = PositionUpdated of the drone; radar = TrackUpdated of the ground radar; meteo = WindReported; link = LinkStatus of the command link; battery = BatteryStatus; mission = mission events; detector = rule-based detections; monitor = alerts published by the monitor; operator = operator messages. Without source it is all"
           },
           "type": {"type": "string", "description": "Optional: filter by event type, e.g. WindReported"},
-          "last_n": {"type": "integer", "description": "How many events (the most recent). Default 10, maximum 50"},
-          "since": {"type": "number", "description": "Optional: start sim_time in seconds"},
-          "until": {"type": "number", "description": "Optional: end sim_time in seconds (clipped to the current time)"}
+          "last_n": {"type": "integer", "description": "How many events (the most recent); with source all, how many of each source. Default 10 (3 with all), maximum 50"},
+          "since": {"type": ["number", "string"], "description": "Optional: start of the window, in seconds or as a clock time (T+03:42, 03:42, T+1:02:03); the conversion is done for you. A start later than the current time is rejected"},
+          "until": {"type": ["number", "string"], "description": "Optional: end of the window, in seconds or as a clock time (clipped to the current time, and it says so)"},
+          "last_s": {"type": ["number", "string"], "description": "Optional: the last N seconds up to now (60, 90s, 1:30, 1m30s). Do not combine it with since"}
         },
-        "required": ["source"]
+        "required": []
       }
     }
   },
@@ -33,14 +34,15 @@
     "type": "function",
     "function": {
       "name": "get_track_metrics",
-      "description": "Computes trajectory metrics between two instants from the GPS and the radar: deviation of each source from the planned route, distance between GPS and radar, drift direction, course of travel versus the bearing to the next waypoint, mean speed and the wind of the same window (mean speed, maximum gust, where it pushes and difference with the drift). It also returns the ids of the events used, to cite them as evidence, and a `now` block with how things are right now (last 10 seconds): the fix of the GPS, current GPS–radar distance and whether they agree, current deviation of the GPS and of the radar, and the current wind already interpreted (where it comes from and where it pushes). When the GPS has no fix its position is only an estimate: the current GPS–radar distance, whether they agree and the current GPS deviation are then null.",
+      "description": "Computes trajectory metrics over a window (since and until, or last_s for the last seconds up to now) from the GPS and the radar: deviation of each source from the planned route, distance between GPS and radar, drift direction, course of travel versus the bearing to the next waypoint, mean speed and the wind of the same window (mean speed, maximum gust, where it pushes and difference with the drift). It also returns the ids of the events used, to cite them as evidence, and a `now` block with how things are right now (last 10 seconds): the fix of the GPS, current GPS–radar distance and whether they agree, current deviation of the GPS and of the radar, the current wind already interpreted (where it comes from and where it pushes). When the GPS has no fix its position is only an estimate: the current GPS–radar distance, whether they agree and the current GPS deviation are then null.",
       "parameters": {
         "type": "object",
         "properties": {
-          "since": {"type": "number", "description": "start sim_time in seconds"},
-          "until": {"type": "number", "description": "end sim_time in seconds (clipped to the current time)"}
+          "since": {"type": ["number", "string"], "description": "start of the window, in seconds or as a clock time (T+03:42, 03:42, T+1:02:03); the conversion is done for you. A start later than the current time is rejected"},
+          "until": {"type": ["number", "string"], "description": "end of the window, in seconds or as a clock time (clipped to the current time, and it says so)"},
+          "last_s": {"type": ["number", "string"], "description": "alternative to since and until: the last N seconds up to now (60, 90s, 1:30, 1m30s)"}
         },
-        "required": ["since", "until"]
+        "required": []
       }
     }
   },

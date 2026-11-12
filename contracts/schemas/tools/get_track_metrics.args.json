@@ -2,18 +2,42 @@
   "additionalProperties": false,
   "properties": {
     "since": {
-      "title": "Since",
-      "type": "number"
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Since"
     },
     "until": {
-      "title": "Until",
-      "type": "number"
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Until"
+    },
+    "last_s": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last S"
     }
   },
-  "required": [
-    "since",
-    "until"
-  ],
   "title": "GetTrackMetricsArgs",
   "type": "object"
 }
