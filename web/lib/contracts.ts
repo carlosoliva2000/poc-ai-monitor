@@ -7,7 +7,7 @@ export type Phase = 'active' | 'recovering'
 export type SensorSource = 'gps' | 'radar' | 'meteo' | 'link' | 'battery'
 export type FaultMode = 'mute' | 'loss'
 export type Cause = 'WIND' | 'HIJACK' | 'GPS_SPOOFING' | 'SENSOR_FAULT' | 'GPS_JAMMING' | 'UNKNOWN'
-export type Conversation = 'monitor' | 'report'
+export type Conversation = 'monitor' | 'report' | 'instructor'
 export type PlayerStatus = 'idle' | 'running' | 'paused' | 'finished'
 
 export type Envelope<P = Record<string, unknown>> = {
@@ -91,11 +91,15 @@ export type DetectionAcknowledged = {
   fallback: boolean
 }
 export type ReportGenerated = { run_id: string; markdown: string; alerts_count: number }
-export type OperatorMessage = { conversation_id: Conversation; text: string }
-export type AgentReply = { conversation_id: Conversation; reply_to: string; text: string; tool_calls: string[] }
+/** Viento del instructor en curso que la web manda con la pregunta al agente del instructor (v0.18). */
+export type ActiveWindContext = { from_deg: number; speed_mps: number; gust_mps: number; remaining_s: number | null }
+export type OperatorMessage = { conversation_id: Conversation; text: string; context?: { active_wind: ActiveWindContext | null } }
+/** Propuesta del agente del instructor (v0.18): no se aplica hasta que el instructor confirma. */
+export type Proposal = { command: InstructorCommandName; params: WindParams | null; defaults_used: string[] }
+export type AgentReply = { conversation_id: Conversation; reply_to: string; text: string; tool_calls: string[]; proposal?: Proposal | null }
 export type AgentReplyChunk = { conversation_id: Conversation; reply_to: string; delta: string }
 export type AgentActivity = {
-  agent: 'monitor' | 'report' | 'chat-monitor' | 'chat-report'
+  agent: 'monitor' | 'report' | 'chat-monitor' | 'chat-report' | 'chat-instructor'
   state: 'started' | 'finished'
   invocation_id: string
   causation_id: string | null
@@ -113,6 +117,16 @@ export type AgentToolCall = {
   result: string | null
   error: string | null
   truncated: boolean
+}
+/** Viento de un comando del instructor (v0.18): m/s y grados; `from_deg` es la procedencia. */
+export type WindParams = { from_deg: number; speed_mps: number; gust_mps: number; ramp_s: number; duration_s: number | null }
+export type InstructorCommandName = 'set_wind' | 'cancel_wind'
+/** Payload de `InstructorCommand` y valor de `control` → `instructor`. */
+export type InstructorCommand = {
+  command: InstructorCommandName
+  params: WindParams | null
+  issued_by: 'panel' | 'llm' | 'scenario'
+  text: string | null
 }
 export type SimulationStarted = { scenario: string; run_id: string; duration_s: number; total_events: number }
 export type SimulationPaused = { reason: 'user' | 'waiting_agent' }
@@ -158,6 +172,7 @@ export type ControlMessage =
   | { action: 'speed'; value: number }
   | { action: 'wait_agent' | 'interactive'; value: boolean }
   | { action: 'fault'; value: { source: SensorSource; mode: FaultMode; active: boolean } }
+  | { action: 'instructor'; value: InstructorCommand }
 
 export type ScenarioInfo = { name: string; description: string; generated: boolean; duration_s: number | null }
 export type PlanFile = {

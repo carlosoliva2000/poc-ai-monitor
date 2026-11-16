@@ -42,6 +42,7 @@ from poc_contracts.topics import client_can_publish, topic_domain, topic_matches
 from poc_contracts.ws import (
     ClientMessage,
     ControlFault,
+    ControlInstructor,
     ControlInteractive,
     ControlLoad,
     ControlPause,
@@ -175,6 +176,8 @@ def _handle_control(player: Player, message: Any) -> None:
         case ControlFault():
             f = message.value
             player.fault(f.source, f.mode, f.active)
+        case ControlInstructor():
+            player.instructor(message.value)
 
 
 def _handle_message(app: FastAPI, client: Client, text: str) -> None:

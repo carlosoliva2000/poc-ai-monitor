@@ -149,5 +149,32 @@
         "required": ["name"]
       }
     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "propose_wind",
+      "description": "Proposes a wind for the drone, in m/s, for the instructor to confirm. Nothing is applied by this call: the proposal is shown to the instructor, who confirms, edits or discards it. Returns the validated proposal (with the values filled in by default) or the errors to correct.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "from_direction": {"type": "string", "description": "Where the wind blows FROM: a compass point (N, NE, ENE, north-east…) or degrees (225). 0 = north, 90 = east. Copy what the instructor said; do not convert it."},
+          "speed_mps": {"type": "number", "description": "Mean wind speed in m/s (0 to 40). It pushes the drone."},
+          "gust_mps": {"type": "number", "description": "Gust speed in m/s (at least the speed). Optional: it does not push the drone, only the weather station measures it."},
+          "duration_s": {"type": "number", "description": "How long the wind lasts, in seconds. Optional."},
+          "until_cancelled": {"type": "boolean", "description": "true if the wind has no end until it is cancelled. Optional."},
+          "ramp_s": {"type": "number", "description": "Seconds the wind takes to rise and to fall. Optional."}
+        },
+        "required": ["from_direction", "speed_mps"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "propose_cancel_wind",
+      "description": "Proposes cancelling the wind the instructor has put, for the instructor to confirm. Nothing is applied by this call.",
+      "parameters": {"type": "object", "properties": {}, "required": []}
+    }
   }
 ]

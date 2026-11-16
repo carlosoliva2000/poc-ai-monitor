@@ -13,7 +13,8 @@
         "monitor",
         "report",
         "chat-monitor",
-        "chat-report"
+        "chat-report",
+        "chat-instructor"
       ],
       "title": "AgentName",
       "type": "string"

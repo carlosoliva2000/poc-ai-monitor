@@ -47,6 +47,7 @@ EVENT_SPECS: dict[EventType, EventSpec] = {
     _T.INTERACTIVE_MODE_CHANGED: EventSpec(SIM_DOMAIN, "player", "plr", "platform-player"),
     _T.FAULT_INJECTED: EventSpec(SIM_DOMAIN, "player", "sim", "platform-player"),
     _T.FAULT_CLEARED: EventSpec(SIM_DOMAIN, "player", "sim", "platform-player"),
+    _T.INSTRUCTOR_COMMAND: EventSpec(SIM_DOMAIN, "instructor", "cmd", "platform-player"),
     _T.DETECTION_RAISED: EventSpec("ai", "d1", "det", "ai-detector"),
     _T.DETECTION_UPDATED: EventSpec("ai", "d1", "det", "ai-detector"),
     _T.DETECTION_CLEARED: EventSpec("ai", "d1", "det", "ai-detector"),
@@ -69,7 +70,12 @@ EPHEMERAL_TYPES: frozenset[EventType] = frozenset(
 CHAT_SOURCES: dict[ConversationId, str] = {
     ConversationId.MONITOR: "ai-chat-monitor",
     ConversationId.REPORT: "ai-chat-report",
+    ConversationId.INSTRUCTOR: "ai-chat-instructor",
 }
+
+# `source` del sobre de `OperatorMessage` cuando no es el del operador: el chat del instructor no
+# comparte fuente con el del monitor para que `get_events` (`operator`) nunca lo devuelva.
+OPERATOR_SOURCES: dict[ConversationId, str] = {ConversationId.INSTRUCTOR: "web-instructor"}
 
 # Parámetro `source` de la tool `get_events` -> `source` del sobre.
 TOOL_SOURCE_TO_ENVELOPE_SOURCE: dict[ToolSource, str] = {
@@ -110,6 +116,8 @@ def routing_for(event_type: EventType, conversation_id: ConversationId | None = 
 def source_for(event_type: EventType, conversation_id: ConversationId | None = None) -> str:
     """`source` del sobre; para `AgentReply`/`AgentReplyChunk` lo da `conversation_id`."""
     source = EVENT_SPECS[event_type].source
+    if event_type == EventType.OPERATOR_MESSAGE and conversation_id in OPERATOR_SOURCES:
+        return OPERATOR_SOURCES[conversation_id]
     if source is not None:
         return source
     if conversation_id is None:

@@ -27,6 +27,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from poc_contracts.commands import InstructorControl
 from poc_contracts.enums import (
     EventType,
     FaultMode,
@@ -56,6 +57,7 @@ WAIT_AGENT_TIMEOUT_S = 90.0  # reloj de pared
 AI_PATTERN = "citadel.pub.evt.ai.>"
 MONITOR_SOURCE = "ai-monitor"
 INTERACTIVE_OFF_MESSAGE = "interactive mode is off: turn it on to inject faults"
+INTERACTIVE_OFF_MESSAGE_COMMANDS = "interactive mode is off: turn it on to send instructor commands"
 META_KEYS = ("speed", "wait_agent", "interactive")
 
 
@@ -371,6 +373,19 @@ class Player:
             raise PlayerError("the simulation has finished: faults cannot be injected")
         try:
             sim.set_fault(source, mode, active, FaultOrigin.MANUAL)
+        except ValueError as exc:
+            raise PlayerError(str(exc)) from exc
+        self._notify()
+
+    def instructor(self, command: InstructorControl) -> None:
+        """Aplica un comando del instructor desde el instante actual (solo en modo interactivo)."""
+        if not self.interactive:
+            raise PlayerError(INTERACTIVE_OFF_MESSAGE_COMMANDS)
+        sim = self._require_sim()
+        if sim.finished and not self._queue:
+            raise PlayerError("the simulation has finished: commands cannot be applied")
+        try:
+            sim.apply_command(command, command.issued_by, command.text)
         except ValueError as exc:
             raise PlayerError(str(exc)) from exc
         self._notify()

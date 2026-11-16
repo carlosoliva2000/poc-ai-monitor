@@ -1,5 +1,6 @@
 import { stripFieldValues } from './clean-text.ts'
-import type { Anomaly, Cause, Envelope, Phase, Severity, SensorSource } from './contracts'
+import type { Anomaly, Cause, Envelope, InstructorCommand, Phase, Severity, SensorSource } from './contracts'
+import { describeCommand } from './instructor.ts'
 
 export function formatT(seconds: number) {
   const s = Math.max(0, Math.floor(seconds))
@@ -93,7 +94,7 @@ export function groupOf(e: Envelope): Group {
     case 'platform-player':
       return 'sim'
     default:
-      return e.source.startsWith('ai-chat') || e.source === 'web-operator' || e.source === 'ai-module' ? 'chat' : 'sim'
+      return e.source.startsWith('ai-chat') || e.source === 'web-operator' || e.source === 'web-instructor' || e.source === 'ai-module' ? 'chat' : 'sim'
   }
 }
 
@@ -110,6 +111,7 @@ export function eventTone(e: Envelope): Tone {
     case 'DetectionRaised':
     case 'DetectionUpdated':
     case 'FaultInjected':
+    case 'InstructorCommand':
       return 'warning'
     case 'AnomalyDetected':
       return 'danger'
@@ -156,6 +158,8 @@ export function payloadSummary(e: Envelope): string {
     case 'FaultInjected':
     case 'FaultCleared':
       return `${p.source} ${p.mode} (${p.origin})`
+    case 'InstructorCommand':
+      return describeCommand(p as unknown as InstructorCommand)
     case 'InteractiveModeChanged':
       return p.interactive ? 'interactive mode ON' : 'interactive mode OFF'
     case 'SimulationPaused':

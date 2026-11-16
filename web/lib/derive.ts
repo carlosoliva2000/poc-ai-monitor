@@ -9,6 +9,7 @@ import type {
   Envelope,
   Link,
   Position,
+  Proposal,
   Track,
   Wind,
 } from './contracts'
@@ -213,7 +214,7 @@ export type ToolCallEvent = Envelope<AgentToolCall>
 
 export type ChatEntry =
   | { kind: 'operator'; key: string; id: string; t: number; text: string }
-  | { kind: 'agent'; key: string; t: number; text: string; toolCalls: string[]; calls: ToolCallEvent[]; streaming: boolean }
+  | { kind: 'agent'; key: string; t: number; text: string; toolCalls: string[]; calls: ToolCallEvent[]; streaming: boolean; replyTo?: string; question?: string; proposal?: Proposal | null }
 
 /** Llamadas a tool de un agente, por el evento que las provocó (`causation_id`), en orden. */
 export function callsByCause(toolCalls: ToolCallEvent[], agents: AgentToolCall['agent'][]): Map<string, ToolCallEvent[]> {
@@ -232,22 +233,24 @@ export function callsByCause(toolCalls: ToolCallEvent[], agents: AgentToolCall['
  *  los trozos acumulados (`chunks` por `reply_to`) y las llamadas a tool que lleva hasta ahora. */
 export function chatEntries(
   events: Envelope[],
-  conversation: 'monitor' | 'report',
+  conversation: 'monitor' | 'report' | 'instructor',
   chunks: Record<string, string>,
   toolCalls: ToolCallEvent[] = [],
 ): ChatEntry[] {
   const out: ChatEntry[] = []
   const replied = new Set<string>()
-  const calls = callsByCause(toolCalls, [conversation === 'monitor' ? 'chat-monitor' : 'chat-report'])
+  const questions = new Map<string, string>()
+  const calls = callsByCause(toolCalls, [`chat-${conversation}` as AgentToolCall['agent']])
   for (const e of events) {
     if (e.type === 'AgentReply') {
-      const p = e.payload as { conversation_id: string; reply_to: string; text: string; tool_calls: string[] }
+      const p = e.payload as { conversation_id: string; reply_to: string; text: string; tool_calls: string[]; proposal?: Proposal | null }
       if (p.conversation_id === conversation) {
         replied.add(p.reply_to)
-        out.push({ kind: 'agent', key: e.event_id, t: e.sim_time, text: p.text, toolCalls: p.tool_calls, calls: calls.get(p.reply_to) ?? [], streaming: false })
+        out.push({ kind: 'agent', key: e.event_id, t: e.sim_time, text: p.text, toolCalls: p.tool_calls, calls: calls.get(p.reply_to) ?? [], streaming: false, replyTo: p.reply_to, question: questions.get(p.reply_to), proposal: p.proposal })
       }
     } else if (e.type === 'OperatorMessage') {
       const p = e.payload as { conversation_id: string; text: string }
+      if (p.conversation_id === conversation) questions.set(e.event_id, p.text)
       if (p.conversation_id === conversation) out.push({ kind: 'operator', key: e.event_id, id: e.event_id, t: e.sim_time, text: p.text })
     }
   }

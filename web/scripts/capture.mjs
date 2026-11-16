@@ -28,6 +28,9 @@
 //   node scripts/capture.mjs chatlayout <carpeta> faults a 16× con «esperar al agente», a 1920×1080, 1440×900 y 1280×720: chat del monitor
 //                                              plegado, desplegado, con la altura mínima y la máxima y con respuestas largas con Markdown; mide por DOM
 //                                              que el feed y el chat no se solapan (chatlayout.json) y comprueba el Markdown (fase 15)
+//   node scripts/capture.mjs fase16 <carpeta> nominal a 4× con «esperar al agente» a 1920×1080 (Fase 16): panel «Instructor» plegado, desplegado y con
+//                                              viento activo; comando desde el panel (T+01:35) y otro desde el chat del instructor (propuesta, Confirm);
+//                                              el comando en el timeline y la alerta WIND del monitor (módulo de IA con la configuración por defecto)
 // Requiere plataforma (8100), módulo de IA y web (3000) en marcha. Una sola pestaña: los ids
 // `ops-` los calcula la web y con dos pestañas podrían repetirse.
 import { chromium } from 'playwright'
@@ -1224,6 +1227,60 @@ async function runFase9_2() {
 
 /** Fase 10: la demo completa a 1920×1080 con la configuración por defecto (Qwen3-14B). Capturas con la alerta de cada
  *  episodio desplegada (checks y evidencias), el chat del monitor, el informe y el chat del informe. */
+async function runFase16() {
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await setup('nominal', { waitAgent: true, interactive: true, speed: 4 })
+  const panel = page.locator('[data-testid=instructor-panel]')
+  await shot('01_panel_plegado')
+  await panel.getByRole('button', { name: /Instructor/ }).click()
+  await sleep(300)
+  await shot('02_panel_desplegado')
+  await page.getByRole('button', { name: 'Start', exact: true }).click()
+  note('play')
+  // Comando desde el panel: del norte, 12 m/s, rachas 16, 60 s, rampa 10 s, a ~T+01:35
+  await page.getByRole('radio', { name: 'N', exact: true }).click()
+  await page.getByLabel('Speed in m/s').fill('12')
+  await page.getByLabel('Gust in m/s').fill('16')
+  await page.getByLabel('Duration in seconds').fill('60')
+  await page.getByLabel('Ramp in seconds').fill('10')
+  while ((await simTime()) < 95) await sleep(300)
+  await page.getByRole('button', { name: 'Apply' }).click()
+  note(`comando del panel aplicado a T+${await simTime()}`)
+  await sleep(1500)
+  await shot('03_viento_activo')
+  // la alerta WIND del monitor (esperar al agente: la simulación se pausa con cada aviso)
+  const started = Date.now()
+  while (Date.now() - started < 120000 && (await count('[data-testid=alert-card]')) === 0) await sleep(500)
+  await sleep(800)
+  await page.getByRole('tab', { name: 'Monitor' }).click()
+  await shot('04_alerta_wind_panel')
+  // Esperar a que acabe el viento del panel (T+155) y a que el monitor cierre
+  while ((await simTime()) < 165) await sleep(500)
+  await sleep(2000)
+  // Comando desde el chat del instructor
+  await page.getByRole('tab', { name: 'Instructor' }).click()
+  const box = page.locator('#input-instructor')
+  await box.fill('Wind from the north at 12 m/s with gusts of 16 for one minute')
+  await box.press('Enter')
+  note('pregunta al instructor')
+  const card = page.locator('[data-testid=proposal-card]')
+  await card.first().waitFor({ timeout: 60000 })
+  await sleep(500)
+  await shot('05_tarjeta_propuesta')
+  note(`tarjeta: ${await card.first().innerText()}`)
+  await card.first().getByRole('button', { name: 'Confirm' }).click()
+  await sleep(1500)
+  await shot('06_propuesta_confirmada')
+  const before = await count('[data-testid=alert-card]')
+  const t1 = Date.now()
+  while (Date.now() - t1 < 120000 && (await count('[data-testid=alert-card]')) === before) await sleep(500)
+  await sleep(800)
+  await page.getByRole('tab', { name: 'Monitor' }).click()
+  await shot('07_alerta_wind_chat')
+  note(`alertas: ${await count('[data-testid=alert-card]')} (antes del segundo comando: ${before})`)
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
 async function runFase10() {
   await page.setViewportSize({ width: 1920, height: 1080 })
   await setup('demo', { waitAgent: true, interactive: false, speed: 4 })
@@ -1305,6 +1362,7 @@ try {
   else if (mode === 'smooth') await runSmooth()
   else if (mode === 'fase9_2') await runFase9_2()
   else if (mode === 'fase10') await runFase10()
+  else if (mode === 'fase16') await runFase16()
   else if (mode === 'fase14_1') await runFase14_1()
   else if (mode === 'fase14_2') await runFase14_2()
   else if (mode === 'followcheck') await runFollowCheck()

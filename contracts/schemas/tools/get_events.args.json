@@ -37,6 +37,7 @@
         "InteractiveModeChanged",
         "FaultInjected",
         "FaultCleared",
+        "InstructorCommand",
         "DetectionRaised",
         "DetectionUpdated",
         "DetectionCleared",

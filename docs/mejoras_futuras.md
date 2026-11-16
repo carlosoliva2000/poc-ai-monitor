@@ -51,6 +51,16 @@ Anotadas el 16/10/2026 durante el diseño. Sirven de lista para la Fase 5 y para
 - **Observabilidad:** OpenTelemetry o Langfuse autoalojado en lugar del JSONL propio (nunca LangSmith en la nube).
 - **Visor con historial:** que el visor en directo recupere lo ya publicado al conectarse a mitad de ejecución, pidiéndolo a `GET /api/timeline` (hoy empieza a pintar desde que se conecta).
 
+## Comandos del instructor (tras la Fase 16)
+La Fase 16 solo pone **viento** (`set_wind` y `cancel_wind`, contrato v0.18). Queda:
+- **Los demás comandos del instructor**, con el mismo patrón (comando → propuesta del LLM → confirmación del instructor → `InstructorCommand` en el dominio `sim`, que el módulo de IA no ve): **spoofing del GPS** (hoy solo de escenario), **secuestro** (cambio de destino y de controlador del enlace), **silenciar fuentes** y **pérdida de GPS** (hoy son los fallos del panel «Inyectar fallo», que van por `control` → `fault` y no por el evento de comando; unificarlos o dejarlos separados es una decisión pendiente). Cada uno necesita su etiqueta en directo (`evaluate.synthetic_labels`) y su rango de validación.
+- **Un orquestador o EDL** (guion de ejercicio, p. ej. «a T+02:00 viento, a T+04:00 spoofing») que programe comandos en directo, no solo en el YAML del escenario (`commands:`). Hoy un comando programado es de un escenario y el instructor solo puede lanzar uno cada vez, a mano o por el LLM.
+- **Conversión de unidades** (nudos, km/h, mph, Beaufort) y **otros idiomas** en el agente del instructor. Hoy pide que se diga en m/s y en inglés; la conversión sería código (como la del rumbo), no del modelo.
+- **El chat del instructor no usa los perfiles de modelo** (`model-profiles/` solo conoce monitor, informe y los dos chats): usa el muestreo de `agents.yaml`. Añadir `chat_instructor` a `AGENT_NAMES` de `agent/profiles.py` cuando se compare modelos.
+- **«Stronger» / «a bit less»** sin número: hoy el agente pregunta la nueva velocidad en m/s (diciendo la actual). Una orden relativa («+2 m/s») sería interpretarla con el viento activo, que ya llega en `context`.
+- **Nombre del topic del comando.** Hoy va como evt + sim (`citadel.pub.evt.sim.instructor.InstructorCommand.v1`) por rapidez; cuando llegue la taxonomía de David, valorar pasarlo a un tipo `cmd` (referencia de Francesco: `xxx.yyy.air.drone.Command`).
+- **El módulo de IA mal protegido contra un comando mal etiquetado:** hoy la separación es de suscripción (el módulo no pide el patrón). Si algún día se suscribe a `sim.>`, hay que filtrar `InstructorCommand` en el cliente del bus (lista blanca de `op` ya existe; falta la de topics).
+
 ## Refactorización
 - **Mover la constante `BASE`** (id del waypoint base) de `generator/controller.py` a `poc_contracts`, para que `tools/summary.py` no dependa del generador.
 

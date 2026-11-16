@@ -1,8 +1,10 @@
 """Perturbaciones del escenario en cada instante: viento, desfase del GPS y secuestro."""
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 
+from poc_contracts.commands import WindCommandParams
 from poc_contracts.scenario import HijackConfig, SpoofingConfig, WindConfig
 
 
@@ -20,8 +22,47 @@ class Wind:
         return self.speed_mps * math.sin(to), self.speed_mps * math.cos(to)
 
 
-def wind_at(t: float, wind: WindConfig) -> Wind:
-    """Viento base, o el del episodio activo con rampa de subida y bajada de `ramp_s`.
+@dataclass
+class CommandWind:
+    """Viento puesto por el instructor: un episodio más, aplicado **después** de los del escenario.
+
+    Sustituye al viento que haya (la velocidad y la racha suben con la rampa desde el viento de ese
+    instante; la procedencia cambia de golpe, como en un episodio). Termina solo a los `duration_s`
+    (con la rampa de bajada) o antes: `cancel` baja con su rampa desde el nivel que tenga y
+    `replace_by` (otro `set_wind`) lo congela mientras sube el nuevo, para que la transición sea
+    continua.
+    """
+
+    start_s: float
+    params: WindCommandParams
+    end_s: float = math.inf
+    cut_at: float | None = None
+    release_after: float = 0.0  # con `replace_by`: lo que dura el relevo; 0 = cancelación con rampa
+
+    def __post_init__(self) -> None:
+        if self.params.duration_s is not None:
+            self.end_s = self.start_s + self.params.duration_s
+
+    def _level(self, t: float) -> float:
+        r = self.params.ramp_s
+        return max(0.0, min(1.0, (t - self.start_s) / r, (self.end_s - t) / r))
+
+    def level(self, t: float) -> float | None:
+        """Peso del comando en `t` (0 a 1), o `None` si no está en curso."""
+        if t < self.start_s or t > self.end_s:
+            return None
+        if self.cut_at is None or t <= self.cut_at:
+            return self._level(t)
+        held = self._level(self.cut_at)
+        if self.release_after > 0.0:  # relevo: se mantiene hasta que el nuevo llega a su nivel
+            return held if t < self.cut_at + self.release_after else None
+        left = 1.0 - (t - self.cut_at) / self.params.ramp_s  # cancelación: baja con su rampa
+        return held * left if left > 0.0 else None
+
+
+def wind_at(t: float, wind: WindConfig, commands: Sequence[CommandWind] = ()) -> Wind:
+    """Viento base, o el del episodio activo con rampa de subida y bajada de `ramp_s`, y por
+    encima el del instructor si lo hay.
 
     La velocidad y la racha se interpolan; la procedencia pasa a la del episodio de golpe.
     """
@@ -32,6 +73,12 @@ def wind_at(t: float, wind: WindConfig) -> Wind:
             speed += (e.speed_mps - speed) * k
             gust += (e.gust_mps - gust) * k
             from_deg = e.from_deg
+    for c in commands:
+        k = c.level(t)
+        if k is not None:
+            speed += (c.params.speed_mps - speed) * k
+            gust += (c.params.gust_mps - gust) * k
+            from_deg = c.params.from_deg
     return Wind(speed, gust, from_deg)
 
 

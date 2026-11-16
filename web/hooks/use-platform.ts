@@ -10,6 +10,7 @@ import {
   type Conversation,
   type ControlMessage,
   type Envelope,
+  type OperatorMessage,
   type EventDraft,
   type PlanFile,
   type PlayerState,
@@ -232,7 +233,7 @@ export function usePlatform() {
 
   /** Publica un `OperatorMessage`. El id `ops-NNNN` lo calcula la web (máximo visto + 1): con dos
    *  pestañas abiertas pueden repetirse y la plataforma rechazaría el mensaje. */
-  const sendOperatorMessage = useCallback((conversation: Conversation, text: string): boolean => {
+  const sendOperatorMessage = useCallback((conversation: Conversation, text: string, context?: OperatorMessage['context']): boolean => {
     const socket = ws.current
     const current = stateRef.current
     const last = eventsRef.current.reduce<Envelope | null>((a, e) => (a === null || e.seq > a.seq ? e : a), null)
@@ -250,13 +251,13 @@ export function usePlatform() {
       event_id: `ops-${String(max + 1).padStart(4, '0')}`,
       topic: `citadel.pub.evt.ops.${conversation}.OperatorMessage.v1`,
       type: 'OperatorMessage',
-      source: 'web-operator',
+      source: conversation === 'instructor' ? 'web-instructor' : 'web-operator',
       asset: null,
       sim_time: simTime,
       event_time: new Date(t0 + simTime * 1000).toISOString().replace(/\.000Z$/, 'Z'),
       causation_id: null,
       ephemeral: false,
-      payload: { conversation_id: conversation, text },
+      payload: context ? { conversation_id: conversation, text, context } : { conversation_id: conversation, text },
     }
     socket.send(JSON.stringify({ op: 'publish', event }))
     return true

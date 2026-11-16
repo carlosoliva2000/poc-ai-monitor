@@ -163,3 +163,20 @@ agents:
     stream: true
     # Respuesta fija mientras aún no existe el informe (no se llama al LLM).
     no_report_reply: "There is no report yet: the simulation has not finished. Ask me again once the exercise is over."
+
+  # Agente del instructor (Fase 16, contrato v0.18): interpreta una frase en inglés y en m/s y
+  # propone un viento con una tool; nunca lo publica (la web lo enseña y el instructor confirma).
+  # Sin tools de datos ni skills: el monitor no sabe nada de este chat.
+  chat_instructor:
+    system_prompt: prompts/chat_instructor_system.md
+    tools: [propose_wind, propose_cancel_wind]
+    skills: []
+    max_iterations: 4
+    max_invocation_s: 60
+    llm_timeout_s: 40
+    temperature: 0
+    top_p: 1.0
+    top_k: -1
+    memory: conversation
+    max_history_messages: 12
+    stream: true

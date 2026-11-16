@@ -69,6 +69,44 @@ def _num(value: float | None, unit: str = "", decimals: int = 1) -> str:
 
 
 def synthetic_labels(events: list[Event]) -> list[Label]:
+    """Etiquetas de los fallos manuales (`FaultInjected` con `origin: manual`) y de los vientos
+    puestos en directo por el instructor (`InstructorCommand`)."""
+    return [*_fault_labels(events), *_wind_command_labels(events)]
+
+
+def _wind_command_labels(events: list[Event]) -> list[Label]:
+    """Una etiqueta de viento (`A101`…) por cada `set_wind` que no viene del escenario (los del
+    escenario ya están en `labels.json`). Ventana: del comando a su fin por duración, por el
+    siguiente comando (otro `set_wind` o un `cancel_wind`) o por el fin de la ejecución."""
+    end_time = max((e["sim_time"] for e in events), default=0.0)
+    commands = [e for e in events if e["type"] == "InstructorCommand"]
+    labels: list[Label] = []
+    for i, e in enumerate(commands):
+        p = e["payload"]
+        if p["command"] != "set_wind" or p["issued_by"] == "scenario":
+            continue
+        start = e["sim_time"]
+        duration = p["params"]["duration_s"]
+        end = min(start + duration if duration is not None else end_time, end_time)
+        if i + 1 < len(commands):
+            end = min(end, commands[i + 1]["sim_time"])
+        labels.append(
+            Label(
+                id=f"A{101 + len(labels)}",
+                type=LabelType.WIND,
+                source=None,
+                start_s=start,
+                end_s=end,
+                expected_rules=[Rule.ROUTE_DEVIATION],
+                expected_cause=Cause.WIND,
+                also_accepted_causes=[],
+                eval_window=(start, end + 60.0),
+            )
+        )
+    return labels
+
+
+def _fault_labels(events: list[Event]) -> list[Label]:
     """Etiquetas de los fallos manuales (`FaultInjected` con `origin: manual`)."""
     end_time = max((e["sim_time"] for e in events), default=0.0)
     open_faults: dict[tuple[str, str], Event] = {}

@@ -19,6 +19,7 @@ from ai_module.bus_client import (
 )
 from poc_contracts.enums import EventType
 from poc_contracts.envelope import Envelope
+from poc_contracts.topics import topic_for, topic_matches
 
 Handler = Callable[[ServerConnection], Awaitable[None]]
 
@@ -106,6 +107,9 @@ def test_hello_subscribe_receive_and_publish() -> None:
     # el agente no recibe los fallos inyectados ni el modo interactivo (dominio `sim`)
     assert not any("FaultInjected" in p or "InteractiveModeChanged" in p for p in patterns)
     assert "citadel.pub.evt.>" not in patterns and "citadel.pub.evt.sim.>" not in patterns
+    # ni el comando del instructor (v0.18): el monitor descubre el viento por sus efectos
+    command_topic = topic_for(EventType.INSTRUCTOR_COMMAND)
+    assert not any(topic_matches(p, command_topic) for p in patterns)
     assert received[2]["op"] == "publish"
     assert received[2]["event"]["type"] == "DetectionCleared"
     assert "seq" not in received[2]["event"] and "ingestion_time" not in received[2]["event"]

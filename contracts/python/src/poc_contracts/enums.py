@@ -62,6 +62,7 @@ class EventType(StrEnum):
     INTERACTIVE_MODE_CHANGED = "InteractiveModeChanged"
     FAULT_INJECTED = "FaultInjected"
     FAULT_CLEARED = "FaultCleared"
+    INSTRUCTOR_COMMAND = "InstructorCommand"
     DETECTION_RAISED = "DetectionRaised"
     DETECTION_UPDATED = "DetectionUpdated"
     DETECTION_CLEARED = "DetectionCleared"
@@ -159,9 +160,25 @@ class GpsFix(StrEnum):
     FIX_3D = "3d"
 
 
+class InstructorCommandName(StrEnum):
+    """Comandos del instructor (v0.18). Más adelante caben otros sin romper el evento."""
+
+    SET_WIND = "set_wind"
+    CANCEL_WIND = "cancel_wind"
+
+
+class CommandIssuer(StrEnum):
+    """Quién emite un comando: el panel, el LLM del instructor (confirmado) o el escenario."""
+
+    PANEL = "panel"
+    LLM = "llm"
+    SCENARIO = "scenario"
+
+
 class ConversationId(StrEnum):
     MONITOR = "monitor"
     REPORT = "report"
+    INSTRUCTOR = "instructor"
 
 
 class AgentName(StrEnum):
@@ -169,6 +186,7 @@ class AgentName(StrEnum):
     REPORT = "report"
     CHAT_MONITOR = "chat-monitor"
     CHAT_REPORT = "chat-report"
+    CHAT_INSTRUCTOR = "chat-instructor"
 
 
 class ActivityState(StrEnum):

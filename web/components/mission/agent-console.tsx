@@ -6,22 +6,25 @@ import remarkGfm from 'remark-gfm'
 import { useState } from 'react'
 import { useStoredState } from '@/hooks/use-stored-state'
 import type { ReportPhase } from '@/hooks/use-platform'
-import type { AgentActivity, Conversation, Envelope } from '@/lib/contracts'
+import type { AgentActivity, Conversation, Envelope, Proposal } from '@/lib/contracts'
 import { chatEntries, type Derived, type ToolCallEvent } from '@/lib/derive'
 import { formatT } from '@/lib/format'
 import { splitReport } from '@/lib/report'
 import { cn } from '@/lib/utils'
 import { ChatPanel, TypingDots } from './chat-panel'
 import { MonitorFeed } from './monitor-feed'
+import { ProposalCard, type Decision } from './proposal-card'
 
-type Tab = 'monitor' | 'report'
+type Tab = 'monitor' | 'report' | 'instructor'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'monitor', label: 'Monitor' },
   { id: 'report', label: 'Report' },
+  { id: 'instructor', label: 'Instructor' },
 ]
 
 const MONITOR_SUGGESTIONS = ['What is happening right now?', 'Why do you think that is the cause?', 'Which alerts are open?']
+const INSTRUCTOR_SUGGESTIONS = ['Wind from the north-east at 8 m/s', 'Put a 12 m/s wind from the north with gusts of 16 for one minute', 'Remove the wind']
 const REPORT_SUGGESTIONS = ['What happened during the flight?', 'Which was the most serious anomaly?', 'What do you recommend?']
 
 type Props = {
@@ -34,9 +37,14 @@ type Props = {
   /** La simulación ha terminado (el informe lo escribe el agente a continuación). */
   finished: boolean
   onSend: (conversation: Conversation, text: string) => boolean
+  /** Modo interactivo encendido: sin él no se puede confirmar una propuesta. */
+  interactive: boolean
+  onConfirmProposal: (proposal: Proposal, text: string) => void
+  onEditProposal: (proposal: Proposal) => void
 }
 
-export function AgentConsole({ events, data, chunks, activity, toolCalls, reportPhase, finished, onSend }: Props) {
+export function AgentConsole({ events, data, chunks, activity, toolCalls, reportPhase, finished, onSend, interactive, onConfirmProposal, onEditProposal }: Props) {
+  const [decisions, setDecisions] = useState<Record<string, Decision>>({})
   const [tab, setTab] = useState<Tab>('monitor')
   const [showCalls, setShowCalls] = useStoredState<boolean>('poc-toolcalls-v1', true, (raw) => raw !== false)
   const calls = showCalls ? toolCalls : []
@@ -96,6 +104,37 @@ export function AgentConsole({ events, data, chunks, activity, toolCalls, report
             placeholder="Ask the monitor…"
             onSend={(text) => onSend('monitor', text)}
             showToolCalls={showCalls}
+          />
+        </>
+      ) : tab === 'instructor' ? (
+        <>
+          <p className="px-4 py-3 text-xs leading-relaxed text-muted-foreground" data-testid="instructor-intro">
+            Tell the instructor assistant, in English and in m/s, what wind to put on the drone. It only proposes: nothing is applied until you confirm. The monitor is not told.
+          </p>
+          <ChatPanel
+            title="instructor"
+            agentLabel="INSTRUCTOR"
+            agentClass="text-accent"
+            entries={chatEntries(events, 'instructor', chunks, calls)}
+            suggestions={INSTRUCTOR_SUGGESTIONS}
+            placeholder="e.g. Wind from the north at 12 m/s…"
+            onSend={(text) => onSend('instructor', text)}
+            showToolCalls={showCalls}
+            extra={(m) =>
+              m.proposal && m.replyTo ? (
+                <ProposalCard
+                  proposal={m.proposal}
+                  decision={decisions[m.replyTo]}
+                  canConfirm={interactive}
+                  onConfirm={() => {
+                    setDecisions((d) => ({ ...d, [m.replyTo as string]: 'confirmed' }))
+                    onConfirmProposal(m.proposal as Proposal, m.question ?? '')
+                  }}
+                  onEdit={() => onEditProposal(m.proposal as Proposal)}
+                  onDiscard={() => setDecisions((d) => ({ ...d, [m.replyTo as string]: 'discarded' }))}
+                />
+              ) : null
+            }
           />
         </>
       ) : (

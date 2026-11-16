@@ -5,10 +5,13 @@ import { useStoredState } from '@/hooks/use-stored-state'
 import { clampConsoleWidth, DEFAULT_CONSOLE } from '@/lib/map-view'
 import { usePlatform, useTruth } from '@/hooks/use-platform'
 import { derive } from '@/lib/derive'
+import type { Conversation, Proposal } from '@/lib/contracts'
+import { activeWind, EMPTY_FORM, formFromParams, remaining, type WindForm } from '@/lib/instructor'
 import { AgentConsole } from './agent-console'
 import { DroneMap } from './drone-map'
 import { EventTimeline } from './event-timeline'
 import { FaultPanel } from './fault-panel'
+import { InstructorPanel } from './instructor-panel'
 import { LayersPanel, useLayers } from './layers-panel'
 import { MissionHeader } from './mission-header'
 import { progressMarks, SimControls } from './sim-controls'
@@ -17,6 +20,8 @@ import { TelemetryStrip } from './telemetry-strip'
 export function MissionConsole() {
   const { connection, events, state, errors, chunks, activity, toolCalls, reportPhase, scenarios, plan, live, setTruthFeed, control, sendOperatorMessage } = usePlatform()
   const [layers, setLayers] = useLayers()
+  const [windForm, setWindForm] = useState<WindForm>(EMPTY_FORM)
+  const [openTick, setOpenTick] = useState(0)
   const data = useMemo(() => derive(events), [events])
   const truth = useTruth(layers.truth, state?.run_id ?? null, state?.status === 'running')
   // La posición real en directo solo se pide mientras su capa está activa.
@@ -45,6 +50,20 @@ export function MissionConsole() {
     } else {
       waiting = 'Waiting for the monitor…'
     }
+  }
+  // El módulo de IA no ve el comando del instructor: la web le manda el viento activo en la pregunta.
+  const sendInstructorAware = (conversation: Conversation, text: string) => {
+    if (conversation !== 'instructor') return sendOperatorMessage(conversation, text)
+    const a = activeWind(events, state?.sim_time ?? 0)
+    const active_wind = a ? { from_deg: a.params.from_deg, speed_mps: a.params.speed_mps, gust_mps: a.params.gust_mps, remaining_s: remaining(a, state?.sim_time ?? 0) } : null
+    return sendOperatorMessage(conversation, text, { active_wind })
+  }
+  // Solo al confirmar se publica el comando (el mismo que el del panel, con `issued_by: llm`).
+  const confirmProposal = (p: Proposal, text: string) => control({ action: 'instructor', value: { command: p.command, params: p.params, issued_by: 'llm', text } })
+  const editProposal = (p: Proposal) => {
+    if (!p.params) return
+    setWindForm(formFromParams(p.params))
+    setOpenTick((t) => t + 1)
   }
   const agentBusy = Object.keys(activity).length > 0
 
@@ -86,6 +105,7 @@ export function MissionConsole() {
 
           <SimControls state={state} data={data} marks={marks} duration={duration} scenarios={scenarios} waiting={waiting} onControl={control} />
           <FaultPanel state={state} onControl={control} />
+          <InstructorPanel state={state} events={events} form={windForm} onForm={setWindForm} forceOpen={openTick} onControl={control} />
           <TelemetryStrip data={data} plan={plan} faults={state?.active_faults ?? []} />
 
           <div className="flex min-h-72 flex-1 border-t border-border lg:h-[100cqh] lg:min-h-0 lg:flex-none">
@@ -95,7 +115,7 @@ export function MissionConsole() {
 
         <div className="relative min-h-[80dvh] bg-card lg:h-full lg:min-h-0 lg:overflow-hidden">
           <ResizeHandle width={consoleWidth} viewport={viewport} onChange={setStoredWidth} />
-          <AgentConsole events={events} data={data} chunks={chunks} activity={activity} toolCalls={toolCalls} reportPhase={reportPhase} finished={state?.status === 'finished'} onSend={sendOperatorMessage} />
+          <AgentConsole events={events} data={data} chunks={chunks} activity={activity} toolCalls={toolCalls} reportPhase={reportPhase} finished={state?.status === 'finished'} onSend={sendInstructorAware} interactive={Boolean(state?.interactive)} onConfirmProposal={confirmProposal} onEditProposal={editProposal} />
         </div>
       </main>
     </div>

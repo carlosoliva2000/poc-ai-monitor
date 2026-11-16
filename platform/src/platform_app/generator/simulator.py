@@ -14,6 +14,10 @@ Fallos (`set_fault` y los programados del escenario):
   waypoint que no ha alcanzado). Mientras dura, el GPS publica la posición estimada con
   `fix: none`, `sats: 0` y `hdop` alto; al recuperarse, la posición salta a la real.
 
+Comandos del instructor (`apply_command` y los `commands` del escenario): `set_wind` y
+`cancel_wind`. El viento del instructor es un episodio más (ver `disturbances.CommandWind`): lo
+mide la estación y empuja al dron con la física de siempre; no gasta números aleatorios.
+
 Una fuente solo tiene un fallo a la vez, salvo el GPS, que puede tener `loss` y `mute` a la vez
 (receptor muerto): navega a estima y no publica nada; al terminar uno sigue el otro.
 """
@@ -22,7 +26,15 @@ import math
 import random
 from dataclasses import dataclass
 
-from poc_contracts.enums import EventType, FaultMode, FaultOrigin, SensorSource
+from poc_contracts.commands import CommandBody, ScheduledCommand
+from poc_contracts.enums import (
+    CommandIssuer,
+    EventType,
+    FaultMode,
+    FaultOrigin,
+    InstructorCommandName,
+    SensorSource,
+)
 from poc_contracts.envelope import EventDraft
 from poc_contracts.run_files import TruthFile, TruthSample, TruthWind
 from poc_contracts.scenario import ScenarioConfig
@@ -30,7 +42,7 @@ from poc_contracts.scenario import ScenarioConfig
 from ..geometry import Point, angle_diff_deg, bearing_deg
 from . import sensors
 from .controller import STEP_S, Sample, aim_point, build_route
-from .disturbances import is_hijacked, spoof_offset, spoof_offset_rate, wind_at
+from .disturbances import CommandWind, Wind, is_hijacked, spoof_offset, spoof_offset_rate, wind_at
 from .events import make_event
 
 
@@ -99,7 +111,12 @@ class Simulator:
             "link": sensors.period_steps(config.sensors.link.period_s),
             "battery": sensors.period_steps(config.sensors.battery.period_s),
         }
-        self._ids = {"mis": 0, "sim": 0}
+        self._ids = {"mis": 0, "sim": 0, "cmd": 0}
+        self._scheduled_cmds: list[ScheduledCommand] = (
+            sorted(config.commands, key=lambda c: c.at_s) if perturbed else []
+        )
+        self._wind_cmds: list[CommandWind] = []  # viento del instructor, por orden de llegada
+        self._cmd_queue: list[tuple[CommandBody, CommandIssuer, str | None]] = []
 
         self.n = 0
         self._i = 1  # índice del waypoint pendiente en la ruta
@@ -217,6 +234,72 @@ class Simulator:
                 out.append(self._fault_event(f.source, fault, True))
         return out
 
+    # --- Comandos del instructor ----------------------------------------------------------------
+
+    def apply_command(
+        self,
+        body: CommandBody,
+        issued_by: CommandIssuer,
+        text: str | None = None,
+        at_s: float | None = None,
+    ) -> None:
+        """Aplica un comando del instructor desde `at_s` (por defecto, el instante actual).
+
+        `set_wind` sustituye al viento del instructor que hubiera (el nuevo sube con su rampa y el
+        anterior se mantiene hasta entonces); `cancel_wind` baja el que haya con su rampa hasta el
+        viento del escenario. Lanza `ValueError` si no hay viento del instructor que cancelar.
+        """
+        t = self.t if at_s is None else at_s
+        active = next((c for c in reversed(self._wind_cmds) if self._is_active(c, t)), None)
+        if body.command == InstructorCommandName.SET_WIND:
+            assert body.params is not None
+            new = CommandWind(t, body.params)
+            if active is not None:
+                active.cut_at = t
+                active.release_after = min(
+                    body.params.ramp_s, (body.params.duration_s or float("inf")) / 2
+                )
+            self._wind_cmds.append(new)
+        else:
+            if active is None:
+                raise ValueError("there is no instructor wind to cancel")
+            active.cut_at, active.release_after = t, 0.0
+        self._cmd_queue.append((body, issued_by, text))
+
+    @staticmethod
+    def _is_active(command: CommandWind, t: float) -> bool:
+        """En curso y sin orden de terminar."""
+        return command.cut_at is None and command.level(t) is not None
+
+    def instructor_wind_active(self) -> bool:
+        return any(self._is_active(c, self.t) for c in self._wind_cmds)
+
+    def _apply_scheduled_commands(self) -> None:
+        while self._scheduled_cmds and self._scheduled_cmds[0].at_s <= self.t:
+            c = self._scheduled_cmds.pop(0)
+            self.apply_command(c, CommandIssuer.SCENARIO, None, at_s=c.at_s)
+
+    def _command_events(self) -> list[EventDraft]:
+        out: list[EventDraft] = []
+        for body, issued_by, text in self._cmd_queue:
+            self._ids["cmd"] += 1
+            payload = {
+                "command": body.command.value,
+                "params": body.params.model_dump() if body.params else None,
+                "issued_by": issued_by.value,
+                "text": text,
+            }
+            out.append(
+                make_event(
+                    self.config, EventType.INSTRUCTOR_COMMAND, self.t, self._ids["cmd"], payload
+                )
+            )
+        self._cmd_queue.clear()
+        return out
+
+    def _wind(self, t: float) -> Wind:
+        return wind_at(t, self.config.wind, self._wind_cmds)
+
     # --- Un paso ------------------------------------------------------------------------------
 
     def _mission_event(self, et: EventType, payload: dict) -> EventDraft:
@@ -254,6 +337,8 @@ class Simulator:
         self._queued.clear()
         if self.perturbed:
             faults += self._scheduled_transitions()
+            self._apply_scheduled_commands()
+        commands = self._command_events()
 
         mission: list[EventDraft] = []
         timeout = self.n >= self._max_steps
@@ -287,7 +372,7 @@ class Simulator:
         readings = self._readings() if self._events else []
         if not self.finished:
             self._advance()
-        return [*mission, *faults, *readings]
+        return [*mission, *faults, *commands, *readings]
 
     def _readings(self) -> list[EventDraft]:
         """Medidas de las fuentes cuyo periodo cae en este instante (con ruido siempre)."""
@@ -322,7 +407,7 @@ class Simulator:
                 "meteo",
                 EventType.WIND_REPORTED,
                 SensorSource.METEO,
-                sensors.meteo_payload(cfg, rng, t),
+                sensors.meteo_payload(cfg, rng, self._wind(t)),
             )
         if n % self._periods["link"] == 0:
             emit(
@@ -353,7 +438,7 @@ class Simulator:
         step = d.max_turn_rate_dps * STEP_S
         self._heading = (self._heading + max(-step, min(step, err))) % 360.0
         self._speed = min(d.cruise_speed_mps, self._speed + d.max_accel_mps2 * STEP_S)
-        wx, wy = wind_at(t, self.config.wind).vector() if self.perturbed else (0.0, 0.0)
+        wx, wy = self._wind(t).vector() if self.perturbed else (0.0, 0.0)
         ax = self._speed * math.sin(math.radians(self._heading))
         ay = self._speed * math.cos(math.radians(self._heading))
         vx, vy = ax + wx, ay + wy
@@ -390,7 +475,7 @@ class Simulator:
             wind=[
                 TruthWind(
                     t=s.t,
-                    speed_mps=round((w := wind_at(s.t, self.config.wind)).speed_mps, 2),
+                    speed_mps=round((w := self._wind(s.t)).speed_mps, 2),
                     gust_mps=round(w.gust_mps, 2),
                     from_deg=round(w.from_deg, 2),
                 )

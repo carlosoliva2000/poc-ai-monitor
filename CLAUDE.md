@@ -56,6 +56,7 @@ Cada carpeta de componente tiene su propio `CLAUDE.md` con lo específico.
 - **Fase 3 · agentes.** Motor de agente, monitor, informe, chats (en streaming), guardrails, trazas y `evaluate.py`. Ejecuta `demo.yaml` con «esperar al agente» y enséñale a Carlos `eval.md`, el informe generado y dos trazas representativas.
 - **Fase 4 · web.** Copia la interfaz de v0 a `web/`, quita la simulación del navegador y conéctala al WebSocket (ver `web/CLAUDE.md`). Prueba la demo completa.
 - **Fase 5 · extras.** Solo si Carlos lo pide, de `docs/mejoras_futuras.md`.
+- **Fase 16 · comando de viento del instructor** (contrato v0.18, aditivo): el instructor pone viento en directo desde un panel de la web o con una frase al **agente del instructor** (un LLM que solo propone; el instructor confirma). El comando (`InstructorCommand`, dominio `sim`) **no lo ve el módulo de IA**: el monitor descubre el viento por sus efectos. Programable en el escenario (`commands:`; `nominal-wind-cmd`). Detalle en `docs/fases/fase16.md`.
 
 **Quién decide qué:** `docs/quien_decide_que.md` dice qué decide cada pieza (código, tools, guardrails o modelo) y quién pone la causa en cada caso. Al cerrar cada fase, contrástalo con el código, corrígelo y dile a Carlos qué has cambiado y por qué.
 

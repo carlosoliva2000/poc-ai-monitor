@@ -4,10 +4,11 @@ Los eventos son los del simulador incremental (`simulator.py`) ejecutado hasta e
 intervenciones: el reproductor en directo produce exactamente los mismos.
 """
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from poc_contracts.enums import Cause, FaultMode, LabelType, Rule
+from poc_contracts.enums import Cause, FaultMode, InstructorCommandName, LabelType, Rule
 from poc_contracts.envelope import EventDraft
 from poc_contracts.run_files import Label, LabelsFile, PlanFile, PlanSample, TruthFile
 from poc_contracts.scenario import ScenarioConfig
@@ -30,11 +31,34 @@ class Run:
     labels: LabelsFile
 
 
+def _wind_command_windows(config: ScenarioConfig, end_s: float) -> list[tuple[float, float]]:
+    """Ventana de cada viento puesto por un comando programado: del `set_wind` a su fin por
+    duración, por el siguiente comando (otro `set_wind` o un `cancel_wind`) o por el fin del
+    vuelo."""
+    windows: list[list[float]] = []
+    current: list[float] | None = None
+    for c in sorted(config.commands, key=lambda c: c.at_s):
+        if current is not None:
+            current[1] = min(current[1], c.at_s)
+        if c.command == InstructorCommandName.SET_WIND:
+            assert c.params is not None
+            d = c.params.duration_s
+            current = [c.at_s, c.at_s + d if d is not None else math.inf]
+            windows.append(current)
+        else:
+            current = None
+    return [(a, min(b, end_s)) for a, b in windows if a < end_s]
+
+
 def _labels(config: ScenarioConfig, end_s: float) -> LabelsFile:
     """Una etiqueta por anomalía (`A1…`, por inicio) y por fallo programado (`F1…`)."""
     anomalies: list[tuple[float, float, LabelType, list[Rule], Cause]] = [
         (e.start_s, min(e.end_s, end_s), LabelType.WIND, [Rule.ROUTE_DEVIATION], Cause.WIND)
         for e in config.wind.episodes
+    ]
+    anomalies += [
+        (a, b, LabelType.WIND, [Rule.ROUTE_DEVIATION], Cause.WIND)
+        for a, b in _wind_command_windows(config, end_s)
     ]
     if config.spoofing:
         s = config.spoofing

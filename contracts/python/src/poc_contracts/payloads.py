@@ -4,17 +4,20 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from .commands import CommandBody, WindCommandParams
 from .enums import (
     ActivityState,
     AgentName,
     AlertPhase,
     Cause,
+    CommandIssuer,
     CompletionReason,
     ConversationId,
     EventType,
     FaultMode,
     FaultOrigin,
     GpsFix,
+    InstructorCommandName,
     PauseReason,
     Rule,
     SensorSource,
@@ -156,6 +159,16 @@ class FaultCleared(_Fault):
     """Fallo terminado. El agente no ve este evento."""
 
 
+class InstructorCommand(Payload, CommandBody):
+    """Comando del instructor aplicado por la plataforma (v0.18). El agente no ve este evento.
+
+    `issued_by`: `panel`, `llm` (propuesta confirmada; `text` es la frase original) o `scenario`.
+    """
+
+    issued_by: CommandIssuer
+    text: str | None
+
+
 # --- Del detector ----------------------------------------------------------------------------
 
 
@@ -281,9 +294,25 @@ class ReportGenerated(Payload):
 # --- Del chat --------------------------------------------------------------------------------
 
 
+class ActiveWind(Payload):
+    """Viento del instructor en curso, tal como lo conoce la web (`remaining_s: null` = sin fin)."""
+
+    from_deg: float
+    speed_mps: float
+    gust_mps: float
+    remaining_s: float | None
+
+
+class OperatorContext(Payload):
+    """Contexto que la web añade a la pregunta del chat del instructor (v0.18)."""
+
+    active_wind: ActiveWind | None
+
+
 class OperatorMessage(Payload):
     conversation_id: ConversationId
     text: str
+    context: OperatorContext | None = None  # solo `instructor`
 
 
 class AgentReplyChunk(Payload):
@@ -292,11 +321,21 @@ class AgentReplyChunk(Payload):
     delta: str
 
 
+class InstructorProposal(Payload):
+    """Propuesta del agente del instructor (no publica nada: la web la enseña y, si el instructor
+    confirma, manda el comando). `defaults_used`: los parámetros que el modelo rellenó solo."""
+
+    command: InstructorCommandName
+    params: WindCommandParams | None
+    defaults_used: list[str]
+
+
 class AgentReply(Payload):
     conversation_id: ConversationId
     reply_to: str
     text: str
     tool_calls: list[str]
+    proposal: InstructorProposal | None = None  # solo `instructor`
 
 
 class AgentActivity(Payload):
@@ -339,6 +378,7 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.INTERACTIVE_MODE_CHANGED: InteractiveModeChanged,
     EventType.FAULT_INJECTED: FaultInjected,
     EventType.FAULT_CLEARED: FaultCleared,
+    EventType.INSTRUCTOR_COMMAND: InstructorCommand,
     EventType.DETECTION_RAISED: DetectionRaised,
     EventType.DETECTION_UPDATED: DetectionUpdated,
     EventType.DETECTION_CLEARED: DetectionCleared,

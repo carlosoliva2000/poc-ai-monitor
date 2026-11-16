@@ -1,12 +1,71 @@
 {
   "$defs": {
+    "ActiveWind": {
+      "additionalProperties": false,
+      "description": "Viento del instructor en curso, tal como lo conoce la web (`remaining_s: null` = sin fin).",
+      "properties": {
+        "from_deg": {
+          "title": "From Deg",
+          "type": "number"
+        },
+        "speed_mps": {
+          "title": "Speed Mps",
+          "type": "number"
+        },
+        "gust_mps": {
+          "title": "Gust Mps",
+          "type": "number"
+        },
+        "remaining_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Remaining S"
+        }
+      },
+      "required": [
+        "from_deg",
+        "speed_mps",
+        "gust_mps",
+        "remaining_s"
+      ],
+      "title": "ActiveWind",
+      "type": "object"
+    },
     "ConversationId": {
       "enum": [
         "monitor",
-        "report"
+        "report",
+        "instructor"
       ],
       "title": "ConversationId",
       "type": "string"
+    },
+    "OperatorContext": {
+      "additionalProperties": false,
+      "description": "Contexto que la web añade a la pregunta del chat del instructor (v0.18).",
+      "properties": {
+        "active_wind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActiveWind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "active_wind"
+      ],
+      "title": "OperatorContext",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -17,6 +76,17 @@
     "text": {
       "title": "Text",
       "type": "string"
+    },
+    "context": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OperatorContext"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

@@ -53,6 +53,7 @@ ALERT_PHASES_SECTION = (
 _AGENT = {
     ConversationId.MONITOR: (AgentName.CHAT_MONITOR, "chat_monitor"),
     ConversationId.REPORT: (AgentName.CHAT_REPORT, "chat_report"),
+    ConversationId.INSTRUCTOR: (AgentName.CHAT_INSTRUCTOR, "chat_instructor"),
 }
 
 

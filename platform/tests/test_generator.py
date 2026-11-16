@@ -16,7 +16,17 @@ from poc_contracts.envelope import EventDraft
 from poc_contracts.run_files import LabelsFile, PlanFile, TruthFile
 
 SENSOR_TYPES = {"PositionUpdated", "TrackUpdated", "WindReported", "LinkStatus", "BatteryStatus"}
-ALL = ["demo", "demo-battery", "demo-meteo", "faults", "hijack", "nominal", "spoofing", "wind"]
+ALL = [
+    "demo",
+    "demo-battery",
+    "demo-meteo",
+    "faults",
+    "hijack",
+    "nominal",
+    "nominal-wind-cmd",
+    "spoofing",
+    "wind",
+]
 
 
 def test_all_scenarios_in_the_repo_are_the_seven_expected() -> None:

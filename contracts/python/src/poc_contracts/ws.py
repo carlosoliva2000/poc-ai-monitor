@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, model_validator
 
+from .commands import InstructorControl
 from .enums import ClientKind, FaultMode, FaultOrigin, PlayerStatus, SensorSource
 from .envelope import Envelope, EventDraft
 from .topics import validate_pattern
@@ -127,6 +128,14 @@ class ControlFault(_Message):
     value: FaultControl
 
 
+class ControlInstructor(_Message):
+    """Comando del instructor (v0.18): como `fault`, solo con el modo interactivo encendido."""
+
+    op: Literal["control"] = "control"
+    action: Literal["instructor"] = "instructor"
+    value: InstructorControl
+
+
 Control = Annotated[
     ControlLoad
     | ControlPlay
@@ -136,7 +145,8 @@ Control = Annotated[
     | ControlSpeed
     | ControlWaitAgent
     | ControlInteractive
-    | ControlFault,
+    | ControlFault
+    | ControlInstructor,
     Field(discriminator="action"),
 ]
 

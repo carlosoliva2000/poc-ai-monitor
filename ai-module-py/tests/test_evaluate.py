@@ -412,6 +412,31 @@ def test_manual_faults_generate_synthetic_labels(tmp_path: Path) -> None:
     )
 
 
+WIND = {"from_deg": 0.0, "speed_mps": 12.0, "gust_mps": 16.0, "ramp_s": 10.0, "duration_s": 60.0}
+
+
+def test_live_wind_commands_generate_wind_labels(tmp_path: Path) -> None:
+    b = Builder(tmp_path, "nominal")
+    (b.root / "labels.json").write_text('{"labels": []}')
+
+    def command(t: float, n: int, name: str, params: dict | None, issued_by: str) -> None:
+        payload = {"command": name, "params": params, "issued_by": issued_by, "text": None}
+        b.ev("InstructorCommand", t, payload, "platform-player", id=f"cmd-{n:04d}")
+
+    command(100.0, 1, "set_wind", WIND, "panel")  # dura 60 s: hasta T+160
+    command(300.0, 2, "set_wind", {**WIND, "duration_s": None}, "llm")  # sin fin…
+    command(330.0, 3, "cancel_wind", None, "panel")  # …hasta que lo cancelan
+    command(400.0, 4, "set_wind", WIND, "scenario")  # el del escenario ya está en labels.json
+    b.ev("SimulationFinished", 480.0, {}, "platform-player", id="plr-0009")
+    labels = RunData(b.write()).labels
+    assert [(lb.id, lb.type.value, lb.start_s, lb.end_s) for lb in labels] == [
+        ("A101", "wind", 100.0, 160.0),
+        ("A102", "wind", 300.0, 330.0),
+    ]
+    assert labels[0].expected_cause.value == "WIND"
+    assert labels[0].eval_window == (100.0, 220.0)
+
+
 def test_scenario_faults_do_not_duplicate_labels(tmp_path: Path) -> None:
     b = Builder(tmp_path, "faults")
     b.ev(

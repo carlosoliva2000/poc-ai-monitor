@@ -344,6 +344,7 @@ def test_scenarios(client: TestClient) -> None:
         "faults",
         "hijack",
         "nominal",
+        "nominal-wind-cmd",
         "spoofing",
         "wind",
     ]
@@ -508,3 +509,80 @@ def test_truth_feed_needs_hello_and_load_pushes_the_truth(client: TestClient) ->
         assert truths(drain(ws)) == []  # sin escenario cargado no hay muestra
         messages = control(ws, "load", "nominal")
         assert [m["t"] for m in truths(messages)] == [0.0]
+
+
+# --- Comandos del instructor (v0.18) ------------------------------------------------------------
+
+WIND_COMMAND = {
+    "command": "set_wind",
+    "params": {
+        "from_deg": 0.0,
+        "speed_mps": 12.0,
+        "gust_mps": 16.0,
+        "ramp_s": 10.0,
+        "duration_s": 60.0,
+    },
+    "issued_by": "panel",
+    "text": None,
+}
+# los mismos patrones que el cliente del bus del módulo de IA (`ai_module.bus_client`)
+AI_MODULE_PATTERNS = [
+    "citadel.pub.evt.air.>",
+    "citadel.pub.evt.env.>",
+    "citadel.pub.evt.ai.>",
+    "citadel.pub.evt.ops.>",
+    "citadel.pub.evt.sim.player.SimulationStarted.v1",
+    "citadel.pub.evt.sim.player.SimulationReset.v1",
+    "citadel.pub.evt.sim.player.SimulationFinished.v1",
+]
+
+
+def test_instructor_command_over_the_websocket(client: TestClient) -> None:
+    with (
+        client.websocket_connect("/ws") as ws,
+        client.websocket_connect("/ws") as ai,
+    ):
+        ws.receive_json()
+        ai.receive_json()
+        hello(ws, "web", "citadel.pub.evt.sim.>")
+        hello(ai, "ai-module", *AI_MODULE_PATTERNS)
+        control(ws, "load", "nominal")
+        off = "interactive mode is off: turn it on to send instructor commands"
+        assert control(ws, "instructor", WIND_COMMAND) == [{"op": "error", "message": off}]
+
+        control(ws, "interactive", True)
+        control(ws, "play")
+        player(client).advance(20.0)
+        drain(ws)
+        drain(ai)
+        control(ws, "instructor", WIND_COMMAND)
+        player(client).advance(1.0)
+        sent = [m["event"] for m in drain(ws) if m["op"] == "event"]
+        assert [(e["type"], e["event_id"]) for e in sent if e["type"] == "InstructorCommand"] == [
+            ("InstructorCommand", "cmd-0001")
+        ]
+        # el módulo de IA recibe el mundo, pero nunca el comando (como los fallos inyectados)
+        seen = {m["event"]["type"] for m in drain(ai) if m["op"] == "event"}
+        assert "PositionUpdated" in seen and "InstructorCommand" not in seen
+
+        bad = {
+            **WIND_COMMAND,
+            "params": {**WIND_COMMAND["params"], "speed_mps": 50.0, "gust_mps": 51.0},
+        }
+        assert control(ws, "instructor", bad)[0]["message"].startswith("invalid message")
+        scenario = {**WIND_COMMAND, "issued_by": "scenario"}
+        assert control(ws, "instructor", scenario)[0]["message"].startswith("invalid message")
+        cancel = {"command": "cancel_wind", "params": None, "issued_by": "panel", "text": None}
+        assert not [m for m in control(ws, "instructor", cancel) if m["op"] == "error"]
+        assert (
+            control(ws, "instructor", cancel)[0]["message"]
+            == "there is no instructor wind to cancel"
+        )
+
+
+def test_only_web_clients_can_send_instructor_commands(client: TestClient) -> None:
+    with client.websocket_connect("/ws") as ai:
+        ai.receive_json()
+        hello(ai, "ai-module")
+        messages = control(ai, "instructor", WIND_COMMAND)
+        assert messages == [{"op": "error", "message": "only clients of type web can send control"}]

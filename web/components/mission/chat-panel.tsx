@@ -36,10 +36,12 @@ type Props = {
   onSend: (text: string) => boolean
   /** Muestra las llamadas a tool de cada respuesta (interruptor de la consola). */
   showToolCalls?: boolean
+  /** Pie de cada respuesta (la tarjeta de propuesta del instructor). */
+  extra?: (entry: Extract<ChatEntry, { kind: 'agent' }>) => React.ReactNode
 }
 
 /** Chat con un agente: las respuestas llegan en streaming (trozos acumulados por el hook). */
-export function ChatPanel({ title, agentLabel, agentClass, entries, suggestions, placeholder, onSend, showToolCalls = false }: Props) {
+export function ChatPanel({ title, agentLabel, agentClass, entries, suggestions, placeholder, onSend, showToolCalls = false, extra }: Props) {
   const [input, setInput] = useState('')
   const [saved, setSaved] = useStoredState<Saved>(`poc-chat-${title}-v1`, DEFAULT_SAVED, revive)
   const [live, setLive] = useState<number | null>(null)
@@ -164,6 +166,7 @@ export function ChatPanel({ title, agentLabel, agentClass, entries, suggestions,
               ) : showToolCalls && !m.streaming ? (
                 <span className="font-mono text-[10px] text-muted-foreground">no tool calls</span>
               ) : null}
+              {extra?.(m)}
             </article>
           ),
         )}

@@ -15,6 +15,7 @@ const MARKS: Record<string, { className: string; label: string }> = {
   AlertClosed: { className: 'bg-primary', label: 'closure' },
   FaultInjected: { className: 'bg-foreground', label: 'fault' },
   FaultCleared: { className: 'bg-muted-foreground', label: 'end of fault' },
+  InstructorCommand: { className: 'bg-warning', label: 'instructor command' },
   InteractiveModeChanged: { className: 'bg-muted-foreground', label: 'interactive mode' },
 }
 

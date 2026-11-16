@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from .commands import ScheduledCommand
 from .enums import FaultMode, SensorSource
 
 IsoUtcSeconds = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")]
@@ -175,3 +176,4 @@ class ScenarioConfig(Config):
     spoofing: SpoofingConfig | None
     hijack: HijackConfig | None
     faults: list[FaultConfig]
+    commands: list[ScheduledCommand] = []  # opcional (v0.18): comandos del instructor programados

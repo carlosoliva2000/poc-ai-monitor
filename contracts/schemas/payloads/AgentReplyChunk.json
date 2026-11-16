@@ -3,7 +3,8 @@
     "ConversationId": {
       "enum": [
         "monitor",
-        "report"
+        "report",
+        "instructor"
       ],
       "title": "ConversationId",
       "type": "string"

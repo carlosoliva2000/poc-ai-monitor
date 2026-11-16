@@ -14,7 +14,7 @@ from poc_contracts.scenario import ScenarioConfig
 
 from ..geometry import bearing_deg
 from .controller import STEP_S, Sample
-from .disturbances import Wind, is_hijacked, wind_at
+from .disturbances import Wind, is_hijacked
 
 GPS_ALT_SIGMA_M = 0.5
 GPS_SPEED_SIGMA_MPS = 0.2
@@ -73,9 +73,9 @@ def radar_payload(config: ScenarioConfig, rng: random.Random, s: Sample) -> dict
     }
 
 
-def meteo_payload(config: ScenarioConfig, rng: random.Random, t: float) -> dict:
+def meteo_payload(config: ScenarioConfig, rng: random.Random, w: Wind) -> dict:
+    """`WindReported` con el viento real `w` (el del escenario y, si lo hay, el del instructor)."""
     m = config.sensors.meteo
-    w: Wind = wind_at(t, config.wind)
     speed = max(0.0, w.speed_mps + rng.gauss(0, m.sigma_mps))
     gust = max(speed, w.gust_mps + rng.gauss(0, m.sigma_mps))
     return {

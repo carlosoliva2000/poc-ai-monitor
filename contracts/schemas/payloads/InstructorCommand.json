@@ -1,0 +1,114 @@
+{
+  "$defs": {
+    "CommandIssuer": {
+      "description": "Quién emite un comando: el panel, el LLM del instructor (confirmado) o el escenario.",
+      "enum": [
+        "panel",
+        "llm",
+        "scenario"
+      ],
+      "title": "CommandIssuer",
+      "type": "string"
+    },
+    "InstructorCommandName": {
+      "description": "Comandos del instructor (v0.18). Más adelante caben otros sin romper el evento.",
+      "enum": [
+        "set_wind",
+        "cancel_wind"
+      ],
+      "title": "InstructorCommandName",
+      "type": "string"
+    },
+    "WindCommandParams": {
+      "additionalProperties": false,
+      "description": "Los mismos parámetros que un episodio de viento del escenario, más la duración.\n\n`from_deg` y `speed_mps` empujan al dron; `ramp_s` suaviza la subida y la bajada; `gust_mps`\nno empuja: solo la mide la estación (y cuenta para que el viento sea «notable»).\n`duration_s: null` = hasta nuevo aviso.",
+      "properties": {
+        "from_deg": {
+          "maximum": 360,
+          "minimum": 0,
+          "title": "From Deg",
+          "type": "number"
+        },
+        "speed_mps": {
+          "maximum": 40.0,
+          "minimum": 0,
+          "title": "Speed Mps",
+          "type": "number"
+        },
+        "gust_mps": {
+          "maximum": 60.0,
+          "minimum": 0,
+          "title": "Gust Mps",
+          "type": "number"
+        },
+        "ramp_s": {
+          "exclusiveMinimum": 0,
+          "maximum": 120.0,
+          "title": "Ramp S",
+          "type": "number"
+        },
+        "duration_s": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 1800.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Duration S"
+        }
+      },
+      "required": [
+        "from_deg",
+        "speed_mps",
+        "gust_mps",
+        "ramp_s",
+        "duration_s"
+      ],
+      "title": "WindCommandParams",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Comando del instructor aplicado por la plataforma (v0.18). El agente no ve este evento.\n\n`issued_by`: `panel`, `llm` (propuesta confirmada; `text` es la frase original) o `scenario`.",
+  "properties": {
+    "command": {
+      "$ref": "#/$defs/InstructorCommandName"
+    },
+    "params": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WindCommandParams"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "issued_by": {
+      "$ref": "#/$defs/CommandIssuer"
+    },
+    "text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Text"
+    }
+  },
+  "required": [
+    "command",
+    "params",
+    "issued_by",
+    "text"
+  ],
+  "title": "InstructorCommand",
+  "type": "object"
+}

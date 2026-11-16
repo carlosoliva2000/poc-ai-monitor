@@ -12,6 +12,7 @@ import pytest
 from pydantic import TypeAdapter
 
 from poc_contracts.api import ScenarioInfo, ScenariosResponse, ToolError
+from poc_contracts.commands import InstructorControl
 from poc_contracts.enums import EventType
 from poc_contracts.envelope import Envelope
 from poc_contracts.payloads import PAYLOAD_MODELS
@@ -74,6 +75,7 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ("{}", payload_of(T.SIMULATION_RESET)),
     ('{ "interactive": true }', payload_of(T.INTERACTIVE_MODE_CHANGED)),
     ('{ "source": "radar", "mode": "mute", "origin"', payload_of(T.FAULT_INJECTED)),
+    ('{ "command": "set_wind", "params": {"from_deg": 0.0', payload_of(T.INSTRUCTOR_COMMAND)),
     (
         '{ "detection_id": "det-0002", "rule": "ROUTE_DEVIATION", "severity"',
         payload_of(T.DETECTION_RAISED),
@@ -99,7 +101,10 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ('{ "conversation_id": "monitor", "reply_to": "ops-0004", "text"', payload_of(T.AGENT_REPLY)),
     ('{ "agent"', payload_of(T.AGENT_ACTIVITY)),
     ('{ "agent": "monitor", "invocation_id": "inv-0007", "index"', payload_of(T.AGENT_TOOL_CALL)),
+    ('{ "conversation_id": "instructor", "text": "Stronger"', payload_of(T.OPERATOR_MESSAGE)),
+    ('{ "conversation_id": "instructor", "reply_to": "ops-0009"', payload_of(T.AGENT_REPLY)),
     ('{"source": "gps", "mode": "loss", "active"', model(FaultControl)),
+    ('{"command": "set_wind", "params": {"from_deg": 0.0', model(InstructorControl)),
     ('{"scenarios"', model(ScenariosResponse)),
     ('{"ok": true, "result"', SKIP),  # ilustrativo: `…` no es JSON; `result` depende de cada tool
     ('{"ok": false, "error"', model(ToolError)),

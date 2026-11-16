@@ -133,6 +133,19 @@ class LoadSkillArgs(_Model):
     name: str
 
 
+class ProposeWindArgs(_Model):
+    """`propose_wind` (agente del instructor, v0.18): lo que interpreta el modelo de la frase. El
+    código convierte el rumbo a grados, rellena lo que falte y valida; no publica nada."""
+
+    from_direction: str
+    """De dónde viene el viento: un rumbo (`NE`, `north-east`) o grados (`225`)."""
+    speed_mps: float
+    gust_mps: float | None = None
+    duration_s: float | None = None
+    until_cancelled: bool | None = None
+    ramp_s: float | None = None
+
+
 # --- Resultados ------------------------------------------------------------------------------
 
 
@@ -368,6 +381,8 @@ TOOL_MODELS: dict[str, tuple[type[BaseModel], type[BaseModel] | None]] = {
     "acknowledge_detection": (AcknowledgeDetectionArgs, None),
     "close_alert": (CloseAlertArgs, None),
     "load_skill": (LoadSkillArgs, None),
+    "propose_wind": (ProposeWindArgs, None),
+    "propose_cancel_wind": (NoArgs, None),
 }
 
 # Resultado de `publish_alert`: uno de estos dos.

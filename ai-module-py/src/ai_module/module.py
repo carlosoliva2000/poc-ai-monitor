@@ -13,6 +13,7 @@ from poc_contracts.ws import ErrorMessage, EventMessage, StateMessage
 from .chat import Chat
 from .detection_format import DetectionFormatter
 from .detector import Detector
+from .instructor import InstructorChat
 from .monitor import Monitor
 from .report import ReportAgent
 from .runtime import Runtime
@@ -43,7 +44,16 @@ class AiModule:
         self._on_detection = on_detection
         self.monitor = Monitor(rt) if with_agents else None
         self.report = ReportAgent(rt, self.monitor) if self.monitor else None
-        self.chats = {c: Chat(rt, c, self.report) for c in ConversationId} if with_agents else {}
+        self.chats = (
+            {
+                c: InstructorChat(rt)
+                if c == ConversationId.INSTRUCTOR
+                else Chat(rt, c, self.report)
+                for c in ConversationId
+            }
+            if with_agents
+            else {}
+        )
         self._tasks: list[asyncio.Task[None]] = []
         self._report_started = False
 
