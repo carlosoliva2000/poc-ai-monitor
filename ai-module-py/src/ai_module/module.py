@@ -13,6 +13,7 @@ from poc_contracts.ws import ErrorMessage, EventMessage, StateMessage
 from .chat import Chat
 from .detection_format import DetectionFormatter
 from .detector import Detector
+from .enrich import Enricher
 from .instructor import InstructorChat
 from .monitor import Monitor
 from .report import ReportAgent
@@ -47,6 +48,16 @@ class AiModule:
         # E6 (`--no-llm`): con la tabla de decisión y sin LLM no hay informe ni chats
         llm_agents = with_agents and with_llm_agents
         self.report = ReportAgent(rt, self.monitor) if self.monitor and llm_agents else None
+        # E6 (`monitor.engine: hybrid`): la tabla decide y el LLM añade después la interpretación
+        self.enricher = (
+            Enricher(rt)
+            if self.monitor and llm_agents and self.monitor.config.engine == "hybrid"
+            else None
+        )
+        if self.enricher is not None and self.monitor is not None:
+            self.monitor.enrich_hook = self.enricher.submit
+            if self.report is not None:
+                self.report.enricher = self.enricher
         self.chats = (
             {
                 c: InstructorChat(rt)
@@ -65,6 +76,8 @@ class AiModule:
     def start(self) -> None:
         if self.monitor:
             self._tasks.append(asyncio.create_task(self.monitor.run_forever()))
+        if self.enricher:
+            self._tasks.append(asyncio.create_task(self.enricher.run_forever()))
         self._tasks += [asyncio.create_task(c.run_forever()) for c in self.chats.values()]
 
     async def stop(self) -> None:
@@ -123,6 +136,8 @@ class AiModule:
         self._report_started = False
         if self.monitor:
             self.monitor.reset()
+        if self.enricher:
+            self.enricher.reset()
         if self.report:
             self.report.reset()
         for chat in self.chats.values():

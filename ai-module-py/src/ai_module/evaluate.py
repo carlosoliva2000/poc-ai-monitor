@@ -261,6 +261,68 @@ def contradictions(alerts: list[Event]) -> list[Contradiction]:
     return found
 
 
+def enrichment_contradictions(data: "RunData") -> list[Contradiction]:
+    """E6 (híbrido): las frases de cada `AlertEnriched` contra los `checks` de su alerta."""
+    found: list[Contradiction] = []
+    for event in data.events:
+        if event["type"] != "AlertEnriched":
+            continue
+        p = event["payload"]
+        alert = data.alerts.get(p["alert_id"])
+        checks = alert["payload"].get("checks") if alert else None
+        for sentence in SENTENCE_SPLIT.split(p["text"]):
+            for rule in contradicting_rules(sentence, checks):
+                found.append(
+                    Contradiction(
+                        p["alert_id"],
+                        event["sim_time"],
+                        "interpretación (LLM)",
+                        rule,
+                        sentence.strip(),
+                    )  # fmt: skip
+                )
+    return found
+
+
+def enrichment_stats(trace: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """E6 (híbrido): qué pasó con cada alerta en el enriquecimiento. `None` sin trazas `enrich`."""
+    records = [t.get("enrich") or {} for t in trace if t.get("agent") == "enrich"]
+    if not records:
+        return None
+    published = [r for r in records if r.get("published")]
+    wall = [r["enrich_latency_wall_s"] for r in published if "enrich_latency_wall_s" in r]
+    sim = [r["enrich_latency_sim_s"] for r in published if "enrich_latency_sim_s" in r]
+    report = next((t.get("enrich") for t in trace if t.get("agent") == "report"), None)
+    return {
+        "alerts": len(records),
+        "published": len(published),
+        "rejected": [
+            {"alert_id": r.get("alert_id"), "rule_id": r.get("rule_id"), "reasons": r["rejected"]}
+            for r in records
+            if r.get("rejected")
+        ],
+        "skipped": [
+            {"alert_id": r.get("alert_id"), "reason": r["skipped"]}
+            for r in records
+            if r.get("skipped")
+        ],
+        "hypotheses": sum(1 for r in published if r.get("hypothesis")),
+        "latency_wall_s": _stats(wall),
+        "latency_sim_s": _stats(sim),
+        "report_wait": report or None,
+    }
+
+
+def _stats(values: list[float]) -> dict[str, float] | None:
+    if not values:
+        return None
+    return {
+        "median": round(statistics.median(values), 2),
+        "max": round(max(values), 2),
+        "n": len(values),
+    }
+
+
 CHECK_FIELDS = (
     "gps_alert_recent",
     "gps_radar_disagreed",
@@ -1084,6 +1146,8 @@ class Evaluation:
     """Episodios sin etiqueta (E6; vacío si el escenario no los tiene)."""
     ambiguous: list[AmbiguousResult] = field(default_factory=list)
     """Avisos ambiguos (E6; vacío si ninguna ventana con reglas comunes se solapa)."""
+    enrichment: dict[str, Any] | None = None
+    """Enriquecimiento del híbrido (E6; `None` si la ejecución no lo tiene)."""
 
     @property
     def unlabeled_false(self) -> int:
@@ -1114,12 +1178,13 @@ def evaluate(folder: Path) -> Evaluation:
         agents.get("monitor", {}).get("fallbacks", 0),
         overall,
         data.open_alerts_at_end(),
-        contradictions(list(data.alerts.values())),
+        contradictions(list(data.alerts.values())) + enrichment_contradictions(data),
         non_latin_stats(data),
         checks_report(data.alerts, data.trace),
         recovery_misses(data),
         unlabeled,
         ambiguous_results(data),
+        enrichment_stats(data.trace),
     )
 
 
@@ -1523,6 +1588,36 @@ def unlabeled_section(ev: Evaluation) -> list[str]:
     return lines
 
 
+def enrichment_section(ev: Evaluation) -> list[str]:
+    """Enriquecimiento del híbrido (E6): solo si la ejecución lo tiene."""
+    e = ev.enrichment
+    if not e:
+        return []
+
+    def lat(s: dict[str, float] | None, unit: str) -> str:
+        return "—" if not s else f"mediana {s['median']:g} {unit}, máx {s['max']:g} {unit}"
+
+    lines = [
+        "",
+        "## Enriquecimiento (híbrido: la tabla decide, el LLM interpreta)",
+        "",
+        f"- Alertas: {e['alerts']} · publicadas: {e['published']} · descartadas por las "
+        f"comprobaciones: {len(e['rejected'])} · no pedidas (alerta ya sustituida o cerrada): "
+        f"{len(e['skipped'])} · con hipótesis: {e['hypotheses']}",
+        f"- Latencia desde la alerta: reloj {lat(e['latency_wall_s'], 's')} · simulada "
+        f"{lat(e['latency_sim_s'], 's')}",
+    ]
+    if e.get("report_wait"):
+        w = e["report_wait"]
+        done = "completa" if w.get("complete") else "**incompleta (tope agotado)**"
+        lines.append(f"- El informe esperó {w.get('waited_s')} s a la cola: {done}")
+    for r in e["rejected"]:
+        lines.append(f"- ❌ {r['alert_id']} ({r['rule_id']}): {'; '.join(r['reasons'])}")
+    for r in e["skipped"]:
+        lines.append(f"- ⏭ {r['alert_id']}: {r['reason']}")
+    return lines
+
+
 def contradictions_section(ev: Evaluation) -> list[str]:
     lines = ["", "## Frases que contradicen los checks", ""]
     if not ev.contradictions:
@@ -1644,6 +1739,7 @@ def render_markdown(ev: Evaluation) -> str:
         false_section(ev),
         ambiguous_section(ev),
         unlabeled_section(ev),
+        enrichment_section(ev),
         contradictions_section(ev),
         checks_section(ev),
         non_latin_section(ev),
@@ -1721,6 +1817,7 @@ def to_json(ev: Evaluation) -> dict[str, Any]:
         # E6: solo si el escenario tiene episodios sin etiqueta (sin ellos, el JSON no cambia)
         **({"unlabeled_episodes": unlabeled_json(ev)} if ev.unlabeled else {}),
         **({"ambiguous": ambiguous_json(ev)} if ev.ambiguous else {}),
+        **({"enrichment": ev.enrichment} if ev.enrichment else {}),
     }
 
 

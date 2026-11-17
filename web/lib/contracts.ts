@@ -89,6 +89,18 @@ export type Anomaly = {
   rule_id?: string | null
 }
 export type AlertClosed = { alert_id: string; reason: string; as_of_sim_time: number }
+/** v0.19 (E6, híbrido): hipótesis del LLM en una alerta UNKNOWN. No es un diagnóstico. */
+export type EnrichHypothesis = { cause: Cause; confidence: number; evidence_event_ids: string[] }
+/** v0.19 (E6, híbrido): interpretación del LLM de una alerta de la tabla (fuente `ai-enricher`,
+ *  `causation_id` = la alerta). No cambia la alerta. */
+export type AlertEnriched = {
+  alert_id: string
+  text: string
+  hypothesis: EnrichHypothesis | null
+  decided_by: 'llm'
+  as_of_sim_time: number
+  alert_status: 'open' | 'superseded' | 'closed'
+}
 export type DetectionAcknowledged = {
   detection_id: string
   alert_id: string | null

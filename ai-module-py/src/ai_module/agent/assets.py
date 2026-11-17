@@ -379,8 +379,16 @@ class Assets:
             "server": profile.server if profile else None,
             "wait_agent_timeout_s": profile.wait_agent_timeout_s if profile else DEFAULT_WAIT_S,
             "chat_tools_enabled": self.chat_tools_enabled,
-            "agents": {name: self.agent(name).effective() for name in self._raw["agents"]},
+            "agents": {name: self.agent(name).effective() for name in self._profile_agents()},
         }
+
+    def _profile_agents(self) -> list[str]:
+        """Agentes de `profile.json`. El del enriquecimiento (E6) solo sale con el monitor en
+        `hybrid`, el único que lo usa: así el `profile.json` de las demás ejecuciones no cambia."""
+        names = list(self._raw["agents"])
+        if "enrich" in names and self.agent("monitor").engine != "hybrid":
+            names.remove("enrich")
+        return names
 
     def chat_switch(self, name: str) -> bool:
         """Interruptor `chat.<name>` (Fase 15.1: `alert_phases`, `monitor_decisions`); sin la

@@ -167,6 +167,8 @@ def load_run(source: Source, folder: Path) -> Run:
             label = labels.get(payload.get("alert_id") or "")
             label = label or by_detection.get(payload.get("detection_id", ""), NO_LABEL)
             run.ends.setdefault(label, []).append(event)
+        elif kind == "AlertEnriched":  # E6 (híbrido): la interpretación del LLM, bajo su alerta
+            run.ends.setdefault(labels.get(payload.get("alert_id", ""), NO_LABEL), []).append(event)
         elif kind == "OperatorMessage":
             questions[event["event_id"]] = (payload["conversation_id"], payload["text"])
         elif kind == "AgentReply":
@@ -199,6 +201,24 @@ def alert_block(event: dict[str, Any]) -> list[str]:
             f"  **{name}**",
             "",
             *("  " + q for q in quote(str(p.get(name) or "")).splitlines()),
+            "",
+        ]
+    return lines
+
+
+def enriched_block(event: dict[str, Any]) -> list[str]:
+    """E6: la interpretación del LLM de una alerta de la tabla (`AlertEnriched`)."""
+    p = event["payload"]
+    head = (
+        f"- **{clock(event['sim_time'])}** · interpretation (LLM) of `{p.get('alert_id')}` · "
+        f"alert {p.get('alert_status')}"
+    )
+    lines = [head, "", *("  " + q for q in quote(str(p.get("text") or "")).splitlines()), ""]
+    hyp = p.get("hypothesis")
+    if hyp:
+        lines += [
+            f"  hypothesis (not a diagnosis): `{hyp.get('cause')}` · confidence "
+            f"`{hyp.get('confidence')}` · evidence {', '.join(hyp.get('evidence_event_ids', []))}",
             "",
         ]
     return lines
@@ -243,11 +263,12 @@ def render(scenarios: list[str], by_scenario: dict[str, list[Run]], missing: lis
                 if not events:
                     out += ["_no alert, closure or acknowledgement_", ""]
                 for event in events:
-                    out += (
-                        alert_block(event)
-                        if event["type"] == "AnomalyDetected"
-                        else end_block(event)
-                    )
+                    if event["type"] == "AnomalyDetected":
+                        out += alert_block(event)
+                    elif event["type"] == "AlertEnriched":
+                        out += enriched_block(event)
+                    else:
+                        out += end_block(event)
         out += ["### Chats", ""]
         questions: list[tuple[str, str]] = []
         for run in runs:

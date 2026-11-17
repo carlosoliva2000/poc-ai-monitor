@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { AgentToolCall, Envelope } from './contracts.ts'
-import { callsByCause, chatEntries, groupByWarning, type ToolCallEvent } from './derive.ts'
+import type { AgentToolCall, Anomaly, Envelope } from './contracts.ts'
+import { callsByCause, chatEntries, enrichmentViews, groupByWarning, type ToolCallEvent } from './derive.ts'
 
 const base = { asset: null, event_time: '2026-10-20T10:00:01Z', ingestion_time: '2026-10-20T10:00:01.000Z', ephemeral: false }
 const call = (id: string, cause: string, agent: AgentToolCall['agent'], index: number): ToolCallEvent => ({
@@ -58,4 +58,20 @@ test('E6: las respuestas del monitor van bajo su aviso y lo demás queda arriba'
   assert.deepEqual(top.map((e) => e.event_id), ['det-0001', 'det-0002', 'ai-0003'])
   assert.deepEqual(responses.get('det-0001')?.map((e) => e.event_id), ['ai-0001'])
   assert.deepEqual(responses.get('det-0002')?.map((e) => e.event_id), ['ai-0002'])
+})
+
+test('E6: la interpretación del LLM de cada alerta de la tabla (híbrido)', () => {
+  const ev = (id: string, type: string, payload: object): Envelope =>
+    ({ ...base, event_id: id, topic: 't', type, source: 'ai-enricher', seq: 1, sim_time: 1, causation_id: null, payload }) as unknown as Envelope
+  const alert = (id: string, extra: Partial<Anomaly> = {}) => ({ alert_id: id, decided_by: 'table', fallback: false, ...extra }) as Anomaly
+  const enriched = ev('ai-0009', 'AlertEnriched', { alert_id: 'ai-0001', text: 'Wind drift.', hypothesis: null })
+  // sin ningún AlertEnriched no es el híbrido: nada que mostrar
+  assert.deepEqual(enrichmentViews([])(alert('ai-0001')), { state: 'none' })
+  const view = enrichmentViews([enriched])
+  assert.equal(view(alert('ai-0001')).state, 'published')
+  assert.equal(view(alert('ai-0002')).state, 'pending')
+  assert.equal(view(alert('ai-0003', { decided_by: 'llm' })).state, 'none')
+  assert.equal(view(alert('ai-0004', { fallback: true })).state, 'none')
+  const done = enrichmentViews([enriched, ev('ai-0010', 'ReportGenerated', {})])
+  assert.equal(done(alert('ai-0002')).state, 'missing')
 })

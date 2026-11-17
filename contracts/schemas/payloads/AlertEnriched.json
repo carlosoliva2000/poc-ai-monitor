@@ -1,0 +1,108 @@
+{
+  "$defs": {
+    "AlertStatus": {
+      "enum": [
+        "open",
+        "closed",
+        "superseded"
+      ],
+      "title": "AlertStatus",
+      "type": "string"
+    },
+    "Cause": {
+      "description": "Causas del diagnóstico (`REPLAY` queda reservada para el futuro).",
+      "enum": [
+        "WIND",
+        "HIJACK",
+        "GPS_SPOOFING",
+        "SENSOR_FAULT",
+        "GPS_JAMMING",
+        "UNKNOWN"
+      ],
+      "title": "Cause",
+      "type": "string"
+    },
+    "DecidedBy": {
+      "description": "Quién decidió una alerta (v0.19): la tabla de decisión del módulo o el LLM del monitor.",
+      "enum": [
+        "table",
+        "llm"
+      ],
+      "title": "DecidedBy",
+      "type": "string"
+    },
+    "EnrichHypothesis": {
+      "additionalProperties": false,
+      "description": "Hipótesis del LLM en una alerta `UNKNOWN` del híbrido (v0.19): **no es un diagnóstico**.\nCausa de la lista cerrada (nunca `UNKNOWN`), confianza de 0,4 como mucho y evidencias que el\nmódulo consultó al decidir la alerta.",
+      "properties": {
+        "cause": {
+          "$ref": "#/$defs/Cause"
+        },
+        "confidence": {
+          "maximum": 0.4,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "evidence_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Event Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "cause",
+        "confidence",
+        "evidence_event_ids"
+      ],
+      "title": "EnrichHypothesis",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Interpretación del LLM de una alerta que decidió la tabla (`monitor.engine: hybrid`,\nv0.19). Llega después de la alerta y no la cambia: causa, severidad, confianza y fase son las\nde la tabla. `alert_status` es el estado de la alerta al publicarse. El `causation_id` del\nsobre es el `alert_id`.",
+  "properties": {
+    "alert_id": {
+      "title": "Alert Id",
+      "type": "string"
+    },
+    "text": {
+      "minLength": 1,
+      "title": "Text",
+      "type": "string"
+    },
+    "hypothesis": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EnrichHypothesis"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "decided_by": {
+      "$ref": "#/$defs/DecidedBy"
+    },
+    "as_of_sim_time": {
+      "title": "As Of Sim Time",
+      "type": "number"
+    },
+    "alert_status": {
+      "$ref": "#/$defs/AlertStatus"
+    }
+  },
+  "required": [
+    "alert_id",
+    "text",
+    "hypothesis",
+    "decided_by",
+    "as_of_sim_time",
+    "alert_status"
+  ],
+  "title": "AlertEnriched",
+  "type": "object"
+}

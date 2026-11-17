@@ -9,6 +9,7 @@ from .enums import (
     ActivityState,
     AgentName,
     AlertPhase,
+    AlertStatus,
     Cause,
     CommandIssuer,
     CompletionReason,
@@ -275,6 +276,42 @@ class AlertClosed(Payload):
     as_of_sim_time: float
 
 
+class EnrichHypothesis(Payload):
+    """Hipótesis del LLM en una alerta `UNKNOWN` del híbrido (v0.19): **no es un diagnóstico**.
+    Causa de la lista cerrada (nunca `UNKNOWN`), confianza de 0,4 como mucho y evidencias que el
+    módulo consultó al decidir la alerta."""
+
+    cause: Cause
+    confidence: float = Field(ge=0, le=0.4)
+    evidence_event_ids: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check_cause(self) -> "EnrichHypothesis":
+        if self.cause == Cause.UNKNOWN:
+            raise ValueError("a hypothesis names a cause other than UNKNOWN")
+        return self
+
+
+class AlertEnriched(Payload):
+    """Interpretación del LLM de una alerta que decidió la tabla (`monitor.engine: hybrid`,
+    v0.19). Llega después de la alerta y no la cambia: causa, severidad, confianza y fase son las
+    de la tabla. `alert_status` es el estado de la alerta al publicarse. El `causation_id` del
+    sobre es el `alert_id`."""
+
+    alert_id: str
+    text: str = Field(min_length=1)
+    hypothesis: EnrichHypothesis | None
+    decided_by: DecidedBy
+    as_of_sim_time: float
+    alert_status: AlertStatus
+
+    @model_validator(mode="after")
+    def _check_decided_by(self) -> "AlertEnriched":
+        if self.decided_by != DecidedBy.LLM:
+            raise ValueError("an enrichment is written by the llm")
+        return self
+
+
 class DetectionAcknowledged(Payload):
     """Respuesta del monitor a una detección que no genera una alerta nueva: `alert_id` es la
     alerta abierta a la que pertenece, o `None` si no hace falta alerta. `fallback: true` si lo
@@ -391,6 +428,7 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.DETECTION_ACKNOWLEDGED: DetectionAcknowledged,
     EventType.ANOMALY_DETECTED: AnomalyDetected,
     EventType.ALERT_CLOSED: AlertClosed,
+    EventType.ALERT_ENRICHED: AlertEnriched,
     EventType.REPORT_GENERATED: ReportGenerated,
     EventType.OPERATOR_MESSAGE: OperatorMessage,
     EventType.AGENT_REPLY: AgentReply,

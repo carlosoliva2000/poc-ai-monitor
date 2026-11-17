@@ -2,6 +2,7 @@ import type {
   AgentToolCall,
   Anomaly,
   AlertClosed,
+  AlertEnriched,
   Battery,
   Detection,
   DetectionAcknowledged,
@@ -281,4 +282,34 @@ export function chatEntries(
     }
   }
   return out
+}
+
+/** v0.19 (E6, híbrido): estado de la interpretación del LLM de una alerta de la tabla. `none`:
+ *  no hay híbrido en la ejecución (o la alerta no es de la tabla); `pending`: aún puede llegar;
+ *  `missing`: el informe ya está y no llegó (no pasó las comprobaciones o no se pidió). El
+ *  híbrido se reconoce por el primer `AlertEnriched` de la ejecución. */
+export type EnrichmentView =
+  | { state: 'none' }
+  | { state: 'pending' }
+  | { state: 'missing' }
+  | { state: 'published'; enrichment: AlertEnriched }
+
+export function enrichmentViews(events: Envelope[]): (alert: Anomaly) => EnrichmentView {
+  const byAlert = new Map<string, AlertEnriched>()
+  let reportDone = false
+  for (const e of events) {
+    if (e.type === 'AlertEnriched') {
+      const p = e.payload as unknown as AlertEnriched
+      byAlert.set(p.alert_id, p)
+    } else if (e.type === 'ReportGenerated') {
+      reportDone = true
+    }
+  }
+  const hybrid = byAlert.size > 0
+  return (alert) => {
+    const found = byAlert.get(alert.alert_id)
+    if (found) return { state: 'published', enrichment: found }
+    if (!hybrid || alert.decided_by !== 'table' || alert.fallback) return { state: 'none' }
+    return reportDone ? { state: 'missing' } : { state: 'pending' }
+  }
 }

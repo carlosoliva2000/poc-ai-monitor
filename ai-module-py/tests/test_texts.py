@@ -183,3 +183,19 @@ def test_report_with_annex_gives_mission_and_annex_sections() -> None:
     assert sections["Technical recommendations"] == "1. Reduce the delay."
     assert "Monitor figures" not in "".join(sections.values())
     assert seen["A1"][1] == "Wind pushed it."
+
+
+def test_an_interpretation_goes_under_its_alert_with_its_hypothesis(tmp_path: Path) -> None:
+    """E6 (híbrido): el `AlertEnriched` sale con la alerta que interpreta."""
+    make_run(tmp_path / "a", "actual", "s")
+    folder = tmp_path / "a" / "runs" / "actual" / "demo" / "r1"
+    lines = (folder / "timeline.jsonl").read_text().splitlines()
+    enriched = event("AlertEnriched", 9, 130.0, "ai-9", alert_id="ai-1", text="Wind drift.",
+                     hypothesis={"cause": "HIJACK", "confidence": 0.3,
+                                 "evidence_event_ids": ["lnk-0001"]},
+                     decided_by="llm", as_of_sim_time=106.8, alert_status="open")  # fmt: skip
+    (folder / "timeline.jsonl").write_text("\n".join([*lines, json.dumps(enriched)]), "utf-8")
+    out = texts.build([texts.parse_source(f"x={tmp_path / 'a'}")], ["demo"], 1)
+    block = out[out.index("#### x · A1") :]
+    assert "interpretation (LLM) of `ai-1` · alert open" in block and "> Wind drift." in block
+    assert "hypothesis (not a diagnosis): `HIJACK` · confidence `0.3` · evidence lnk-0001" in block

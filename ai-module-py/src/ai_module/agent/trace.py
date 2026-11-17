@@ -112,6 +112,10 @@ class InvocationTrace:
     """E6: sha256 del archivo de la tabla de decisión con el que se decidió."""
     table: list[dict[str, Any]] = field(default_factory=list)
     """E6: por aviso, la fila de cada tabla, sus entradas, las salidas y el resultado."""
+    enrich: dict[str, Any] = field(default_factory=dict)
+    """E6 (híbrido, `agent: enrich`): la alerta, la fila, el texto y la hipótesis, si se publicó
+    (`published`), se descartó (`rejected`, con los motivos) o no se pidió (`skipped`), y las
+    latencias de reloj y simuladas desde la alerta. Vacío en los demás agentes."""
 
     def to_dict(self) -> dict[str, Any]:
         data = {k: v for k, v in self.__dict__.items() if k != "calls"}

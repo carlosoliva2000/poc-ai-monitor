@@ -419,3 +419,23 @@ def test_sensor_episodes_are_optional_in_the_scenario() -> None:
     assert e.labeled and (e.level(0.5), e.level(2.0), e.level(5.0), e.level(9.0)) == (
         None, 0.5, 1.0, 0.0,
     )  # fmt: skip
+
+
+def test_alert_enriched_is_written_by_the_llm_and_its_hypothesis_is_bounded() -> None:
+    """E6 (v0.19): la interpretación del híbrido; la hipótesis no es un diagnóstico."""
+    from poc_contracts.payloads import AlertEnriched
+    from poc_contracts.topics import EVENT_SPECS, TOOL_SOURCE_TO_ENVELOPE_SOURCE
+
+    base = {"alert_id": "ai-0003", "text": "t", "decided_by": "llm", "as_of_sim_time": 84.0,
+            "alert_status": "open"}  # fmt: skip
+    hyp = {"cause": "GPS_SPOOFING", "confidence": 0.3, "evidence_event_ids": ["rad-000042"]}
+    assert AlertEnriched(**base, hypothesis=hyp).hypothesis is not None
+    for bad in ({**hyp, "confidence": 0.5}, {**hyp, "cause": "UNKNOWN"},
+                {**hyp, "evidence_event_ids": []}):  # fmt: skip
+        with pytest.raises(ValidationError):
+            AlertEnriched(**base, hypothesis=bad)
+    with pytest.raises(ValidationError, match="written by the llm"):
+        AlertEnriched(**{**base, "decided_by": "table"}, hypothesis=None)
+    spec = EVENT_SPECS[EventType.ALERT_ENRICHED]
+    assert spec.source == "ai-enricher" and not spec.ephemeral
+    assert spec.source not in TOOL_SOURCE_TO_ENVELOPE_SOURCE.values()  # ninguna tool lo devuelve

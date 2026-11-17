@@ -11,7 +11,7 @@ import type {
   DetectionCleared,
   Envelope,
 } from '@/lib/contracts'
-import { callsByCause, groupByWarning, type Derived, type ToolCallEvent } from '@/lib/derive'
+import { callsByCause, enrichmentViews, groupByWarning, type Derived, type EnrichmentView, type ToolCallEvent } from '@/lib/derive'
 import { stripFieldValues } from '@/lib/clean-text'
 import { CAUSE_LABEL, CHECK_LABEL, episodePath, formatT, PHASE_LABEL, phaseOf, SEVERITY_LABEL, SOURCE_LABEL } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -49,6 +49,7 @@ export function MonitorFeed({ events, data, activity, toolCalls }: Props) {
   const busy = Boolean(activity.monitor)
   const callsByDetection = callsByCause(toolCalls, ['monitor'])
   const { top, responses } = groupByWarning(feed)
+  const enrichmentOf = enrichmentViews(events)
 
   useEffect(() => {
     const el = scrollRef.current
@@ -76,11 +77,11 @@ export function MonitorFeed({ events, data, activity, toolCalls }: Props) {
         )}
         {top.map((e) => (
           <div key={e.event_id} className="flex flex-col gap-2" data-testid="warning-group">
-            <FeedEntry event={e} data={data} byId={byId} />
+            <FeedEntry event={e} data={data} byId={byId} enrichmentOf={enrichmentOf} />
             {pendingIds.has(e.event_id) && <Analyzing event={e} busy={busy} />}
             <Invocation calls={callsByDetection.get(e.event_id)} />
             {responses.get(e.event_id)?.map((r) => (
-              <FeedEntry key={r.event_id} event={r} data={data} byId={byId} />
+              <FeedEntry key={r.event_id} event={r} data={data} byId={byId} enrichmentOf={enrichmentOf} />
             ))}
           </div>
         ))}
@@ -140,7 +141,9 @@ function Analyzing({ event, busy }: { event: Envelope; busy: boolean }) {
   )
 }
 
-function FeedEntry({ event, data, byId }: { event: Envelope; data: Derived; byId: Map<string, Envelope> }) {
+type EnrichmentOf = (alert: Anomaly) => EnrichmentView
+
+function FeedEntry({ event, data, byId, enrichmentOf }: { event: Envelope; data: Derived; byId: Map<string, Envelope>; enrichmentOf: EnrichmentOf }) {
   switch (event.type) {
     case 'DetectionRaised':
     case 'DetectionUpdated': {
@@ -172,7 +175,7 @@ function FeedEntry({ event, data, byId }: { event: Envelope; data: Derived; byId
       )
     }
     case 'AnomalyDetected':
-      return <AlertCard event={event as Envelope<Anomaly>} data={data} byId={byId} />
+      return <AlertCard event={event as Envelope<Anomaly>} data={data} byId={byId} enrichment={enrichmentOf(event.payload as unknown as Anomaly)} />
     case 'AlertClosed': {
       const p = event.payload as unknown as AlertClosed
       const ep = data.alerts.get(p.alert_id)?.episode
@@ -205,7 +208,7 @@ function FeedEntry({ event, data, byId }: { event: Envelope; data: Derived; byId
   }
 }
 
-function AlertCard({ event, data, byId }: { event: Envelope<Anomaly>; data: Derived; byId: Map<string, Envelope> }) {
+function AlertCard({ event, data, byId, enrichment }: { event: Envelope<Anomaly>; data: Derived; byId: Map<string, Envelope>; enrichment: EnrichmentView }) {
   const a = event.payload
   const view = data.alerts.get(a.alert_id)
   const responds = event.causation_id ? byId.get(event.causation_id) : undefined
@@ -236,6 +239,7 @@ function AlertCard({ event, data, byId }: { event: Envelope<Anomaly>; data: Deri
           {decidedBy(a)}
         </p>
       )}
+      <Interpretation view={enrichment} />
       <details className="group text-sm">
         <summary className="cursor-pointer list-none text-xs font-medium text-primary [&::-webkit-details-marker]:hidden">
           <span className="mr-1 inline-block transition-transform group-open:rotate-90">›</span>
@@ -271,6 +275,29 @@ function AlertCard({ event, data, byId }: { event: Envelope<Anomaly>; data: Deri
         </div>
       </details>
     </article>
+  )
+}
+
+/** v0.19 (E6, híbrido): la interpretación del LLM bajo la alerta de la tabla. La hipótesis va
+ *  aparte, en otro color y nunca en la cabecera: no es un diagnóstico. */
+function Interpretation({ view }: { view: EnrichmentView }) {
+  if (view.state === 'none') return null
+  return (
+    <div className="flex flex-col gap-1 border-l-2 border-muted-foreground/40 pl-2" data-testid="interpretation">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Interpretation (LLM)</span>
+      {view.state === 'pending' && <span className="text-xs text-muted-foreground">pending…</span>}
+      {view.state === 'missing' && <span className="text-xs text-muted-foreground">not published (did not pass the checks or was not requested)</span>}
+      {view.state === 'published' && (
+        <>
+          <p className="text-sm leading-relaxed text-foreground text-pretty">{view.enrichment.text}</p>
+          {view.enrichment.hypothesis && (
+            <p className="rounded-sm bg-warning/15 px-1.5 py-0.5 text-xs text-foreground" data-testid="hypothesis">
+              Hypothesis (LLM, not a diagnosis): {CAUSE_LABEL[view.enrichment.hypothesis.cause]} · confidence {view.enrichment.hypothesis.confidence.toFixed(1)} · evidence {view.enrichment.hypothesis.evidence_event_ids.join(', ')}
+            </p>
+          )}
+        </>
+      )}
+    </div>
   )
 }
 

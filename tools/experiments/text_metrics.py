@@ -26,7 +26,6 @@ import importlib.util
 import json
 import re
 import sys
-import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -38,6 +37,14 @@ assert _spec and _spec.loader
 texts = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("texts", texts)
 _spec.loader.exec_module(texts)
+
+from ai_module.text_checks import (  # noqa: E402  (las comprobaciones viven en el módulo)
+    ID_RE,
+    find_names,
+    norm,
+    prompt_numbers,
+    unsupported_figures,
+)
 
 SCENARIOS = ("nominal", "wind", "spoofing", "hijack", "faults", "demo")
 ASSET_DIRS = ("agent-assets", "agent-assets-v13")
@@ -99,46 +106,10 @@ COMPASS = {
         ],
     )
 }
-ID_RE = re.compile(r"\b(?:gps|rad|met|lnk|bat|mis|det|ai|chk|act|tcl|ops|sim|plr)-\d{3,6}\b")
-DASHES = dict.fromkeys(
-    map(ord, "\u2010\u2011\u2012\u2013\u2014\u2015\u2212\ufe58\ufe63\uff0d"), "-"
-)
 NUM = r"(\d+(?:\.\d+)?)"
 # Unidad de longitud: «m», «meter(s)» y «metre(s)» (el 32B escribe «9.9 meters»), no «m/s».
 METRES = r"\s*(?:m|meters?|metres?)\b(?!/)"
 GAP = r"(?:[^.;]|(?<=\d)\.(?=\d))"  # texto hasta el fin de la frase, con decimales
-ENUMS = [
-    "WIND",
-    "HIJACK",
-    "GPS_SPOOFING",
-    "SENSOR_FAULT",
-    "GPS_JAMMING",
-    "ROUTE_DEVIATION",
-    "SOURCE_DISCREPANCY",
-    "SOURCE_SILENT",
-    "GPS_DEGRADED",
-]
-TOOLS = [
-    "get_events",
-    "get_mission_plan",
-    "get_track_metrics",
-    "get_my_alerts",
-    "get_flight_summary",
-    "load_skill",
-    "publish_alert",
-    "acknowledge_detection",
-    "close_alert",
-]
-SKILLS = ("route-deviation", "source-discrepancy", "report-format")
-MODULE_FIELDS = [
-    "alert_id",
-    "detection_id",
-    "detection_ids",
-    "evidence_event_ids",
-    "as_of_sim_time",
-    "sim_time",
-    "tool_choice",
-]
 
 
 # --- Recomendaciones genéricas y sin acción (Fase 14.2) ----------------------------------------
@@ -334,36 +305,6 @@ def recovery_time_mismatch(
 # están en el prompt de la llamada del informe de misión: umbrales, plazos o límites inventados. No
 # ve acciones inventadas sin cifra («actualiza el firmware»): eso es de la rúbrica.
 
-UNIT_FIGURE_RE = re.compile(
-    r"(?<![\w.+:-])(\d+(?:\.\d+)?)\s*(?:%|°|(?:minutes?|min|m/s|km/h|km|meters?|metres?|seconds?|ms|hz|dbm|db|m|s)"
-    r"(?![\w/]))",
-    re.I,
-)
-ANY_NUMBER_RE = re.compile(r"(?<![\w.+:-])\d+(?:\.\d+)?")
-APPROX_RE = re.compile(r"(?:about|approximately|around|roughly|~|circa)\s*$", re.I)
-
-
-def prompt_numbers(text: str) -> set[float]:
-    """Todas las cifras de un texto (sin ids ni horas T+mm:ss, que llevan guion o dos puntos)."""
-    return {float(m.group(0)) for m in ANY_NUMBER_RE.finditer(norm(text))}
-
-
-def unsupported_figures(text: str, known: set[float]) -> list[str]:
-    """Cifras con unidad del texto que no están entre las cifras recibidas (`known`). Un entero
-    precedido de «about», «around»… cuenta como respaldado si redondea una cifra recibida."""
-    plain = norm(text)
-    found: list[str] = []
-    for m in UNIT_FIGURE_RE.finditer(plain):
-        value = float(m.group(1))
-        if any(abs(value - k) <= 0.05 for k in known):
-            continue
-        approx = APPROX_RE.search(plain[max(0, m.start() - 14) : m.start()])
-        if approx and value.is_integer() and any(round(k) == value for k in known):
-            continue
-        found.append(m.group(0).strip())
-    return found
-
-
 # --- El cierre dice qué volvió a la normalidad de la causa (Fase 14.3) ---------------------------
 # Heurística léxica en inglés sobre el motivo de un `AlertClosed`: un secuestro se cierra con el
 # enlace (controlador, latencia, señal); una causa del GPS, con GPS y radar; un fallo de sensor, con
@@ -511,59 +452,6 @@ def monitor_talk(text: str) -> list[str]:
 
 
 # --- Normalización y nombres internos ----------------------------------------------------------
-
-
-def norm(text: str) -> str:
-    """Unicode comparable: NFKC, guiones y espacios especiales a ASCII."""
-    text = unicodedata.normalize("NFKC", text).translate(DASHES)
-    return re.sub(r"\s", " ", text)
-
-
-def internal_field_names() -> tuple[set[str], set[str]]:
-    """(campos con guion bajo, nombres con punto) de los hechos y de los `checks`, sacados de los
-    modelos del contrato."""
-    from poc_contracts import payloads, tools  # noqa: PLC0415
-
-    underscored: set[str] = set(MODULE_FIELDS)
-    dotted: set[str] = set()
-    models = {
-        "": tools.TrackMetrics,
-        "wind": tools.WindStat,
-        "gps_radar": tools.GpsRadarFact,
-        "now": tools.NowFacts,
-    }
-    for prefix, model in models.items():
-        for name in model.model_fields:
-            if "_" in name:
-                underscored.add(name)
-            if prefix:
-                dotted.add(f"{prefix}.{name}")
-    underscored |= set(payloads.AlertChecks.model_fields)
-    underscored |= {"now"} - {"now"}  # `now` es una palabra corriente: no se cuenta
-    return underscored, dotted
-
-
-UNDERSCORED, DOTTED = internal_field_names()
-NAME_RE = re.compile(
-    r"(?<![\w.])("
-    + "|".join(
-        re.escape(n)
-        for n in sorted([*TOOLS, *SKILLS, *UNDERSCORED, *DOTTED], key=len, reverse=True)
-    )
-    + r")(?![\w])"
-)
-ENUM_RE = re.compile(r"\b(" + "|".join(ENUMS) + r")\b")
-BOOL_RE = re.compile(
-    r"(?:[=:]\s*|\bis\s+|\bare\s+|`)(true|false)\b(?!\s+(?:alarm|positive|reading))"
-)
-
-
-def find_names(text: str) -> tuple[list[str], list[str], list[str]]:
-    plain = norm(text)
-    names = [m.group(1) for m in NAME_RE.finditer(plain)]
-    enums = [m.group(1) for m in ENUM_RE.finditer(plain)]
-    bools = [m.group(1) for m in BOOL_RE.finditer(plain)]
-    return names, enums, bools
 
 
 # --- Frases copiadas ---------------------------------------------------------------------------

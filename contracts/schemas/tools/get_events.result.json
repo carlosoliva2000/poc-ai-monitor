@@ -57,6 +57,7 @@
         "DetectionAcknowledged",
         "AnomalyDetected",
         "AlertClosed",
+        "AlertEnriched",
         "ReportGenerated",
         "OperatorMessage",
         "AgentReply",

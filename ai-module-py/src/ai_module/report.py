@@ -20,6 +20,7 @@ from .agent.assets import render
 from .agent.engine import AgentEngine, ToolError, compact_json
 from .agent.llm import Messages
 from .agent.trace import InvocationTrace
+from .enrich import REPORT_WAIT_S, Enricher
 from .monitor import Monitor
 from .outbox import format_t
 from .report_facts import (
@@ -45,6 +46,9 @@ class ReportAgent:
         self.monitor = monitor
         self.config = rt.assets.agent("report")
         self.markdown: str | None = None
+        self.enricher: Enricher | None = None
+        """E6 (híbrido): el informe espera su cola (con tope) y usa las interpretaciones
+        publicadas, que ya pasaron las comprobaciones del módulo."""
 
     def reset(self) -> None:
         self.markdown = None
@@ -53,6 +57,11 @@ class ReportAgent:
         """Espera a que el monitor termine y escribe el informe. Devuelve el Markdown."""
         rt, cfg = self.rt, self.config
         await self.monitor.wait_idle()
+        enrich_wait: dict[str, Any] = {}
+        if self.enricher is not None:
+            t0 = time.monotonic()
+            done = await self.enricher.wait_idle(REPORT_WAIT_S)
+            enrich_wait = {"waited_s": round(time.monotonic() - t0, 3), "complete": done}
         invocation_id = rt.ids.next("inv")
         now = rt.clock.now()
         trace = InvocationTrace(
@@ -62,6 +71,7 @@ class ReportAgent:
             as_of=now,
             wall_start=_wall_iso(),
         )
+        trace.enrich = enrich_wait
         started = time.monotonic()
         await rt.activity(AgentName.REPORT, ActivityState.STARTED, invocation_id, finished_id)
         markdown = ""
@@ -83,7 +93,10 @@ class ReportAgent:
             "flight_summary": compact_json(summary) if summary else "not available",
             "labels": ", ".join(a.label for a in facts.anomalies) or "none",
             "anomalies": anomalies_for_llm(
-                facts, mission=narrative.annex, records=rt.trace.records
+                facts,
+                mission=narrative.annex,
+                records=rt.trace.records,
+                interpretations=self.enricher.texts if self.enricher else None,
             ),
             "assessment_facts": assessment_facts(facts, rt.trace.records, aids),
         }

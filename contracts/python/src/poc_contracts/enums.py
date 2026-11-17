@@ -69,6 +69,7 @@ class EventType(StrEnum):
     DETECTION_ACKNOWLEDGED = "DetectionAcknowledged"
     ANOMALY_DETECTED = "AnomalyDetected"
     ALERT_CLOSED = "AlertClosed"
+    ALERT_ENRICHED = "AlertEnriched"
     REPORT_GENERATED = "ReportGenerated"
     OPERATOR_MESSAGE = "OperatorMessage"
     AGENT_REPLY = "AgentReply"

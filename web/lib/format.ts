@@ -88,6 +88,7 @@ export function groupOf(e: Envelope): Group {
     case 'ai-detector':
       return 'detector'
     case 'ai-monitor':
+    case 'ai-enricher':
       return 'monitor'
     case 'ai-report':
       return 'report'
@@ -153,6 +154,8 @@ export function payloadSummary(e: Envelope): string {
       return `${p.alert_id} ${p.cause} (${p.severity}) ${p.summary}`
     case 'AlertClosed':
       return `${p.alert_id} ${stripFieldValues(String(p.reason))}`
+    case 'AlertEnriched':
+      return `${p.alert_id} interpretation (LLM): ${p.text}`
     case 'DetectionAcknowledged':
       return `${p.detection_id} → ${p.alert_id ?? 'no alert'}`
     case 'FaultInjected':

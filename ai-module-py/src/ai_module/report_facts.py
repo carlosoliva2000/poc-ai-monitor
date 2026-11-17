@@ -432,7 +432,10 @@ def describe_alert_phases(facts: ReportFacts) -> str:
 
 
 def anomalies_for_llm(
-    facts: ReportFacts, mission: bool = False, records: list[dict[str, Any]] | None = None
+    facts: ReportFacts,
+    mission: bool = False,
+    records: list[dict[str, Any]] | None = None,
+    interpretations: dict[str, str] | None = None,
 ) -> str:
     """Cada anomalía con lo que dijo el monitor y lo que vio el detector, para «qué se vio».
     Para el informe de misión (`mission`) sin la hora de la primera alerta ni las de la cadena
@@ -465,6 +468,9 @@ def anomalies_for_llm(
                 )
         for alert in anomaly.chain:
             lines.append(_alert_line(alert, mission=mission))
+            text = (interpretations or {}).get(alert.alert_id)
+            if text:  # E6 (híbrido): la interpretación publicada, ya comprobada por el módulo
+                lines.append(f'  · Interpretation (written by a language model, checked): "{text}"')
         if len(anomaly.chain) > 1:
             lines.append(f"- Changes from the first alert to the last: {anomaly.changes}")
         blocks.append("\n".join(lines))
