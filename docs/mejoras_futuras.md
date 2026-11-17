@@ -126,3 +126,23 @@ Para ver hasta dónde llega un modelo potente con **todas las ayudas apagadas** 
 3. `claude-opus-5-5` (4 $ / 20 $) **solo como techo**, si Sonnet también falla, y **avisando antes** de usarlo.
 
 **Método.** En cada modelo: primero con **todas las ayudas apagadas** (los cinco interruptores de `monitor.*`, `chat.tools_enabled` y, si se quiere medir también el informe, sin los datos inyectados), **una ejecución por escenario** (repetir solo `demo` o lo que falle) y **usando la caché de prompts**. Si un modelo potente falla, **revisar primero el diseño** (datos que faltan, instrucciones contradictorias o etiquetas discutibles, como F3 de `faults`) antes de encender ninguna ayuda. Medir tokens y coste con lo que ya da `eval.md` (tokens por agente y máximo de prompt); hay que añadirle los tokens de caché y el **coste estimado** con los precios de arriba, y anotarlos en cada `eval.md`.
+
+## Tabla de decisión (tras la E6)
+La tabla de la E6 está congelada (`experiments/e6/table_freeze.json`): nada de esto se aplicó. Cada cambio pide una tabla nueva, con su hash, y repetir el barrido del 2b y un conjunto reservado **nuevo**, porque el de la E6 ya se ha visto. Detalle y cifras en `docs/fases/e6.md`.
+- **Decidir el `monitor.engine` por defecto.** La E6 cumple la regla de decisión (T 23/27 frente a L 22/27 en el reservado; ciclo de vida 4 frente a 44) y propone la tabla con el LLM en el híbrido. Hoy sigue `llm`.
+- **C14, el engaño, debería mirar la distancia GPS–radar y su tendencia**, no la distancia de cada fuente a la ruta (`gps_dev_mean_m < 15`, `radar_minus_gps_now_m > 15`). Falla cuando el engaño va a lo largo del tramo (2b: 8 ❌ y 4 ⚠️), cuando hay viento a la vez (2b, `combo-wind-spoofing`) y cuando el engaño **aleja** el GPS de la ruta y el radar sigue en ella: **`d01/A2` del reservado, el único caso en que L gana a la tabla** (C16 `SENSOR_FAULT`; L, `GPS_SPOOFING` en las dos repeticiones). Visto ya en el 2b (propuestas 3 y 5) y confirmado fuera de la muestra.
+- **C19 (`HIJACK` por el rumbo) con viento notable:** que exija viento no notable o un enlace anómalo, y una fila de viento notable con GPS y radar de acuerdo sin deriva a favor (`WIND` con menos confianza). En el 2b, 2 vientos a lo largo del tramo salían `HIJACK`.
+- **C08 contra el veto del guardrail en la recuperación:** usar el mismo criterio que `recovery_context` (salto y alerta del GPS reciente) sin depender de que GPS y radar coincidan en ese instante.
+- **`gps_loss_open` con una degradación:** que exija `gps_fix_bad`; hoy un `GPS_DEGRADED` con fix se trata como pérdida.
+- **Recuperaciones sin `recovering` que comparten L y T** (reservado: `d02`, engaño lento, y `d05`, engaño con el radar callado): mirar si la ventana del salto del módulo (`recovery_jump_from_module`) los cubre.
+- **Alertas que quedan abiertas tras un ruido** (`n03-ruido-alto`: dos `SENSOR_FAULT` de la tabla siguen abiertas al terminar). Revisar el cierre cuando el aviso llega justo antes del fin del vuelo.
+
+## Detector (visto en la E6)
+- **Viento flojo sostenido sin aviso** (`d03` del reservado, y 19 de las 22 ❌ de viento del 2b): el viento no desvía el dron lo bastante para el umbral de `ROUTE_DEVIATION`. Ningún monitor llega a decidir. Decidir si es un fallo del detector o de la magnitud del escenario.
+
+## Evaluación y herramientas (vistas en la E6)
+- **`text_metrics.py` con la tabla:** saca los hechos de los mensajes del LLM de la traza, que la tabla no tiene, y da «cifras que no cuadran» en las plantillas que casi seguro son falsos positivos (10 en el reservado). Debería sacarlos de `table[].inputs`. Tampoco mide el texto de `AlertEnriched`.
+- **Comparación a ciegas de verdad:** hoy la alerta de H es la plantilla más la interpretación al final, y el estilo la delata. Comparar solo la interpretación de H con la explicación de L, o reescribir las dos con el mismo formato.
+- **`recovery_misses` con la tabla:** sus motivos (`window_without_jump`, `no_metrics`) están pensados para el LLM; con la tabla convendría el motivo de la fila.
+- **`test_run_matrix.py` escribe en `runs/nominal/`:** cada pasada de la suite del módulo deja ejecuciones falsas nuevas (carpetas `runs/nominal/<run_id>/` con perfiles qwen3). Debería escribir en una carpeta temporal (`POC_RUNS_DIR`, que existe desde la E6).
+- **Rechazos que el modelo corrige:** la regla de la E6 los cuenta como errores de ciclo de vida (39 por repetición en L). Separar en las métricas los que acaban bien de los que acaban en fallback.

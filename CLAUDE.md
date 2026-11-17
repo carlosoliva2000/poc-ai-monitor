@@ -58,6 +58,8 @@ Cada carpeta de componente tiene su propio `CLAUDE.md` con lo específico.
 - **Fase 5 · extras.** Solo si Carlos lo pide, de `docs/mejoras_futuras.md`.
 - **Fase 16 · comando de viento del instructor** (contrato v0.18, aditivo): el instructor pone viento en directo desde un panel de la web o con una frase al **agente del instructor** (un LLM que solo propone; el instructor confirma). El comando (`InstructorCommand`, dominio `sim`) **no lo ve el módulo de IA**: el monitor descubre el viento por sus efectos. Programable en el escenario (`commands:`; `nominal-wind-cmd`). Detalle en `docs/fases/fase16.md`.
 
+- **E6 · tabla de decisión frente al LLM** (contrato v0.19, aditivo): `monitor.engine` = `llm` (por defecto, sin cambios), `table` (la tabla de decisión del módulo decide causa, severidad, confianza, fase y ciclo de vida, sin LLM) o `hybrid` (la tabla decide y el LLM añade después una interpretación comprobada, `AlertEnriched`). Perfiles `table` y `hybrid` de `model-profiles/`. **La tabla está congelada** (`experiments/e6/table_freeze.json`, comprobación con `tools/experiments/check_freeze.py`): no se cambia sin un conjunto reservado nuevo. Episodios de degradación del GPS y del enlace en los escenarios. Resultado en el conjunto reservado: tabla 23/27, LLM 22/27, menos errores de ciclo de vida con la tabla. Detalle en `docs/fases/e6.md`.
+
 **Quién decide qué:** `docs/quien_decide_que.md` dice qué decide cada pieza (código, tools, guardrails o modelo) y quién pone la causa en cada caso. Al cerrar cada fase, contrástalo con el código, corrígelo y dile a Carlos qué has cambiado y por qué.
 
 ## Trabajo en paralelo

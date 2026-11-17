@@ -17,6 +17,15 @@ Episodios sin etiqueta (E6, `unlabeled_episodes.json`, solo si el escenario los 
 de su regla y su fuente dentro de su ventana que no van a ninguna etiqueta se cuentan aparte, como
 informativos (no son falsas alarmas); las alertas de esos avisos con causa de ataque o `WIND` sí
 son falsas alarmas, y las de `SENSOR_FAULT` o `UNKNOWN`, no. Sin el fichero, nada cambia.
+
+Avisos dudosos tras un secuestro (E6): un `ROUTE_DEVIATION` (y sus alertas) entre el fin de la
+ventana de evaluación de un secuestro y la vuelta real del dron a la ruta (`truth.json`) no es
+falsa alarma; se informa aparte. Si el dron vuelve antes del fin de la ventana, nada cambia.
+
+«`UNKNOWN` honesto» (E6, con `--honest-unknown`): un aviso con causa `UNKNOWN` sobre una etiqueta
+cuya causa esperada necesita una fuente callada en ese instante por un fallo programado (la
+estación para `WIND`, el radar para `GPS_SPOOFING` y el enlace para `HIJACK`) no cuenta ni como
+acierto ni como fallo; se informa aparte.
 """
 
 import argparse
@@ -568,9 +577,43 @@ class LabelResult:
     first_alert: Event | None
     chains: int
     verdict: str
+    honest: list[Item] = field(default_factory=list)
+    """Avisos con «`UNKNOWN` honesto» (E6, solo con `honest_unknown`): fuera de `raised`."""
 
 
-def analyze_labels(data: RunData) -> list[LabelResult]:
+HONEST_ONLY = "❔"
+"""Veredicto de una etiqueta cuyos avisos son todos «`UNKNOWN` honesto» (E6): aparte."""
+HONEST_SOURCE = {"WIND": "meteo", "GPS_SPOOFING": "radar", "HIJACK": "link"}
+"""Fuente que necesita cada causa para distinguirse (E6, «`UNKNOWN` honesto»)."""
+
+
+def silent_by_scenario(events: list[Event], source: str, t: float) -> bool:
+    """Si un fallo `mute` programado (`origin: scenario`) calla `source` en el instante `t`."""
+    silent = False
+    for e in events:
+        if e["sim_time"] > t:
+            break
+        p = e["payload"]
+        if e["type"] in ("FaultInjected", "FaultCleared") and (
+            p.get("source"),
+            p.get("mode"),
+            p.get("origin"),
+        ) == (source, "mute", "scenario"):
+            silent = e["type"] == "FaultInjected"
+    return silent
+
+
+def is_honest_unknown(data: RunData, label: Label, item: Item) -> bool:
+    source = HONEST_SOURCE.get(label.expected_cause.value)
+    return (
+        source is not None
+        and item.cause() == "UNKNOWN"
+        and "UNKNOWN" not in accepted_causes(label)
+        and silent_by_scenario(data.events, source, item.event["sim_time"])
+    )
+
+
+def analyze_labels(data: RunData, honest_unknown: bool = False) -> list[LabelResult]:
     out = []
     for label in data.labels:
         ok = accepted_causes(label)
@@ -582,6 +625,9 @@ def analyze_labels(data: RunData) -> list[LabelResult]:
             i.kind == "Raised" and i.ambiguous and any(lb is label for lb in i.candidates)
             for i in data.items
         )
+        # E6: ni el «UNKNOWN honesto» (con el interruptor)
+        honest = [i for i in raised if honest_unknown and is_honest_unknown(data, label, i)]
+        raised = [i for i in raised if i not in honest]
         wrong = [i for i in raised if i.cause() not in ok]
         window = label.eval_window
         mine = [i for i in data_items_of(data, label) if not i.ambiguous]
@@ -606,6 +652,8 @@ def analyze_labels(data: RunData) -> list[LabelResult]:
         }
         if ambiguous_only:
             verdict = AMBIGUOUS_ONLY
+        elif honest and not raised:
+            verdict = HONEST_ONLY
         elif alerts and not wrong and raised:
             verdict = "✅"
         elif alerts:
@@ -621,6 +669,7 @@ def analyze_labels(data: RunData) -> list[LabelResult]:
                 min(alerts, key=lambda e: e["sim_time"], default=None),
                 len(roots),
                 verdict,
+                honest,
             )  # fmt: skip
         )
     return out
@@ -667,10 +716,14 @@ def ambiguous_results(data: RunData) -> list[AmbiguousResult]:
 
 def false_alarms(data: RunData) -> tuple[list[Item], list[Event]]:
     """Avisos `Raised` sin etiqueta y alertas fuera de toda ventana de evaluación, sin los de los
-    episodios sin etiqueta (esos se cuentan en `unlabeled_results`)."""
+    episodios sin etiqueta (esos se cuentan en `unlabeled_results`) ni los dudosos tras un
+    secuestro (`doubtful_windows`)."""
     episodes = unlabeled_results(data)
     theirs = {i.detection_id for r in episodes for i in r.detections}
     their_alerts = {a["payload"]["alert_id"] for r in episodes for a in r.alerts}
+    doubtful = doubtful_windows(data)
+    theirs |= {i.detection_id for w in doubtful for i in w.detections}
+    their_alerts |= {a["payload"]["alert_id"] for w in doubtful for a in w.alerts}
     stray_detections = [
         i
         for i in data.items
@@ -683,6 +736,74 @@ def false_alarms(data: RunData) -> tuple[list[Item], list[Event]]:
         and e["payload"]["alert_id"] not in their_alerts
     ]
     return stray_detections, stray_alerts
+
+
+RETURN_TO_ROUTE_M = 10.0
+"""Distancia real a la ruta por debajo de la cual el dron ha vuelto tras un secuestro (E6)."""
+
+
+def route_distance(x: float, y: float, route: list[tuple[float, float]]) -> float:
+    best = float("inf")
+    for (ax, ay), (bx, by) in zip(route, route[1:], strict=False):
+        vx, vy = bx - ax, by - ay
+        length = vx * vx + vy * vy
+        k = max(0.0, min(1.0, ((x - ax) * vx + (y - ay) * vy) / length)) if length else 0.0
+        best = min(best, ((x - ax - k * vx) ** 2 + (y - ay - k * vy) ** 2) ** 0.5)
+    return best
+
+
+@dataclass
+class DoubtfulWindow:
+    """Tramo entre el fin de la ventana de un secuestro y la vuelta real a la ruta (E6)."""
+
+    label: Label
+    start_s: float
+    end_s: float
+    detections: list[Item]
+    alerts: list[Event]
+
+
+def doubtful_windows(data: RunData) -> list[DoubtfulWindow]:
+    """Tramos dudosos tras cada secuestro con sus avisos `ROUTE_DEVIATION` y alertas que, si no,
+    serían falsas alarmas. Sin `truth.json` o `plan.json`, ninguno."""
+    truth_path, plan_path = data.folder.parent / "truth.json", data.folder.parent / "plan.json"
+    hijacks = [lb for lb in data.labels if lb.type == LabelType.HIJACK]
+    if not hijacks or not truth_path.exists() or not plan_path.exists():
+        return []
+    trajectory = json.loads(truth_path.read_text(encoding="utf-8"))["trajectory"]
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    route = [(w["x"], w["y"]) for w in plan["waypoints"]]
+    out = []
+    for lb in hijacks:
+        start = lb.eval_window[1]
+        back = next(
+            (
+                s["t"]
+                for s in trajectory
+                if s["t"] >= lb.end_s and route_distance(s["x"], s["y"], route) <= RETURN_TO_ROUTE_M
+            ),
+            None,
+        )
+        if back is None or back <= start:
+            continue
+        detections = [
+            i
+            for i in data.items
+            if i.kind == "Raised"
+            and i.label is None
+            and i.rule == "ROUTE_DEVIATION"
+            and start < i.event["sim_time"] <= back
+        ]
+        ids = {i.detection_id for i in detections}
+        answered = {r.alert_id for i in detections for r in i.responses if r.alert_id}
+        alerts = [
+            e
+            for e in data.alerts.values()
+            if start < e["sim_time"] <= back
+            and (ids & set(e["payload"]["detection_ids"]) or e["payload"]["alert_id"] in answered)
+        ]
+        out.append(DoubtfulWindow(lb, start, back, detections, alerts))
+    return out
 
 
 UNLABELED_FILE = "unlabeled_episodes.json"
@@ -1148,6 +1269,13 @@ class Evaluation:
     """Avisos ambiguos (E6; vacío si ninguna ventana con reglas comunes se solapa)."""
     enrichment: dict[str, Any] | None = None
     """Enriquecimiento del híbrido (E6; `None` si la ejecución no lo tiene)."""
+    doubtful: list[DoubtfulWindow] = field(default_factory=list)
+    """Tramos dudosos tras un secuestro con algún aviso o alerta (E6)."""
+
+    @property
+    def honest(self) -> list[tuple[Label, Item]]:
+        """Avisos con «`UNKNOWN` honesto» (E6; vacío sin `honest_unknown`)."""
+        return [(r.label, i) for r in self.results for i in r.honest]
 
     @property
     def unlabeled_false(self) -> int:
@@ -1155,9 +1283,9 @@ class Evaluation:
         return sum(len(r.false_alerts) for r in self.unlabeled)
 
 
-def evaluate(folder: Path) -> Evaluation:
+def evaluate(folder: Path, honest_unknown: bool = False) -> Evaluation:
     data = RunData(folder)
-    results = analyze_labels(data)
+    results = analyze_labels(data, honest_unknown)
     stray_detections, stray_alerts = false_alarms(data)
     unlabeled = unlabeled_results(data)
     wait_list = waits(data)
@@ -1185,6 +1313,7 @@ def evaluate(folder: Path) -> Evaluation:
         unlabeled,
         ambiguous_results(data),
         enrichment_stats(data.trace),
+        [w for w in doubtful_windows(data) if w.detections or w.alerts],
     )
 
 
@@ -1200,7 +1329,17 @@ def summary_line(ev: Evaluation) -> str:
         f"{checks_count_text(ev)} checks que no cuadran con las tools · "
         f"{recovery_count_text(ev)} recuperaciones sin fase recovering"
         + (f" · {len(ev.ambiguous)} avisos ambiguos (aparte)" if ev.ambiguous else "")
+        + (f" · {len(ev.honest)} UNKNOWN honestos (aparte)" if ev.honest else "")
+        + (
+            f" · {doubtful_count(ev)} avisos dudosos tras un secuestro (aparte)"
+            if ev.doubtful
+            else ""
+        )
     )
+
+
+def doubtful_count(ev: Evaluation) -> int:
+    return sum(len(w.detections) + len(w.alerts) for w in ev.doubtful)
 
 
 def recovery_count_text(ev: Evaluation) -> str:
@@ -1559,6 +1698,50 @@ def ambiguous_section(ev: Evaluation) -> list[str]:
     return lines
 
 
+def honest_section(ev: Evaluation) -> list[str]:
+    """«`UNKNOWN` honesto» (E6, con `--honest-unknown`): solo si los hay."""
+    if not ev.honest:
+        return []
+    lines = [
+        "",
+        "## «UNKNOWN honesto» (aparte: no cuenta en los veredictos)",
+        "",
+        "Avisos con causa `UNKNOWN` sobre una etiqueta cuya causa esperada necesita una fuente "
+        "callada en ese instante por un fallo programado (estación para `WIND`, radar para "
+        "`GPS_SPOOFING`, enlace para `HIJACK`).",
+        "",
+    ]
+    for label, i in ev.honest:
+        source = HONEST_SOURCE[label.expected_cause.value]
+        lines.append(
+            f"- {label.id} ({label.expected_cause.value}): {i.detection_id} {i.rule} a "
+            f"{fmt_t(i.event['sim_time'])} → UNKNOWN, con `{source}` callada."
+        )
+    return lines
+
+
+def doubtful_section(ev: Evaluation) -> list[str]:
+    """Avisos dudosos tras un secuestro (E6): solo si los hay."""
+    if not ev.doubtful:
+        return []
+    lines = ["", "## Avisos dudosos tras un secuestro (aparte: no son falsas alarmas)", ""]
+    for w in ev.doubtful:
+        lines.append(
+            f"- {w.label.id}: entre el fin de su ventana ({fmt_t(w.start_s)}) y la vuelta a la "
+            f"ruta ({fmt_t(w.end_s)}, a {RETURN_TO_ROUTE_M:g} m o menos):"
+        )
+        lines += [
+            f"  - detección {i.detection_id} {i.rule} a {fmt_t(i.event['sim_time'])}"
+            for i in w.detections
+        ]
+        lines += [
+            f"  - alerta {a['payload']['alert_id']} ({a['payload']['cause']}) a "
+            f"{fmt_t(a['sim_time'])}"
+            for a in w.alerts
+        ]
+    return lines
+
+
 def unlabeled_section(ev: Evaluation) -> list[str]:
     """Episodios sin etiqueta (E6): solo si el escenario los tiene."""
     if not ev.unlabeled:
@@ -1738,6 +1921,8 @@ def render_markdown(ev: Evaluation) -> str:
         responses_section(ev),
         false_section(ev),
         ambiguous_section(ev),
+        honest_section(ev),
+        doubtful_section(ev),
         unlabeled_section(ev),
         enrichment_section(ev),
         contradictions_section(ev),
@@ -1818,7 +2003,32 @@ def to_json(ev: Evaluation) -> dict[str, Any]:
         **({"unlabeled_episodes": unlabeled_json(ev)} if ev.unlabeled else {}),
         **({"ambiguous": ambiguous_json(ev)} if ev.ambiguous else {}),
         **({"enrichment": ev.enrichment} if ev.enrichment else {}),
+        **({"honest_unknown": honest_json(ev)} if ev.honest else {}),
+        **({"doubtful": doubtful_json(ev)} if ev.doubtful else {}),
     }
+
+
+def honest_json(ev: Evaluation) -> list[dict[str, Any]]:
+    return [
+        {"label": lb.id, "detection_id": i.detection_id, "rule": i.rule,
+         "sim_time": i.event["sim_time"]}
+        for lb, i in ev.honest
+    ]  # fmt: skip
+
+
+def doubtful_json(ev: Evaluation) -> list[dict[str, Any]]:
+    return [
+        {
+            "label": w.label.id,
+            "window": [w.start_s, w.end_s],
+            "detections": [i.detection_id for i in w.detections],
+            "alerts": [
+                {"alert_id": a["payload"]["alert_id"], "cause": a["payload"]["cause"]}
+                for a in w.alerts
+            ],
+        }
+        for w in ev.doubtful
+    ]
 
 
 def ambiguous_json(ev: Evaluation) -> list[dict[str, Any]]:
@@ -1854,8 +2064,8 @@ def unlabeled_json(ev: Evaluation) -> list[dict[str, Any]]:
     ]
 
 
-def write_evaluation(folder: Path) -> Evaluation:
-    ev = evaluate(folder)
+def write_evaluation(folder: Path, honest_unknown: bool = False) -> Evaluation:
+    ev = evaluate(folder, honest_unknown)
     (folder / "eval.md").write_text(render_markdown(ev), encoding="utf-8")
     (folder / "eval.json").write_text(
         json.dumps(to_json(ev), ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8"
@@ -1866,8 +2076,11 @@ def write_evaluation(folder: Path) -> Evaluation:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Evalúa una ejecución contra sus etiquetas")
     parser.add_argument("folder", type=Path, help="runs/<escenario>/<run_id>")
+    parser.add_argument(
+        "--honest-unknown", action="store_true", help="E6: el «UNKNOWN honesto», aparte"
+    )
     args = parser.parse_args(argv)
-    ev = write_evaluation(args.folder)
+    ev = write_evaluation(args.folder, args.honest_unknown)
     print(summary_line(ev))
     print(f"→ {args.folder / 'eval.md'}")
     return 0
