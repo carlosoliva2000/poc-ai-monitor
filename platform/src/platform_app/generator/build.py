@@ -111,18 +111,22 @@ def _labels(config: ScenarioConfig, end_s: float) -> LabelsFile:
         if isinstance(f, (GpsEpisode, LinkEpisode)):
             # degradación con fix y con el mismo controlador: fallo del sensor o del enlace, o, en
             # el GPS, interferencia; no es un ataque ni viento (sin frontera por magnitud)
+            window = episode_window(config, f, end_s)
+            if window is None:
+                continue  # lo que la anula la cubre entera: no se ve
+            a, b = window
             label_type, source, rules, cause, also = _DEGRADED[type(f)]
             labels.append(
                 Label(
                     id=f"F{i}",
                     type=label_type,
                     source=source,
-                    start_s=f.start_s,
-                    end_s=end,
+                    start_s=a,
+                    end_s=b,
                     expected_rules=rules,
                     expected_cause=cause,
                     also_accepted_causes=also,
-                    eval_window=(f.start_s, end + EVAL_MARGIN_S),
+                    eval_window=(a, b + EVAL_MARGIN_S),
                 )
             )
             continue
@@ -168,6 +172,40 @@ _DEGRADED: dict[type, tuple[LabelType, SensorSource, list[Rule], Cause, list[Cau
 }
 
 
+def _blockers(
+    config: ScenarioConfig, episode: GpsEpisode | LinkEpisode
+) -> list[tuple[float, float]]:
+    """Ventanas en que el generador anula un episodio: la pérdida del GPS (sin fix) para uno del
+    GPS y el secuestro (manda su `link_hint`) para uno del enlace."""
+    if isinstance(episode, GpsEpisode):
+        return [(f.start_s, f.end_s) for f in config.faults if f.mode == FaultMode.LOSS]
+    h = config.hijack
+    if h is None:
+        return []
+    return [(h.start_s, math.inf if h.end_s is None else h.end_s)]
+
+
+def episode_window(
+    config: ScenarioConfig, episode: GpsEpisode | LinkEpisode, end_s: float
+) -> tuple[float, float] | None:
+    """Tramo del episodio que se ve de verdad (convención de la E6): termina donde empieza lo que
+    lo anula; si eso ya está activo al empezar, empieza cuando termina; `None` si lo cubre entero
+    o si empieza después del fin del vuelo."""
+    blockers = sorted(_blockers(config, episode))
+    end = min(episode.end_s, end_s)
+    a = episode.start_s
+    moved = True
+    while moved:
+        moved = False
+        for bs, be in blockers:
+            if bs <= a < be:
+                a, moved = be, True
+    if a >= end:
+        return None
+    b = min((bs for bs, _ in blockers if a < bs < end), default=end)
+    return a, b
+
+
 def _source_events(config: ScenarioConfig) -> list[FaultConfig | GpsEpisode | LinkEpisode]:
     """Fallos programados y episodios de degradación etiquetados, por inicio (`F1…`): con un
     escenario sin episodios, la numeración de los fallos es la de siempre."""
@@ -185,21 +223,24 @@ def _unlabeled(config: ScenarioConfig, end_s: float) -> UnlabeledEpisodesFile | 
     )
     if not episodes:
         return None
-    out = []
-    for i, e in enumerate(episodes, 1):
+    out: list[UnlabeledEpisode] = []
+    for e in episodes:
+        window = episode_window(config, e, end_s)
+        if window is None:
+            continue
+        a, b = window
         _, source, rules, _, _ = _DEGRADED[type(e)]
-        end = min(e.end_s, end_s)
         out.append(
             UnlabeledEpisode(
-                id=f"U{i}",
+                id=f"U{len(out) + 1}",
                 source=source,
-                start_s=e.start_s,
-                end_s=end,
+                start_s=a,
+                end_s=b,
                 rules=rules,
-                eval_window=(e.start_s, end + EVAL_MARGIN_S),
+                eval_window=(a, b + EVAL_MARGIN_S),
             )
         )
-    return UnlabeledEpisodesFile(episodes=out)
+    return UnlabeledEpisodesFile(episodes=out) if out else None
 
 
 def _plan_file(config: ScenarioConfig, plan: Flight, etas: list[float]) -> PlanFile:

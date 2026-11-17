@@ -63,6 +63,7 @@ La Fase 16 solo pone **viento** (`set_wind` y `cancel_wind`, contrato v0.18). Qu
 - **El módulo de IA mal protegido contra un comando mal etiquetado:** hoy la separación es de suscripción (el módulo no pide el patrón). Si algún día se suscribe a `sim.>`, hay que filtrar `InstructorCommand` en el cliente del bus (lista blanca de `op` ya existe; falta la de topics).
 
 ## Refactorización
+- **Fallos programados solapados de una misma fuente (visto en la E6, paso 2a; arreglar después de la E6):** si dos `faults` de la misma fuente se solapan (salvo `loss` y `mute` del GPS), `Simulator._scheduled_transitions` omite el segundo sin error (estado `skipped`), pero `generator/build.py::_labels` le pone etiqueta igualmente. Arreglo propuesto: rechazarlo al validar el escenario (`ScenarioConfig`), como los episodios de degradación solapados. Ningún escenario del repo lo hace.
 - **Mover la constante `BASE`** (id del waypoint base) de `generator/controller.py` a `poc_contracts`, para que `tools/summary.py` no dependa del generador.
 
 ## Uso exclusivo del LLM por configuración

@@ -238,3 +238,5 @@ experiments/**
 # contra el sobreajuste: el hash queda en git antes de ver el conjunto reservado)
 !experiments/e6/table_freeze.json
 !experiments/e6/decision_table.dmn
+# E6, paso 2b: la rejilla de variantes (las variantes generadas y sus ejecuciones, no)
+!experiments/e6-variantes/grid.yaml

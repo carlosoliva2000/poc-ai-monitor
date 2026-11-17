@@ -190,3 +190,63 @@ def test_overlapping_episodes_of_a_source_are_rejected() -> None:
 def test_without_episodes_the_field_defaults_to_an_empty_list() -> None:
     config = scenario_config("nominal")
     assert config.sensors.gps.episodes == [] and config.sensors.link.episodes == []
+
+
+# --- Convención de la E6: una degradación termina donde empieza lo que la anula ---------------
+
+
+def _labels_of(raw: dict) -> list:
+    return generate(ScenarioConfig.model_validate(raw)).labels.labels
+
+
+def _only(raw: dict, label_type: str):
+    [label] = [lb for lb in _labels_of(raw) if lb.type == label_type]
+    return label
+
+
+def test_a_link_degradation_ends_where_the_hijack_starts() -> None:
+    raw = scenario_config("hijack").model_dump(mode="json")
+    start = raw["hijack"]["start_s"]
+    raw["sensors"]["link"]["episodes"] = [
+        {"start_s": start - 15, "end_s": start + 20, "latency_ms": 250.0}
+    ]
+    label = _only(raw, "link_degraded")
+    assert (label.start_s, label.end_s) == (start - 15, start)
+    assert label.eval_window == (start - 15, start + 60)
+
+
+def test_a_gps_degradation_ends_where_the_gps_loss_starts() -> None:
+    raw = example_raw()
+    raw["faults"] = [{"source": "gps", "mode": "loss", "start_s": 170.0, "end_s": 190.0}]
+    label = _only(raw, "gps_degraded")
+    assert (label.start_s, label.end_s) == (150.0, 170.0)
+
+
+def test_a_degradation_already_cancelled_starts_when_that_ends() -> None:
+    raw = example_raw()
+    raw["faults"] = [{"source": "gps", "mode": "loss", "start_s": 140.0, "end_s": 160.0}]
+    label = _only(raw, "gps_degraded")
+    assert (label.start_s, label.end_s) == (160.0, 210.0)
+
+
+def test_a_degradation_fully_cancelled_has_no_label_nor_unlabeled_window() -> None:
+    raw = example_raw()
+    raw["faults"] = [{"source": "gps", "mode": "loss", "start_s": 100.0, "end_s": 320.0}]
+    run = generate(ScenarioConfig.model_validate(raw))
+    assert [lb.type for lb in run.labels.labels] == ["gps_loss", "link_degraded"]
+    assert run.unlabeled is None  # el episodio suave (250–300 s) también queda anulado
+
+
+def test_an_unlabeled_episode_is_cut_like_a_label() -> None:
+    raw = example_raw()
+    raw["faults"] = [{"source": "gps", "mode": "loss", "start_s": 270.0, "end_s": 280.0}]
+    run = generate(ScenarioConfig.model_validate(raw))
+    [u] = run.unlabeled.episodes
+    assert (u.start_s, u.end_s, u.eval_window) == (250.0, 270.0, (250.0, 330.0))
+
+
+def test_other_faults_do_not_cut_a_degradation() -> None:
+    raw = example_raw()
+    raw["faults"] = [{"source": "gps", "mode": "mute", "start_s": 170.0, "end_s": 180.0}]
+    label = _only(raw, "gps_degraded")
+    assert (label.start_s, label.end_s) == (150.0, 210.0)

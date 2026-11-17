@@ -1,0 +1,85 @@
+# E6, paso 2b: rejilla de variantes. `tools/experiments/variants.py` crea un escenario por
+# combinación a partir de `base` (misma ruta y física; solo cambian las perturbaciones).
+# Tramos de `nominal` (ETA del plan): L1 BASE→WP1 0–89 s, L2 WP1→WP2 89–164 s,
+# L3 WP2→WP3 164–235 s, L4 WP3→WP4 235–309 s, L5 WP4→BASE 309–435 s.
+base: nominal
+
+families:
+  wind:                       # 8 procedencias × 2 fuerzas × 2 tramos
+    from_deg: [0, 45, 90, 135, 180, 225, 270, 315]
+    strength:                 # media y racha (m/s)
+      s09: {speed_mps: 9.0, gust_mps: 13.0}
+      s14: {speed_mps: 14.0, gust_mps: 19.0}
+    leg:
+      L2: {start_s: 95.0, end_s: 150.0}
+      L4: {start_s: 245.0, end_s: 300.0}
+    ramp_s: 10.0
+
+  spoofing:                   # 3 direcciones × 3 ritmos × 2 inicios
+    direction_deg: [45, 135, 270]
+    rate:                     # ritmo del desfase (m/s) y duración (s); el lento dura más
+      r03: {drift_rate_mps: 0.3, duration_s: 150.0}
+      r10: {drift_rate_mps: 1.0, duration_s: 60.0}
+      r15: {drift_rate_mps: 1.5, duration_s: 60.0}
+    start_s: [100.0, 250.0]
+
+  hijack:                     # 3 destinos × con y sin radar callado
+    start_s: 335.0
+    end_s: 380.0
+    link_hint: {controller_id: UNK-4F2A, rssi_dbm: -79.0, latency_ms: 120.0}
+    target:
+      south: {x: 1500.0, y: -1400.0}
+      north: {x: 1800.0, y: 900.0}
+      west: {x: -600.0, y: -900.0}
+    radar_mute:               # radar callado alrededor del secuestro (o sin fallo)
+      none: null
+      mute: {start_s: 325.0, end_s: 390.0}
+
+  faults:                     # mute de cada fuente y pérdida del GPS de 2 duraciones
+    mute:
+      gps: {start_s: 300.0, end_s: 312.0}
+      radar: {start_s: 120.0, end_s: 180.0}
+      meteo: {start_s: 120.0, end_s: 180.0}
+      link: {start_s: 120.0, end_s: 180.0}
+      battery: {start_s: 120.0, end_s: 180.0}
+    loss:
+      l20: {start_s: 245.0, end_s: 265.0}
+      l45: {start_s: 245.0, end_s: 290.0}
+
+  degradation:                # episodios del GPS y del enlace: 2 magnitudes × con y sin rampa
+    window: {start_s: 150.0, end_s: 210.0}
+    ramp_s: [0.0, 15.0]
+    gps:
+      moderate: {sats: 7, hdop: 4.0}
+      strong: {sats: 4, hdop: 9.0}
+    link:
+      moderate: {latency_ms: 150.0, rssi_dbm: -75.0}
+      strong: {latency_ms: 300.0, rssi_dbm: -88.0}
+    unlabeled:                # ruido normal del vuelo (labeled: false), suave y un poco más fuerte
+      gps-mild: {source: gps, sats: 10, hdop: 1.6, ramp_s: 15.0}
+      gps-noticeable: {source: gps, sats: 9, hdop: 3.6, ramp_s: 15.0}
+      link-mild: {source: link, latency_ms: 60.0, rssi_dbm: -66.0, ramp_s: 15.0}
+      link-noticeable: {source: link, latency_ms: 100.0, rssi_dbm: -70.0, ramp_s: 15.0}
+
+  clean:                      # vuelos limpios: la misma misión con otras semillas
+    seeds: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110]
+
+  # Combinaciones: se generan, pero no se evalúan hasta que se apruebe la convención
+  combination:
+    wind-spoofing:
+      wind: {start_s: 95.0, end_s: 150.0, ramp_s: 10.0, speed_mps: 12.0, gust_mps: 16.0, from_deg: 0.0}
+      spoofing: {start_s: 120.0, end_s: 175.0, drift_rate_mps: 1.5, direction_deg: 45.0}
+    hijack-after-spoofing:
+      spoofing: {start_s: 280.0, end_s: 330.0, drift_rate_mps: 1.5, direction_deg: 45.0}
+      hijack: {start_s: 333.0, end_s: 380.0, target: {x: 1500.0, y: -1400.0},
+               link_hint: {controller_id: UNK-4F2A, rssi_dbm: -79.0, latency_ms: 120.0}}
+    gps-degraded-during-spoofing:
+      spoofing: {start_s: 168.0, end_s: 222.0, drift_rate_mps: 1.5, direction_deg: 45.0}
+      gps_episodes: [{start_s: 180.0, end_s: 210.0, ramp_s: 0.0, sats: 5, hdop: 6.0}]
+    link-degraded-during-hijack:
+      hijack: {start_s: 335.0, end_s: 380.0, target: {x: 1500.0, y: -1400.0},
+               link_hint: {controller_id: UNK-4F2A, rssi_dbm: -79.0, latency_ms: 120.0}}
+      link_episodes: [{start_s: 320.0, end_s: 400.0, ramp_s: 0.0, latency_ms: 200.0, rssi_dbm: -80.0}]
+    loss-during-wind:
+      wind: {start_s: 245.0, end_s: 300.0, ramp_s: 10.0, speed_mps: 12.0, gust_mps: 16.0, from_deg: 0.0}
+      faults: [{source: gps, mode: loss, start_s: 255.0, end_s: 280.0}]

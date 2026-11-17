@@ -346,6 +346,14 @@ class Item:
     event: Event
     label: Label | None = None
     responses: list[Response] = field(default_factory=list)
+    candidates: list[Label] = field(default_factory=list)
+    """Etiquetas cuya ventana contiene el aviso y cuyas reglas esperadas incluyen la suya (E6)."""
+
+    @property
+    def ambiguous(self) -> bool:
+        """E6: dos o más candidatas (ventanas solapadas con reglas comunes). No cuenta como
+        acierto ni como fallo de ninguna etiqueta; se informa aparte (`ambiguous_results`)."""
+        return len(self.candidates) > 1
 
     @property
     def detection_id(self) -> str:
@@ -446,11 +454,14 @@ class RunData:
             if e["type"] in DETECTION_TYPES
         ]
         label_of: dict[str, Label | None] = {}
+        candidates_of: dict[str, list[Label]] = {}
         for item in items:
             if item.kind == "Raised":
+                candidates_of[item.detection_id] = self._candidates(item)
                 label_of[item.detection_id] = self._attribute(item)
         for item in items:
             item.label = label_of.get(item.detection_id)
+            item.candidates = candidates_of.get(item.detection_id, [])
         return items
 
     def _response(self, event: Event) -> Response:
@@ -466,9 +477,13 @@ class RunData:
         return Response(event, kind, cause, p["alert_id"], fallback, deterministic)
 
     def _attribute(self, item: Item) -> Label | None:
+        """La candidata de inicio más reciente (en un aviso ambiguo, el resultado estricto)."""
+        return max(self._candidates(item), key=lambda lb: lb.start_s, default=None)
+
+    def _candidates(self, item: Item) -> list[Label]:
         p = item.event["payload"]
         t = item.event["sim_time"]
-        candidates = [
+        return [
             lb
             for lb in self.labels
             if lb.eval_window[0] <= t <= lb.eval_window[1]
@@ -477,7 +492,6 @@ class RunData:
                 p["rule"] != "SOURCE_SILENT" or lb.source is None or lb.source.value == p["source"]
             )
         ]
-        return max(candidates, key=lambda lb: lb.start_s, default=None)
 
 
 # --- Análisis ----------------------------------------------------------------------------------
@@ -498,10 +512,17 @@ def analyze_labels(data: RunData) -> list[LabelResult]:
     out = []
     for label in data.labels:
         ok = accepted_causes(label)
-        raised = [i for i in data.items if i.kind == "Raised" and i.label is label]
+        # E6: los avisos ambiguos no cuentan ni como acierto ni como fallo de la etiqueta
+        raised = [
+            i for i in data.items if i.kind == "Raised" and i.label is label and not i.ambiguous
+        ]
+        ambiguous_only = not raised and any(
+            i.kind == "Raised" and i.ambiguous and any(lb is label for lb in i.candidates)
+            for i in data.items
+        )
         wrong = [i for i in raised if i.cause() not in ok]
         window = label.eval_window
-        mine = data_items_of(data, label)
+        mine = [i for i in data_items_of(data, label) if not i.ambiguous]
         detection_ids = {i.detection_id for i in mine}
         answered_by = {r.alert_id for i in mine for r in i.responses if r.alert_id}
         alerts = [
@@ -521,7 +542,9 @@ def analyze_labels(data: RunData) -> list[LabelResult]:
             for r in i.responses
             if r.alert_id and r.kind != "cierre"
         }
-        if alerts and not wrong and raised:
+        if ambiguous_only:
+            verdict = AMBIGUOUS_ONLY
+        elif alerts and not wrong and raised:
             verdict = "✅"
         elif alerts:
             verdict = "⚠️"
@@ -543,6 +566,41 @@ def analyze_labels(data: RunData) -> list[LabelResult]:
 
 def data_items_of(data: RunData, label: Label) -> list[Item]:
     return [i for i in data.items if i.label is label]
+
+
+AMBIGUOUS_ONLY = "🔀"
+"""Veredicto de una etiqueta cuyos avisos son todos ambiguos (E6): no tiene veredicto propio."""
+
+
+@dataclass
+class AmbiguousResult:
+    """Un aviso ambiguo (E6) con sus dos resultados, que no cuentan en los veredictos."""
+
+    item: Item
+    cause: str
+    strict_label: Label
+    strict_ok: bool
+    """Acierta según la candidata de inicio más reciente."""
+    permissive_ok: bool
+    """Acierta según alguna de las candidatas."""
+
+
+def ambiguous_results(data: RunData) -> list[AmbiguousResult]:
+    out = []
+    for item in data.items:
+        if item.kind != "Raised" or not item.ambiguous or item.label is None:
+            continue
+        cause = item.cause()
+        out.append(
+            AmbiguousResult(
+                item,
+                cause,
+                item.label,
+                cause in accepted_causes(item.label),
+                any(cause in accepted_causes(lb) for lb in item.candidates),
+            )
+        )
+    return out
 
 
 def false_alarms(data: RunData) -> tuple[list[Item], list[Event]]:
@@ -1024,6 +1082,8 @@ class Evaluation:
     """`None`: las alertas no llevan `phase` (ejecución anterior a la v0.14)."""
     unlabeled: list[UnlabeledResult] = field(default_factory=list)
     """Episodios sin etiqueta (E6; vacío si el escenario no los tiene)."""
+    ambiguous: list[AmbiguousResult] = field(default_factory=list)
+    """Avisos ambiguos (E6; vacío si ninguna ventana con reglas comunes se solapa)."""
 
     @property
     def unlabeled_false(self) -> int:
@@ -1059,6 +1119,7 @@ def evaluate(folder: Path) -> Evaluation:
         checks_report(data.alerts, data.trace),
         recovery_misses(data),
         unlabeled,
+        ambiguous_results(data),
     )
 
 
@@ -1073,6 +1134,7 @@ def summary_line(ev: Evaluation) -> str:
         f"{len(ev.contradictions)} frases que contradicen los checks · "
         f"{checks_count_text(ev)} checks que no cuadran con las tools · "
         f"{recovery_count_text(ev)} recuperaciones sin fase recovering"
+        + (f" · {len(ev.ambiguous)} avisos ambiguos (aparte)" if ev.ambiguous else "")
     )
 
 
@@ -1404,6 +1466,34 @@ def false_section(ev: Evaluation) -> list[str]:
     return lines
 
 
+def ambiguous_section(ev: Evaluation) -> list[str]:
+    """Avisos ambiguos (E6): solo si los hay."""
+    if not ev.ambiguous:
+        return []
+    lines = [
+        "",
+        "## Avisos ambiguos (aparte: no cuentan en los veredictos)",
+        "",
+        "Avisos en ventanas solapadas de etiquetas que esperan la misma regla. **Estricto:** "
+        "acierta según la etiqueta de inicio más reciente; **permisivo:** según cualquiera de "
+        "las candidatas.",
+        "",
+        "| Aviso | Regla | Instante | Candidatas | Causa | Estricto | Permisivo |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for a in ev.ambiguous:
+        i = a.item
+        candidates = ", ".join(
+            f"{lb.id} {lb.type.value}" + (" (estricta)" if lb is a.strict_label else "")
+            for lb in i.candidates
+        )
+        lines.append(
+            f"| {i.detection_id} | {i.rule} | {fmt_t(i.event['sim_time'])} | {candidates} | "
+            f"{a.cause} | {'✅' if a.strict_ok else '❌'} | {'✅' if a.permissive_ok else '❌'} |"
+        )
+    return lines
+
+
 def unlabeled_section(ev: Evaluation) -> list[str]:
     """Episodios sin etiqueta (E6): solo si el escenario los tiene."""
     if not ev.unlabeled:
@@ -1552,6 +1642,7 @@ def render_markdown(ev: Evaluation) -> str:
         phase_section(ev),
         responses_section(ev),
         false_section(ev),
+        ambiguous_section(ev),
         unlabeled_section(ev),
         contradictions_section(ev),
         checks_section(ev),
@@ -1629,7 +1720,24 @@ def to_json(ev: Evaluation) -> dict[str, Any]:
         "waits": ev.wait_list,
         # E6: solo si el escenario tiene episodios sin etiqueta (sin ellos, el JSON no cambia)
         **({"unlabeled_episodes": unlabeled_json(ev)} if ev.unlabeled else {}),
+        **({"ambiguous": ambiguous_json(ev)} if ev.ambiguous else {}),
     }
+
+
+def ambiguous_json(ev: Evaluation) -> list[dict[str, Any]]:
+    return [
+        {
+            "detection_id": a.item.detection_id,
+            "rule": a.item.rule,
+            "sim_time": a.item.event["sim_time"],
+            "candidates": [lb.id for lb in a.item.candidates],
+            "strict_label": a.strict_label.id,
+            "cause": a.cause,
+            "strict_ok": a.strict_ok,
+            "permissive_ok": a.permissive_ok,
+        }
+        for a in ev.ambiguous
+    ]
 
 
 def unlabeled_json(ev: Evaluation) -> list[dict[str, Any]]:

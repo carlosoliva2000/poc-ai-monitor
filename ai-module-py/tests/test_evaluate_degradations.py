@@ -109,3 +109,77 @@ def test_without_the_file_nothing_changes(tmp_path: Path) -> None:
     assert ev.unlabeled == [] and len(ev.stray_detections) == 1 and len(ev.stray_alerts) == 1
     assert "unlabeled_episodes" not in to_json(ev)
     assert "Episodios sin etiqueta" not in render_markdown(ev)
+
+
+# --- Convención de la E6: avisos ambiguos -----------------------------------------------------
+
+OVERLAP = [
+    {"id": "A1", "type": "wind", "source": None, "start_s": 95.0, "end_s": 150.0,
+     "expected_rules": ["ROUTE_DEVIATION"], "expected_cause": "WIND",
+     "also_accepted_causes": [], "eval_window": [95.0, 210.0]},
+    {"id": "A2", "type": "gps_spoofing", "source": None, "start_s": 168.0, "end_s": 222.0,
+     "expected_rules": ["SOURCE_DISCREPANCY", "ROUTE_DEVIATION"],
+     "expected_cause": "GPS_SPOOFING", "also_accepted_causes": [],
+     "eval_window": [168.0, 282.0]},
+]  # fmt: skip
+
+
+def overlap_builder(tmp_path: Path) -> Builder:
+    b = Builder(tmp_path, "nominal")
+    (b.root / "labels.json").write_text(json.dumps({"labels": OVERLAP}), encoding="utf-8")
+    return b
+
+
+def test_an_ambiguous_detection_counts_neither_as_hit_nor_as_miss(tmp_path: Path) -> None:
+    b = overlap_builder(tmp_path)
+    w = b.raised("det-0001", 100.0, "ROUTE_DEVIATION")  # solo A1
+    b.alert("ai-0002", 101.0, "WIND", w, ["det-0001"])
+    sd = b.raised("det-0003", 175.0, "SOURCE_DISCREPANCY")  # solo A2
+    b.alert("ai-0004", 176.0, "GPS_SPOOFING", sd, ["det-0003"])
+    amb = b.raised("det-0005", 190.0, "ROUTE_DEVIATION")  # A1 y A2: ambiguo
+    b.alert("ai-0006", 191.0, "WIND", amb, ["det-0005"])
+    ev = evaluate(b.write())
+    assert verdicts(ev) == {"A1": "✅", "A2": "✅"}  # el WIND ambiguo no es fallo de A2
+    [a] = ev.ambiguous
+    assert a.item.detection_id == "det-0005" and a.strict_label.id == "A2"
+    assert (a.strict_ok, a.permissive_ok) == (False, True)
+    assert "1 avisos ambiguos (aparte)" in summary_line(ev)
+    md = render_markdown(ev)
+    assert "## Avisos ambiguos" in md and "| det-0005 | ROUTE_DEVIATION |" in md
+    assert to_json(ev)["ambiguous"][0] == {
+        "detection_id": "det-0005", "rule": "ROUTE_DEVIATION", "sim_time": 190.0,
+        "candidates": ["A1", "A2"], "strict_label": "A2", "cause": "WIND",
+        "strict_ok": False, "permissive_ok": True,
+    }  # fmt: skip
+
+
+def test_a_label_with_only_ambiguous_detections_has_no_verdict(tmp_path: Path) -> None:
+    b = overlap_builder(tmp_path)
+    w = b.raised("det-0001", 100.0, "ROUTE_DEVIATION")
+    b.alert("ai-0002", 101.0, "WIND", w, ["det-0001"])
+    amb = b.raised("det-0003", 190.0, "ROUTE_DEVIATION")
+    b.alert("ai-0004", 191.0, "GPS_SPOOFING", amb, ["det-0003"])
+    ev = evaluate(b.write())
+    assert verdicts(ev) == {"A1": "✅", "A2": "🔀"}
+    assert ev.overall == "✅"  # 🔀 no es ni acierto ni fallo
+    [a] = ev.ambiguous
+    assert (a.strict_ok, a.permissive_ok) == (True, True)
+
+
+def test_without_overlaps_there_is_no_ambiguous_section(tmp_path: Path) -> None:
+    b = overlap_builder(tmp_path)
+    w = b.raised("det-0001", 100.0, "ROUTE_DEVIATION")
+    b.alert("ai-0002", 101.0, "WIND", w, ["det-0001"])
+    ev = evaluate(b.write())
+    assert ev.ambiguous == [] and "ambiguous" not in to_json(ev)
+    assert "Avisos ambiguos" not in render_markdown(ev) and "ambiguos" not in summary_line(ev)
+
+
+def test_a_label_whose_only_detection_went_to_the_other_candidate_has_no_verdict(
+    tmp_path: Path,
+) -> None:
+    b = overlap_builder(tmp_path)
+    amb = b.raised("det-0001", 190.0, "ROUTE_DEVIATION")  # estricta: A2 (la más reciente)
+    b.alert("ai-0002", 191.0, "GPS_SPOOFING", amb, ["det-0001"])
+    ev = evaluate(b.write())
+    assert verdicts(ev) == {"A1": "🔀", "A2": "🔀"}  # A1 no es ❌ «sin detección»
