@@ -1,0 +1,98 @@
+{
+  "$defs": {
+    "Rule": {
+      "description": "Reglas del detector.",
+      "enum": [
+        "ROUTE_DEVIATION",
+        "SOURCE_DISCREPANCY",
+        "SOURCE_SILENT",
+        "GPS_DEGRADED",
+        "LINK_ANOMALY"
+      ],
+      "title": "Rule",
+      "type": "string"
+    },
+    "SensorSource": {
+      "description": "Fuentes que se pueden silenciar y en las que puede saltar `SOURCE_SILENT`.",
+      "enum": [
+        "gps",
+        "radar",
+        "meteo",
+        "link",
+        "battery"
+      ],
+      "title": "SensorSource",
+      "type": "string"
+    },
+    "UnlabeledEpisode": {
+      "additionalProperties": false,
+      "description": "Episodio de degradación con `labeled: false` (E6): ruido normal del vuelo, sin etiqueta.\nLa evaluación cuenta aparte lo que pasa en su ventana (`eval_window`, como la de una\netiqueta).",
+      "properties": {
+        "id": {
+          "pattern": "^U\\d+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/SensorSource"
+        },
+        "start_s": {
+          "title": "Start S",
+          "type": "number"
+        },
+        "end_s": {
+          "title": "End S",
+          "type": "number"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/Rule"
+          },
+          "minItems": 1,
+          "title": "Rules",
+          "type": "array"
+        },
+        "eval_window": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Eval Window",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "start_s",
+        "end_s",
+        "rules",
+        "eval_window"
+      ],
+      "title": "UnlabeledEpisode",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`unlabeled_episodes.json`: solo existe si el escenario tiene episodios `labeled: false`.",
+  "properties": {
+    "episodes": {
+      "items": {
+        "$ref": "#/$defs/UnlabeledEpisode"
+      },
+      "title": "Episodes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "episodes"
+  ],
+  "title": "UnlabeledEpisodesFile",
+  "type": "object"
+}

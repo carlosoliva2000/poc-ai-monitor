@@ -16,8 +16,8 @@ from poc_contracts.commands import InstructorControl
 from poc_contracts.enums import EventType
 from poc_contracts.envelope import Envelope
 from poc_contracts.payloads import PAYLOAD_MODELS
-from poc_contracts.run_files import LabelsFile, PlanFile, RunMeta, TruthFile
-from poc_contracts.scenario import ScenarioConfig
+from poc_contracts.run_files import LabelsFile, PlanFile, RunMeta, TruthFile, UnlabeledEpisodesFile
+from poc_contracts.scenario import GpsConfig, LinkConfig, ScenarioConfig
 from poc_contracts.tools import (
     FlightSummary,
     GetEventsResult,
@@ -120,6 +120,7 @@ EXPECTED: list[tuple[str, Check | str]] = [
         model(PlanFile),
     ),
     ('{ "duration_s": 556.3, "trajectory"', model(TruthFile)),
+    ('{"episodes": [{"id": "U1"', model(UnlabeledEpisodesFile)),
     ('{ "labels"', model(LabelsFile)),
     ('{ "scenario": "demo", "run_id"', model(RunMeta)),
 ]
@@ -158,11 +159,21 @@ def test_yaml_example_of_the_scenario_validates() -> None:
     import yaml
 
     blocks = YAML_RE.findall(DOC.read_text(encoding="utf-8"))
-    assert len(blocks) == 1
+    assert len(blocks) == 2
     config = ScenarioConfig.model_validate(yaml.safe_load(blocks[0]))
     assert config.name == "demo"
     assert config.hijack is not None
     assert config.faults[0].source.value == "radar"
+
+
+def test_yaml_example_of_the_sensor_episodes_validates() -> None:
+    """El ejemplo de los episodios de degradación de §8.1 (v0.19) valida con sus modelos."""
+    import yaml
+
+    sensors = yaml.safe_load(YAML_RE.findall(DOC.read_text(encoding="utf-8"))[1])["sensors"]
+    gps, link = GpsConfig.model_validate(sensors["gps"]), LinkConfig.model_validate(sensors["link"])
+    assert gps.episodes[0].sats == 4 and gps.episodes[0].labeled
+    assert link.episodes[0].ramp_s == 0 and not link.episodes[0].labeled
 
 
 def test_scenario_info_null_duration() -> None:

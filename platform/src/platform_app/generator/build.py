@@ -8,16 +8,32 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from poc_contracts.enums import Cause, FaultMode, InstructorCommandName, LabelType, Rule
+from poc_contracts.enums import (
+    Cause,
+    FaultMode,
+    InstructorCommandName,
+    LabelType,
+    Rule,
+    SensorSource,
+)
 from poc_contracts.envelope import EventDraft
-from poc_contracts.run_files import Label, LabelsFile, PlanFile, PlanSample, TruthFile
-from poc_contracts.scenario import ScenarioConfig
+from poc_contracts.run_files import (
+    Label,
+    LabelsFile,
+    PlanFile,
+    PlanSample,
+    TruthFile,
+    UnlabeledEpisode,
+    UnlabeledEpisodesFile,
+)
+from poc_contracts.scenario import FaultConfig, GpsEpisode, LinkEpisode, ScenarioConfig
 
 from ..paths import RUNS_DIR
 from .controller import STEP_S
 from .simulator import Flight, Simulator, fly, plan_etas
 
 EVAL_MARGIN_S = 60.0  # la ventana de evaluación acaba 60 s después de la anomalía
+UNLABELED_FILE = "unlabeled_episodes.json"
 
 
 @dataclass(frozen=True)
@@ -29,6 +45,8 @@ class Run:
     truth: TruthFile
     events: list[EventDraft]
     labels: LabelsFile
+    unlabeled: UnlabeledEpisodesFile | None = None
+    """Episodios de degradación con `labeled: false` (`None` si no hay ninguno)."""
 
 
 def _wind_command_windows(config: ScenarioConfig, end_s: float) -> list[tuple[float, float]]:
@@ -86,10 +104,28 @@ def _labels(config: ScenarioConfig, end_s: float) -> LabelsFile:
         )
         for i, (a, b, lt, rules, cause) in enumerate(sorted(anomalies, key=lambda x: x[0]), 1)
     ]
-    for i, f in enumerate(sorted(config.faults, key=lambda f: f.start_s), 1):
+    for i, f in enumerate(_source_events(config), 1):
         if f.start_s >= end_s:
             continue
         end = min(f.end_s, end_s)
+        if isinstance(f, (GpsEpisode, LinkEpisode)):
+            # degradación con fix y con el mismo controlador: fallo del sensor o del enlace, o, en
+            # el GPS, interferencia; no es un ataque ni viento (sin frontera por magnitud)
+            label_type, source, rules, cause, also = _DEGRADED[type(f)]
+            labels.append(
+                Label(
+                    id=f"F{i}",
+                    type=label_type,
+                    source=source,
+                    start_s=f.start_s,
+                    end_s=end,
+                    expected_rules=rules,
+                    expected_cause=cause,
+                    also_accepted_causes=also,
+                    eval_window=(f.start_s, end + EVAL_MARGIN_S),
+                )
+            )
+            continue
         if f.mode == FaultMode.LOSS:
             # al recuperarse, el GPS salta a la verdad (puede saltar ROUTE_DEVIATION)
             label_type = LabelType.GPS_LOSS
@@ -112,6 +148,58 @@ def _labels(config: ScenarioConfig, end_s: float) -> LabelsFile:
             )
         )
     return LabelsFile(labels=labels)
+
+
+_DEGRADED: dict[type, tuple[LabelType, SensorSource, list[Rule], Cause, list[Cause]]] = {
+    GpsEpisode: (
+        LabelType.GPS_DEGRADED,
+        SensorSource.GPS,
+        [Rule.GPS_DEGRADED],
+        Cause.SENSOR_FAULT,
+        [Cause.GPS_JAMMING],
+    ),
+    LinkEpisode: (
+        LabelType.LINK_DEGRADED,
+        SensorSource.LINK,
+        [Rule.LINK_ANOMALY],
+        Cause.SENSOR_FAULT,
+        [Cause.UNKNOWN],
+    ),
+}
+
+
+def _source_events(config: ScenarioConfig) -> list[FaultConfig | GpsEpisode | LinkEpisode]:
+    """Fallos programados y episodios de degradación etiquetados, por inicio (`F1…`): con un
+    escenario sin episodios, la numeración de los fallos es la de siempre."""
+    s = config.sensors
+    episodes = [e for e in (*s.gps.episodes, *s.link.episodes) if e.labeled]
+    return sorted([*config.faults, *episodes], key=lambda f: f.start_s)
+
+
+def _unlabeled(config: ScenarioConfig, end_s: float) -> UnlabeledEpisodesFile | None:
+    """Episodios `labeled: false` (`U1…`, por inicio), con la ventana de una etiqueta."""
+    s = config.sensors
+    episodes = sorted(
+        (e for e in (*s.gps.episodes, *s.link.episodes) if not e.labeled and e.start_s < end_s),
+        key=lambda e: e.start_s,
+    )
+    if not episodes:
+        return None
+    out = []
+    for i, e in enumerate(episodes, 1):
+        _, source, rules, _, _ = _DEGRADED[type(e)]
+        end = min(e.end_s, end_s)
+        out.append(
+            UnlabeledEpisode(
+                id=f"U{i}",
+                source=source,
+                start_s=e.start_s,
+                end_s=end,
+                rules=rules,
+                eval_window=(e.start_s, end + EVAL_MARGIN_S),
+            )
+        )
+    return UnlabeledEpisodesFile(episodes=out)
 
 
 def _plan_file(config: ScenarioConfig, plan: Flight, etas: list[float]) -> PlanFile:
@@ -158,11 +246,15 @@ def generate(config: ScenarioConfig) -> Run:
     events = sim.start()
     while not sim.finished:
         events += sim.step()
-    return Run(config.name, plan, sim.truth(), events, _labels(config, sim.samples[-1].t))
+    end_s = sim.samples[-1].t
+    return Run(
+        config.name, plan, sim.truth(), events, _labels(config, end_s), _unlabeled(config, end_s)
+    )
 
 
 def write_run(run: Run, out_dir: Path | None = None) -> Path:
-    """Escribe `plan.json`, `truth.json`, `events.jsonl` y `labels.json`."""
+    """Escribe `plan.json`, `truth.json`, `events.jsonl`, `labels.json` y, si hay episodios sin
+    etiqueta, `unlabeled_episodes.json` (si no los hay, no queda ninguno de antes)."""
     out = out_dir if out_dir is not None else RUNS_DIR / run.name
     out.mkdir(parents=True, exist_ok=True)
     (out / "plan.json").write_text(run.plan.model_dump_json() + "\n", encoding="utf-8")
@@ -170,4 +262,9 @@ def write_run(run: Run, out_dir: Path | None = None) -> Path:
     (out / "labels.json").write_text(run.labels.model_dump_json(indent=2) + "\n", encoding="utf-8")
     lines = "".join(e.model_dump_json() + "\n" for e in run.events)
     (out / "events.jsonl").write_text(lines, encoding="utf-8")
+    unlabeled = out / UNLABELED_FILE
+    if run.unlabeled is not None:
+        unlabeled.write_text(run.unlabeled.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    else:
+        unlabeled.unlink(missing_ok=True)
     return out

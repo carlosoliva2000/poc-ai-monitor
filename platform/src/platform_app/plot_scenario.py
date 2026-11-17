@@ -65,6 +65,8 @@ LABEL_NAMES = {
     LabelType.WIND: "wind",
     LabelType.HIJACK: "hijacking",
     LabelType.GPS_SPOOFING: "GPS spoofing",
+    LabelType.GPS_DEGRADED: "GPS degraded",
+    LabelType.LINK_DEGRADED: "link degraded",
 }
 
 # Umbrales de las reglas del detector, para ver a qué altura caen las medidas

@@ -39,16 +39,36 @@ def period_steps(period_s: float) -> int:
     return steps
 
 
+def _toward(nominal: float, target: float | None, k: float) -> float:
+    return nominal if target is None else nominal + (target - nominal) * k
+
+
+def gps_quality(config: ScenarioConfig, t: float) -> tuple[int, float]:
+    """`sats` y `hdop` en `t` (sin pérdida): los nominales o los del episodio de degradación
+    activo, con su rampa. No saca números aleatorios: sin episodios, todo sale igual que antes."""
+    g = config.sensors.gps
+    for e in g.episodes:
+        k = e.level(t)
+        if k is not None:
+            sats = g.sats if e.sats is None else round(_toward(g.sats, e.sats, k))
+            hdop = g.hdop if e.hdop is None else round(_toward(g.hdop, e.hdop, k), 2)
+            return sats, hdop
+    return g.sats, g.hdop
+
+
 def gps_payload(
     config: ScenarioConfig,
     rng: random.Random,
     pos: tuple[float, float],
     vel: tuple[float, float],
     loss: bool,
+    t: float,
 ) -> dict:
     """`PositionUpdated`. `pos` y `vel` son lo que cree el dron: con el engaño, la posición y la
-    velocidad falsas; en pérdida, la estima y su velocidad respecto al aire (sin fix)."""
+    velocidad falsas; en pérdida, la estima y su velocidad respecto al aire (sin fix). La pérdida
+    manda sobre un episodio de degradación."""
     g = config.sensors.gps
+    sats, hdop = (0, GPS_LOSS_HDOP) if loss else gps_quality(config, t)
     return {
         "x": round(pos[0] + rng.gauss(0, g.sigma_m), 1),
         "y": round(pos[1] + rng.gauss(0, g.sigma_m), 1),
@@ -56,8 +76,8 @@ def gps_payload(
         "speed_mps": round(max(0.0, math.hypot(*vel) + rng.gauss(0, GPS_SPEED_SIGMA_MPS)), 1),
         "heading_deg": round((bearing_deg(*vel) + rng.gauss(0, GPS_HEADING_SIGMA_DEG)) % 360, 1),
         "fix": "none" if loss else "3d",
-        "sats": 0 if loss else g.sats,
-        "hdop": GPS_LOSS_HDOP if loss else g.hdop,
+        "sats": sats,
+        "hdop": hdop,
     }
 
 
@@ -86,13 +106,30 @@ def meteo_payload(config: ScenarioConfig, rng: random.Random, w: Wind) -> dict:
     }
 
 
-def link_payload(config: ScenarioConfig, rng: random.Random, t: float) -> dict:
+def link_quality(config: ScenarioConfig, t: float) -> tuple[float, float]:
+    """RSSI y latencia nominales en `t` (sin secuestro), o los del episodio de degradación activo,
+    con su rampa. El ruido se suma después, con los mismos números aleatorios de siempre."""
     lk = config.sensors.link
-    hint = config.hijack.link_hint if is_hijacked(t, config.hijack) else lk
+    for e in lk.episodes:
+        k = e.level(t)
+        if k is not None:
+            return _toward(lk.rssi_dbm, e.rssi_dbm, k), _toward(lk.latency_ms, e.latency_ms, k)
+    return lk.rssi_dbm, lk.latency_ms
+
+
+def link_payload(config: ScenarioConfig, rng: random.Random, t: float) -> dict:
+    """`LinkStatus`. Durante un secuestro manda el enlace del secuestro (`link_hint`) sobre un
+    episodio de degradación."""
+    if is_hijacked(t, config.hijack):
+        hint = config.hijack.link_hint
+        controller, rssi, latency = hint.controller_id, hint.rssi_dbm, hint.latency_ms
+    else:
+        controller = config.sensors.link.controller_id
+        rssi, latency = link_quality(config, t)
     return {
-        "controller_id": hint.controller_id,
-        "rssi_dbm": round(hint.rssi_dbm + rng.gauss(0, LINK_RSSI_SIGMA_DB), 1),
-        "latency_ms": round(max(1.0, hint.latency_ms + rng.gauss(0, LINK_LATENCY_SIGMA_MS)), 1),
+        "controller_id": controller,
+        "rssi_dbm": round(rssi + rng.gauss(0, LINK_RSSI_SIGMA_DB), 1),
+        "latency_ms": round(max(1.0, latency + rng.gauss(0, LINK_LATENCY_SIGMA_MS)), 1),
     }
 
 

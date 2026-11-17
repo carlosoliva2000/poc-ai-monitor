@@ -1,7 +1,8 @@
 """Ficheros de `runs/` (`contracts/eventos.md` §8.2 a §8.4 y §8.6).
 
-`events.jsonl` son `EventDraft`; aquí están `plan.json`, `truth.json` y `labels.json` (los escribe
-el generador en `runs/<escenario>/`) y `run_meta.json` (lo escribe la plataforma en
+`events.jsonl` son `EventDraft`; aquí están `plan.json`, `truth.json`, `labels.json` y, si el
+escenario tiene episodios sin etiqueta, `unlabeled_episodes.json` (los escribe el generador en
+`runs/<escenario>/`) y `run_meta.json` (lo escribe la plataforma en
 `runs/<escenario>/<run_id>/`).
 """
 
@@ -63,6 +64,15 @@ class TruthFile(RunFile):
     wind: list[TruthWind]
 
 
+SOURCE_LABEL_TYPES = (
+    LabelType.SOURCE_SILENT,
+    LabelType.GPS_LOSS,
+    LabelType.GPS_DEGRADED,
+    LabelType.LINK_DEGRADED,
+)
+"""Tipos de etiqueta de una sola fuente (fallos y degradaciones): llevan `source`."""
+
+
 class Label(RunFile):
     id: str = Field(pattern=r"^[AF]\d+$")
     type: LabelType
@@ -76,7 +86,7 @@ class Label(RunFile):
 
     @model_validator(mode="after")
     def _check(self) -> "Label":
-        is_fault = self.type in (LabelType.SOURCE_SILENT, LabelType.GPS_LOSS)
+        is_fault = self.type in SOURCE_LABEL_TYPES
         if is_fault != (self.source is not None):
             raise ValueError("`source` is mandatory in faults and null in the rest")
         if self.eval_window[0] != self.start_s or self.eval_window[1] < self.end_s:
@@ -86,6 +96,26 @@ class Label(RunFile):
 
 class LabelsFile(RunFile):
     labels: list[Label]
+
+
+class UnlabeledEpisode(RunFile):
+    """Episodio de degradación con `labeled: false` (E6): ruido normal del vuelo, sin etiqueta.
+    La evaluación cuenta aparte lo que pasa en su ventana (`eval_window`, como la de una
+    etiqueta)."""
+
+    id: str = Field(pattern=r"^U\d+$")
+    source: SensorSource
+    start_s: float
+    end_s: float
+    rules: list[Rule] = Field(min_length=1)
+    """Las reglas que miden esa fuente: sus avisos dentro de la ventana no son falsas alarmas."""
+    eval_window: tuple[float, float]
+
+
+class UnlabeledEpisodesFile(RunFile):
+    """`unlabeled_episodes.json`: solo existe si el escenario tiene episodios `labeled: false`."""
+
+    episodes: list[UnlabeledEpisode]
 
 
 class SpeedChange(RunFile):

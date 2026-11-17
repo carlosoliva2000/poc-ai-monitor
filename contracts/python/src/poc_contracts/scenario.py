@@ -39,11 +39,79 @@ class MissionConfig(Config):
     return_to_base: Literal[True]  # por ahora solo se admiten misiones con vuelta a la base
 
 
+class SensorEpisode(Config):
+    """Episodio de degradación de una fuente (E6): de `start_s` a `end_s`, con rampa de subida y
+    bajada de `ramp_s` (0: el valor cambia de golpe). Los valores objetivo que no se den se quedan
+    en los nominales. Con `labeled: false` es ruido normal del vuelo: no da etiqueta (la evaluación
+    lo cuenta aparte)."""
+
+    start_s: float = Field(ge=0)
+    end_s: float
+    ramp_s: float = Field(default=0.0, ge=0)
+    labeled: bool = True
+
+    @model_validator(mode="after")
+    def _check_window(self) -> "SensorEpisode":
+        if self.end_s <= self.start_s:
+            raise ValueError("end_s must be greater than start_s")
+        return self
+
+    def level(self, t: float) -> float | None:
+        """Cuánto del valor objetivo se aplica en `t` (0 a 1), o `None` fuera del episodio. La
+        misma cuenta que los episodios de viento."""
+        if not self.start_s <= t <= self.end_s:
+            return None
+        if self.ramp_s == 0:
+            return 1.0
+        return min(1.0, (t - self.start_s) / self.ramp_s, (self.end_s - t) / self.ramp_s)
+
+
+def _check_no_overlap(episodes: "list[SensorEpisode]") -> None:
+    ordered = sorted(episodes, key=lambda e: e.start_s)
+    for a, b in zip(ordered, ordered[1:], strict=False):
+        if b.start_s < a.end_s:
+            raise ValueError("episodes of the same source must not overlap")
+
+
+class GpsEpisode(SensorEpisode):
+    """Degradación del GPS con fix 3D (menos satélites, peor `hdop`). La pérdida total del fix es
+    el fallo `loss`, que manda si coincide con un episodio."""
+
+    sats: int | None = Field(default=None, ge=4)  # con menos de 4 no hay fix 3D: es `loss`
+    hdop: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _check_target(self) -> "GpsEpisode":
+        if self.sats is None and self.hdop is None:
+            raise ValueError("a gps episode needs sats, hdop or both")
+        return self
+
+
+class LinkEpisode(SensorEpisode):
+    """Degradación del enlace (más latencia, menos RSSI) con el mismo controlador: cambiar de
+    controlador es un secuestro (`hijack`), que manda si coincide con un episodio."""
+
+    latency_ms: float | None = Field(default=None, ge=0)
+    rssi_dbm: float | None = None
+
+    @model_validator(mode="after")
+    def _check_target(self) -> "LinkEpisode":
+        if self.latency_ms is None and self.rssi_dbm is None:
+            raise ValueError("a link episode needs latency_ms, rssi_dbm or both")
+        return self
+
+
 class GpsConfig(Config):
     period_s: Positive
     sigma_m: float = Field(ge=0)
     sats: int
     hdop: float
+    episodes: list[GpsEpisode] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _check_episodes(self) -> "GpsConfig":
+        _check_no_overlap(list(self.episodes))
+        return self
 
 
 class RadarConfig(Config):
@@ -64,6 +132,12 @@ class LinkConfig(Config):
     controller_id: str
     rssi_dbm: float
     latency_ms: float
+    episodes: list[LinkEpisode] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _check_episodes(self) -> "LinkConfig":
+        _check_no_overlap(list(self.episodes))
+        return self
 
 
 class BatteryConfig(Config):

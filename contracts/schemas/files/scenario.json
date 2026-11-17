@@ -130,6 +130,13 @@
         "hdop": {
           "title": "Hdop",
           "type": "number"
+        },
+        "episodes": {
+          "items": {
+            "$ref": "#/$defs/GpsEpisode"
+          },
+          "title": "Episodes",
+          "type": "array"
         }
       },
       "required": [
@@ -139,6 +146,64 @@
         "hdop"
       ],
       "title": "GpsConfig",
+      "type": "object"
+    },
+    "GpsEpisode": {
+      "additionalProperties": false,
+      "description": "Degradación del GPS con fix 3D (menos satélites, peor `hdop`). La pérdida total del fix es\nel fallo `loss`, que manda si coincide con un episodio.",
+      "properties": {
+        "start_s": {
+          "minimum": 0,
+          "title": "Start S",
+          "type": "number"
+        },
+        "end_s": {
+          "title": "End S",
+          "type": "number"
+        },
+        "ramp_s": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Ramp S",
+          "type": "number"
+        },
+        "labeled": {
+          "default": true,
+          "title": "Labeled",
+          "type": "boolean"
+        },
+        "sats": {
+          "anyOf": [
+            {
+              "minimum": 4,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sats"
+        },
+        "hdop": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hdop"
+        }
+      },
+      "required": [
+        "start_s",
+        "end_s"
+      ],
+      "title": "GpsEpisode",
       "type": "object"
     },
     "HijackConfig": {
@@ -205,6 +270,13 @@
         "latency_ms": {
           "title": "Latency Ms",
           "type": "number"
+        },
+        "episodes": {
+          "items": {
+            "$ref": "#/$defs/LinkEpisode"
+          },
+          "title": "Episodes",
+          "type": "array"
         }
       },
       "required": [
@@ -214,6 +286,63 @@
         "latency_ms"
       ],
       "title": "LinkConfig",
+      "type": "object"
+    },
+    "LinkEpisode": {
+      "additionalProperties": false,
+      "description": "Degradación del enlace (más latencia, menos RSSI) con el mismo controlador: cambiar de\ncontrolador es un secuestro (`hijack`), que manda si coincide con un episodio.",
+      "properties": {
+        "start_s": {
+          "minimum": 0,
+          "title": "Start S",
+          "type": "number"
+        },
+        "end_s": {
+          "title": "End S",
+          "type": "number"
+        },
+        "ramp_s": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Ramp S",
+          "type": "number"
+        },
+        "labeled": {
+          "default": true,
+          "title": "Labeled",
+          "type": "boolean"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latency Ms"
+        },
+        "rssi_dbm": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rssi Dbm"
+        }
+      },
+      "required": [
+        "start_s",
+        "end_s"
+      ],
+      "title": "LinkEpisode",
       "type": "object"
     },
     "LinkHint": {

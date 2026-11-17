@@ -12,6 +12,11 @@ Atribución: una detección va a la etiqueta cuya `eval_window` la contiene y cu
 `DetectionRaised`: la alerta, o la alerta a la que la enlaza el `DetectionAcknowledged`; una
 respuesta de fallback es «sin diagnóstico». Acierta si la causa está en
 `{expected_cause} ∪ also_accepted_causes`. Los fallos manuales generan etiquetas sintéticas.
+
+Episodios sin etiqueta (E6, `unlabeled_episodes.json`, solo si el escenario los tiene): los avisos
+de su regla y su fuente dentro de su ventana que no van a ninguna etiqueta se cuentan aparte, como
+informativos (no son falsas alarmas); las alertas de esos avisos con causa de ataque o `WIND` sí
+son falsas alarmas, y las de `SENSOR_FAULT` o `UNKNOWN`, no. Sin el fichero, nada cambia.
 """
 
 import argparse
@@ -28,7 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from poc_contracts.enums import Cause, LabelType, Rule
-from poc_contracts.run_files import Label, LabelsFile
+from poc_contracts.run_files import Label, LabelsFile, UnlabeledEpisode, UnlabeledEpisodesFile
 
 Event = dict[str, Any]
 GPS_CAUSES = {"GPS_SPOOFING", "GPS_JAMMING", "SENSOR_FAULT"}
@@ -389,6 +394,14 @@ class RunData:
             else []
         )
         self.labels: list[Label] = [*file_labels, *synthetic_labels(self.events)]
+        unlabeled_path = folder.parent / UNLABELED_FILE
+        self.unlabeled: list[UnlabeledEpisode] = (
+            UnlabeledEpisodesFile.model_validate_json(
+                unlabeled_path.read_text(encoding="utf-8")
+            ).episodes
+            if unlabeled_path.exists()
+            else []
+        )
         self.alerts: dict[str, Event] = {
             e["payload"]["alert_id"]: e for e in self.events if e["type"] == "AnomalyDetected"
         }
@@ -533,14 +546,78 @@ def data_items_of(data: RunData, label: Label) -> list[Item]:
 
 
 def false_alarms(data: RunData) -> tuple[list[Item], list[Event]]:
-    """Avisos `Raised` sin etiqueta y alertas fuera de toda ventana de evaluación."""
-    stray_detections = [i for i in data.items if i.kind == "Raised" and i.label is None]
+    """Avisos `Raised` sin etiqueta y alertas fuera de toda ventana de evaluación, sin los de los
+    episodios sin etiqueta (esos se cuentan en `unlabeled_results`)."""
+    episodes = unlabeled_results(data)
+    theirs = {i.detection_id for r in episodes for i in r.detections}
+    their_alerts = {a["payload"]["alert_id"] for r in episodes for a in r.alerts}
+    stray_detections = [
+        i
+        for i in data.items
+        if i.kind == "Raised" and i.label is None and i.detection_id not in theirs
+    ]
     stray_alerts = [
         e
         for e in data.alerts.values()
         if not any(lb.eval_window[0] <= e["sim_time"] <= lb.eval_window[1] for lb in data.labels)
+        and e["payload"]["alert_id"] not in their_alerts
     ]
     return stray_detections, stray_alerts
+
+
+UNLABELED_FILE = "unlabeled_episodes.json"
+FALSE_IN_UNLABELED = ("GPS_SPOOFING", "GPS_JAMMING", "HIJACK", "WIND")
+"""Causas que, dentro de un episodio sin etiqueta (ruido normal de una fuente), son una falsa
+alarma: un ataque o el viento. `SENSOR_FAULT` y `UNKNOWN` no lo son."""
+
+
+@dataclass
+class UnlabeledResult:
+    """Lo que pasó en la ventana de un episodio sin etiqueta."""
+
+    episode: UnlabeledEpisode
+    detections: list[Item]
+    """Avisos `Raised` de sus reglas y su fuente, sin etiqueta: informativos."""
+    alerts: list[Event]
+    """Alertas de esos avisos (por `detection_ids` o porque responden a ellos)."""
+
+    @property
+    def false_alerts(self) -> list[Event]:
+        return [a for a in self.alerts if a["payload"]["cause"] in FALSE_IN_UNLABELED]
+
+
+def unlabeled_results(data: RunData) -> list[UnlabeledResult]:
+    out = []
+    claimed: set[str] = set()
+    for ep in data.unlabeled:
+        a, b = ep.eval_window
+        rules = {r.value for r in ep.rules}
+        detections = [
+            i
+            for i in data.items
+            if i.kind == "Raised"
+            and i.label is None
+            and i.detection_id not in claimed
+            and i.rule in rules
+            and i.event["payload"].get("source") in (None, ep.source.value)
+            and a <= i.event["sim_time"] <= b
+        ]
+        ids = {i.detection_id for i in detections}
+        claimed |= ids
+        answered = {
+            r.alert_id
+            for i in data.items
+            if i.detection_id in ids
+            for r in i.responses
+            if r.alert_id and r.kind != "cierre"
+        }
+        alerts = [
+            e
+            for e in data.alerts.values()
+            if ids & set(e["payload"]["detection_ids"]) or e["payload"]["alert_id"] in answered
+        ]
+        out.append(UnlabeledResult(ep, detections, alerts))
+    return out
 
 
 RECOVERY_LABELS = (LabelType.GPS_SPOOFING, LabelType.GPS_LOSS)
@@ -945,17 +1022,25 @@ class Evaluation:
     """`None`: la traza no guarda los valores esperados (ejecución anterior a la Fase 10)."""
     recovery_misses: list[RecoveryMiss] | None = None
     """`None`: las alertas no llevan `phase` (ejecución anterior a la v0.14)."""
+    unlabeled: list[UnlabeledResult] = field(default_factory=list)
+    """Episodios sin etiqueta (E6; vacío si el escenario no los tiene)."""
+
+    @property
+    def unlabeled_false(self) -> int:
+        """Falsas alarmas dentro de los episodios sin etiqueta (alertas de ataque o viento)."""
+        return sum(len(r.false_alerts) for r in self.unlabeled)
 
 
 def evaluate(folder: Path) -> Evaluation:
     data = RunData(folder)
     results = analyze_labels(data)
     stray_detections, stray_alerts = false_alarms(data)
+    unlabeled = unlabeled_results(data)
     wait_list = waits(data)
     agents = agent_stats(data.trace)
     marks = {r.verdict for r in results}
     overall = "❌" if "❌" in marks else "⚠️" if "⚠️" in marks else "✅"
-    if not results and (stray_detections or stray_alerts):
+    if not results and (stray_detections or stray_alerts or any(r.false_alerts for r in unlabeled)):
         overall = "❌"
     return Evaluation(
         data,
@@ -973,12 +1058,13 @@ def evaluate(folder: Path) -> Evaluation:
         non_latin_stats(data),
         checks_report(data.alerts, data.trace),
         recovery_misses(data),
+        unlabeled,
     )
 
 
 def summary_line(ev: Evaluation) -> str:
     ok = sum(1 for r in ev.results if r.verdict == "✅")
-    false = len(ev.stray_detections) + len(ev.stray_alerts)
+    false = len(ev.stray_detections) + len(ev.stray_alerts) + ev.unlabeled_false
     return (
         f"{ev.overall} {ok}/{len(ev.results)} anomalías y fallos diagnosticados · "
         f"{false} falsas alarmas · {ev.fallbacks} fallbacks · {ev.timeouts} esperas agotadas · "
@@ -1318,6 +1404,35 @@ def false_section(ev: Evaluation) -> list[str]:
     return lines
 
 
+def unlabeled_section(ev: Evaluation) -> list[str]:
+    """Episodios sin etiqueta (E6): solo si el escenario los tiene."""
+    if not ev.unlabeled:
+        return []
+    lines = [
+        "",
+        "## Episodios sin etiqueta (ruido normal de una fuente)",
+        "",
+        "Los avisos de su regla dentro de la ventana son informativos (no son falsas alarmas); una "
+        "alerta con causa de ataque (`GPS_SPOOFING`, `GPS_JAMMING`, `HIJACK`) o `WIND` sí lo es; "
+        "`SENSOR_FAULT` o `UNKNOWN`, no.",
+        "",
+        "| Episodio | Fuente | Ventana | Avisos (informativo) | Alertas | Falsas alarmas |",
+        "|---|---|---|---|---|---|",
+    ]
+    for r in ev.unlabeled:
+        a, b = r.episode.eval_window
+        detections = ", ".join(f"{i.detection_id} {i.rule}" for i in r.detections) or "—"
+        alerts = (
+            ", ".join(f"{e['payload']['alert_id']} ({e['payload']['cause']})" for e in r.alerts)
+            or "—"
+        )
+        lines.append(
+            f"| {r.episode.id} | {r.episode.source.value} | {fmt_t(a)}–{fmt_t(b)} | {detections} "
+            f"| {alerts} | {len(r.false_alerts)} |"
+        )
+    return lines
+
+
 def contradictions_section(ev: Evaluation) -> list[str]:
     lines = ["", "## Frases que contradicen los checks", ""]
     if not ev.contradictions:
@@ -1437,6 +1552,7 @@ def render_markdown(ev: Evaluation) -> str:
         phase_section(ev),
         responses_section(ev),
         false_section(ev),
+        unlabeled_section(ev),
         contradictions_section(ev),
         checks_section(ev),
         non_latin_section(ev),
@@ -1476,7 +1592,7 @@ def to_json(ev: Evaluation) -> dict[str, Any]:
             }
             for r in ev.results
         ],
-        "false_alarms": len(ev.stray_detections) + len(ev.stray_alerts),
+        "false_alarms": len(ev.stray_detections) + len(ev.stray_alerts) + ev.unlabeled_false,
         "fallbacks": ev.fallbacks,
         "timeouts": ev.timeouts,
         "unanswered": [i.detection_id for i in ev.unanswered],
@@ -1511,7 +1627,26 @@ def to_json(ev: Evaluation) -> dict[str, Any]:
         "profile": ev.data.profile or None,
         "agents": ev.agents,
         "waits": ev.wait_list,
+        # E6: solo si el escenario tiene episodios sin etiqueta (sin ellos, el JSON no cambia)
+        **({"unlabeled_episodes": unlabeled_json(ev)} if ev.unlabeled else {}),
     }
+
+
+def unlabeled_json(ev: Evaluation) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": r.episode.id,
+            "source": r.episode.source.value,
+            "eval_window": list(r.episode.eval_window),
+            "detections": [i.detection_id for i in r.detections],
+            "alerts": [
+                {"alert_id": e["payload"]["alert_id"], "cause": e["payload"]["cause"]}
+                for e in r.alerts
+            ],
+            "false_alarms": [e["payload"]["alert_id"] for e in r.false_alerts],
+        }
+        for r in ev.unlabeled
+    ]
 
 
 def write_evaluation(folder: Path) -> Evaluation:

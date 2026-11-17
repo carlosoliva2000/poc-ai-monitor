@@ -218,6 +218,8 @@ class LabelType(StrEnum):
     GPS_SPOOFING = "gps_spoofing"
     SOURCE_SILENT = "source_silent"
     GPS_LOSS = "gps_loss"
+    GPS_DEGRADED = "gps_degraded"  # E6: episodio de degradación del GPS (con fix)
+    LINK_DEGRADED = "link_degraded"  # E6: episodio de degradación del enlace
 
 
 class ClientKind(StrEnum):

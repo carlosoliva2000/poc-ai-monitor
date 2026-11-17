@@ -24,6 +24,37 @@ Cada YAML describe una misión completa y es **determinista** con su `seed`. Tod
 - `spoofing` (o `null`): desde `start_s` hasta `end_s`, el GPS reportado = real + desfase que crece a `drift_rate_mps` en la dirección `direction_deg`. En `end_s` el desfase vuelve a cero de golpe.
 - `faults` (lista, puede estar vacía): `{source, mode, start_s, end_s}` con `source` = `gps` | `radar` | `meteo` | `link` | `battery` y `mode` = `mute` | `loss`. Con `mute` la fuente deja de publicarse en la ventana (el dron vuela igual). `loss` solo existe para el GPS: el dron navega a estima (integra su velocidad respecto al aire, sin conocer el viento), el GPS publica la posición estimada con `fix: none`, `sats: 0` y `hdop` alto, y la trayectoria real se va desviando; al terminar, la posición salta a la real. Cada fallo publica `FaultInjected`/`FaultCleared` (`origin: scenario`). Los fallos manuales (modo interactivo) hacen lo mismo, pero los activa el usuario en directo.
 - `hijack` (o `null`): desde `start_s`, el objetivo del controlador pasa a `target`; en `end_s` (o nunca, si es `null`) se recupera el control y el dron vuelve a seguir el tramo pendiente (se reincorpora a la ruta). `link_hint` cambia el `LinkStatus` durante el secuestro.
+- `sensors.gps.episodes` y `sensors.link.episodes` (listas, opcionales): episodios de degradación de una fuente; ver el apartado siguiente.
+
+## Episodios de degradación del GPS y del enlace
+Una fuente puede degradarse durante una ventana sin fallar del todo: el GPS sigue con fix 3D pero con menos satélites o peor `hdop`, y el enlace sigue con el mismo controlador pero con más latencia o menos señal. Se escriben dentro del bloque de la fuente:
+```yaml
+sensors:
+  gps:
+    period_s: 1.0
+    sigma_m: 1.5
+    sats: 14
+    hdop: 0.8
+    episodes:
+      - {start_s: 150.0, end_s: 210.0, ramp_s: 10.0, sats: 4, hdop: 9.0}
+      - {start_s: 250.0, end_s: 300.0, ramp_s: 20.0, sats: 11, hdop: 1.4, labeled: false}
+  link:
+    period_s: 5.0
+    controller_id: GCS-1
+    rssi_dbm: -62.0
+    latency_ms: 45.0
+    episodes:
+      - {start_s: 330.0, end_s: 390.0, latency_ms: 250.0, rssi_dbm: -85.0}
+```
+Escenario completo de ejemplo: `platform/tests/data/degradations-example.yaml` (el `nominal` con estos tres episodios).
+
+- **Ventana y rampa:** `start_s` y `end_s` en segundos de simulación (`end_s` > `start_s`); `ramp_s` (s, por defecto 0) es la rampa de subida y de bajada, como en los episodios de viento: el valor publicado va del nominal al objetivo en `ramp_s` segundos desde `start_s` y vuelve al nominal en los últimos `ramp_s` segundos antes de `end_s` (con 0 cambia de golpe; si la ventana es más corta que dos rampas, no llega al objetivo). Un episodio que empieza después del fin del vuelo no cuenta; uno que acaba después se recorta al fin del vuelo. Dos episodios de la misma fuente no se pueden solapar.
+- **GPS:** `sats` (número de satélites, entero, al menos 4) y `hdop` (adimensional, mayor que 0), al menos uno de los dos; lo que no se dé se queda en el valor nominal del bloque `gps`. Con la rampa, `sats` se redondea a entero. El `fix` sigue en `3d` y la posición no cambia (ni su ruido). Una pérdida total del fix no es un episodio: es el fallo `loss`, y si coincide con un episodio manda la pérdida.
+- **Enlace:** `latency_ms` (ms, ≥ 0) y `rssi_dbm` (dBm), al menos uno; lo que no se dé se queda en el nominal del bloque `link`. El ruido de siempre se suma encima. El `controller_id` no cambia: un cambio de controlador es un secuestro (`hijack`), y durante el secuestro manda su `link_hint`.
+- **Determinismo:** un episodio no gasta números aleatorios (solo cambia el valor sobre el que se publica la medida), así que todo lo demás sale igual que sin él y un escenario sin episodios genera exactamente lo mismo que antes.
+- **`labeled`** (por defecto `true`): quien escribe el escenario decide, **por la intención**, si el episodio es una degradación que el monitor debe diagnosticar (`true`) o el ruido normal de un vuelo (`false`), sin pensar en si llegará a hacer saltar alguna regla del detector.
+  - Con `labeled: true` el episodio tiene etiqueta en `labels.json`, numerada `F1`, `F2`… junto con los fallos programados, por orden de inicio: `gps_degraded` (`source: gps`, `expected_rules: ["GPS_DEGRADED"]`, `expected_cause: SENSOR_FAULT`, también vale `GPS_JAMMING`) o `link_degraded` (`source: link`, `expected_rules: ["LINK_ANOMALY"]`, `expected_cause: SENSOR_FAULT`, también vale `UNKNOWN`; `HIJACK` es un fallo). No hay frontera por magnitud: una degradación fuerte del GPS no deja de aceptar `SENSOR_FAULT`, y fallar es atribuirla a un engaño, al viento o a un secuestro. Ventana de evaluación: de `start_s` a `end_s + 60`.
+  - Con `labeled: false` no hay etiqueta: el episodio va a `unlabeled_episodes.json` (`U1`, `U2`…, con su fuente, su ventana y las reglas que miden esa fuente). En la evaluación, los avisos de esas reglas dentro de la ventana son informativos (no son falsas alarmas); una alerta con causa de ataque (`GPS_SPOOFING`, `GPS_JAMMING`, `HIJACK`) o `WIND` sí es una falsa alarma; `SENSOR_FAULT` o `UNKNOWN`, no.
 
 ## Salida del generador (`runs/<escenario>/`)
 - `plan.json`: waypoints y trayectoria planificada (vuelo sin perturbaciones; `t, x, y, speed_mps, heading_deg` cada segundo).
@@ -36,6 +67,7 @@ Cada YAML describe una misión completa y es **determinista** con su `seed`. Tod
   "eval_window": [95.0, 210.0] }
 ```
 `eval_window` = de `start_s` a `end_s + 60`: una alerta con la causa esperada dentro de esa ventana cuenta como acierto. Para el spoofing también vale la alerta de recuperación (`GPS_SPOOFING`) tras `end_s`. Para cada fallo programado (`F1`, `F2`… por orden de inicio; la ventana es `[start_s, end_s)`): `{"id": "F1", "type": "source_silent", "source": "radar", "start_s": 120.0, "end_s": 180.0, "expected_rules": ["SOURCE_SILENT"], "expected_cause": "SENSOR_FAULT", "also_accepted_causes": [], "eval_window": [120.0, 240.0]}`. Una pérdida de GPS (`type: gps_loss`) espera `["GPS_DEGRADED", "SOURCE_DISCREPANCY", "ROUTE_DEVIATION"]` y la causa `GPS_JAMMING` (también vale `SENSOR_FAULT`, en `also_accepted_causes`); el `ROUTE_DEVIATION` es el de la recuperación, cuando el GPS salta a la posición real.
+- `unlabeled_episodes.json`: solo si el escenario tiene episodios de degradación con `labeled: false` (ver arriba). Como `labels.json`, solo lo usa la evaluación.
 - `plan_xy.png`, `scenario_xy.png`, `scenario_time.png` (con `plot_scenario.py`).
 
 ## Criterios de aceptación del generador

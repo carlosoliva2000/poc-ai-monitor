@@ -365,3 +365,57 @@ def test_anomaly_decided_by_is_optional_and_closed() -> None:
     assert new.decided_by == "table" and new.rule_id == "C17"
     with pytest.raises(ValidationError):
         AnomalyDetected.model_validate({**base, "decided_by": "rules"})
+
+
+def test_degradation_labels_need_a_source_and_unlabeled_episodes_have_their_own_file() -> None:
+    """E6: `gps_degraded` y `link_degraded` son de una fuente, como los fallos."""
+    from poc_contracts.run_files import Label, UnlabeledEpisodesFile
+
+    base = {"id": "F1", "start_s": 10.0, "end_s": 20.0, "expected_cause": "SENSOR_FAULT",
+            "eval_window": (10.0, 80.0)}  # fmt: skip
+    gps = Label(**base, type="gps_degraded", source="gps", expected_rules=["GPS_DEGRADED"],
+                also_accepted_causes=["GPS_JAMMING"])  # fmt: skip
+    assert gps.type == "gps_degraded"
+    with pytest.raises(ValidationError, match="source"):
+        Label(**base, type="link_degraded", source=None, expected_rules=["LINK_ANOMALY"],
+              also_accepted_causes=["UNKNOWN"])  # fmt: skip
+    episodes = UnlabeledEpisodesFile.model_validate(
+        {
+            "episodes": [
+                {
+                    "id": "U1",
+                    "source": "link",
+                    "start_s": 5.0,
+                    "end_s": 9.0,
+                    "rules": ["LINK_ANOMALY"],
+                    "eval_window": [5.0, 69.0],
+                }
+            ]
+        }  # fmt: skip
+    )
+    assert episodes.episodes[0].id == "U1"
+    with pytest.raises(ValidationError):
+        UnlabeledEpisodesFile.model_validate({"episodes": [{"id": "F1", "source": "link"}]})
+
+
+EPISODE = {"start_s": 1.0, "end_s": 9.0, "ramp_s": 2.0, "latency_ms": 200.0}
+
+
+def test_sensor_episodes_are_optional_in_the_scenario() -> None:
+    from poc_contracts.scenario import GpsConfig, LinkConfig
+
+    gps = GpsConfig(period_s=1.0, sigma_m=1.5, sats=14, hdop=0.8)
+    assert gps.episodes == []
+    link = LinkConfig.model_validate(
+        {
+            "period_s": 5.0,
+            "controller_id": "GCS-1",
+            "rssi_dbm": -62.0,
+            "latency_ms": 45.0,
+            "episodes": [{"start_s": 1.0, "end_s": 9.0, "ramp_s": 2.0, "latency_ms": 200.0}],
+        }  # fmt: skip
+    )
+    [e] = link.episodes
+    assert e.labeled and (e.level(0.5), e.level(2.0), e.level(5.0), e.level(9.0)) == (
+        None, 0.5, 1.0, 0.0,
+    )  # fmt: skip

@@ -390,10 +390,12 @@ class Simulator:
             if self._est is not None:
                 rad = math.radians(s.heading_deg)
                 vel = (self._speed * math.sin(rad), self._speed * math.cos(rad))
-                payload = sensors.gps_payload(cfg, rng, self._est, vel, loss=True)
+                payload = sensors.gps_payload(cfg, rng, self._est, vel, loss=True, t=t)
             else:
                 dvx, dvy = spoof_offset_rate(t, self._spoofing)
-                payload = sensors.gps_payload(cfg, rng, s.gps, (s.vx + dvx, s.vy + dvy), loss=False)
+                payload = sensors.gps_payload(
+                    cfg, rng, s.gps, (s.vx + dvx, s.vy + dvy), loss=False, t=t
+                )
             emit("gps", EventType.POSITION_UPDATED, SensorSource.GPS, payload)
         if n % self._periods["radar"] == 0:
             emit(

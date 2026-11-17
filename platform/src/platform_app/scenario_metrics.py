@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from poc_contracts.enums import LabelType
-from poc_contracts.run_files import Label, LabelsFile, PlanFile, TruthFile
+from poc_contracts.run_files import SOURCE_LABEL_TYPES, Label, LabelsFile, PlanFile, TruthFile
 
 from .geometry import Point, distance_to_route
 from .paths import RUNS_DIR
@@ -393,7 +393,7 @@ def run_checks(name: str, runs_dir: Path = RUNS_DIR) -> list[Check]:
     run = load_run(name, runs_dir)
     c = _Checks(run)
     dev, disc = truth_deviation(run), gps_radar_distance(run)
-    fault_types = (LabelType.SOURCE_SILENT, LabelType.GPS_LOSS)
+    fault_types = SOURCE_LABEL_TYPES  # fallos y degradaciones de una fuente (sin criterio propio)
     anomalies = sorted(
         (lb for lb in run.labels if lb.type not in fault_types), key=lambda x: x.start_s
     )

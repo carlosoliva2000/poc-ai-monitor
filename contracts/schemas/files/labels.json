@@ -96,7 +96,9 @@
         "hijack",
         "gps_spoofing",
         "source_silent",
-        "gps_loss"
+        "gps_loss",
+        "gps_degraded",
+        "link_degraded"
       ],
       "title": "LabelType",
       "type": "string"

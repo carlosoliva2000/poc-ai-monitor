@@ -556,6 +556,7 @@ def test_agent_code_never_reads_labels_or_truth() -> None:
         if path.name == "evaluate.py":
             continue
         assert "labels.json" not in text and "truth" not in text.lower().replace("truthy", ""), path
+        assert "unlabeled_episodes" not in text, path  # E6: tampoco los episodios sin etiqueta
         assert "from .evaluate" not in text and "import evaluate" not in text, path
         assert "platform_app" not in text, path  # regla 3: nada de importar `platform/`
 
