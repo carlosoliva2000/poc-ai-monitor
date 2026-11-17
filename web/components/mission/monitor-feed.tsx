@@ -11,7 +11,7 @@ import type {
   DetectionCleared,
   Envelope,
 } from '@/lib/contracts'
-import { callsByCause, type Derived, type ToolCallEvent } from '@/lib/derive'
+import { callsByCause, groupByWarning, type Derived, type ToolCallEvent } from '@/lib/derive'
 import { stripFieldValues } from '@/lib/clean-text'
 import { CAUSE_LABEL, CHECK_LABEL, episodePath, formatT, PHASE_LABEL, phaseOf, SEVERITY_LABEL, SOURCE_LABEL } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -48,6 +48,7 @@ export function MonitorFeed({ events, data, activity, toolCalls }: Props) {
   const byId = new Map(feed.map((e) => [e.event_id, e]))
   const busy = Boolean(activity.monitor)
   const callsByDetection = callsByCause(toolCalls, ['monitor'])
+  const { top, responses } = groupByWarning(feed)
 
   useEffect(() => {
     const el = scrollRef.current
@@ -73,11 +74,14 @@ export function MonitorFeed({ events, data, activity, toolCalls }: Props) {
             Waiting for the detector. When a rule fires, the monitor will diagnose the cause and publish an alert here.
           </p>
         )}
-        {feed.map((e) => (
-          <div key={e.event_id} className="flex flex-col gap-2">
+        {top.map((e) => (
+          <div key={e.event_id} className="flex flex-col gap-2" data-testid="warning-group">
             <FeedEntry event={e} data={data} byId={byId} />
             {pendingIds.has(e.event_id) && <Analyzing event={e} busy={busy} />}
             <Invocation calls={callsByDetection.get(e.event_id)} />
+            {responses.get(e.event_id)?.map((r) => (
+              <FeedEntry key={r.event_id} event={r} data={data} byId={byId} />
+            ))}
           </div>
         ))}
       </div>
@@ -227,6 +231,11 @@ function AlertCard({ event, data, byId }: { event: Envelope<Anomaly>; data: Deri
         </p>
       )}
       <p className="text-sm leading-relaxed text-foreground text-pretty">{a.summary}</p>
+      {!a.fallback && (
+        <p className="font-mono text-[10px] text-muted-foreground" data-testid="decided-by">
+          {decidedBy(a)}
+        </p>
+      )}
       <details className="group text-sm">
         <summary className="cursor-pointer list-none text-xs font-medium text-primary [&::-webkit-details-marker]:hidden">
           <span className="mr-1 inline-block transition-transform group-open:rotate-90">›</span>
@@ -263,6 +272,12 @@ function AlertCard({ event, data, byId }: { event: Envelope<Anomaly>; data: Deri
       </details>
     </article>
   )
+}
+
+/** v0.19 (E6): quién decidió la alerta. Sin el campo (las alertas anteriores), el modelo. */
+export function decidedBy(a: Pick<Anomaly, 'decided_by' | 'rule_id'>): string {
+  if (a.decided_by === 'table') return `Decided by rule ${a.rule_id ?? '?'} of the decision table`
+  return 'Decided by the model'
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

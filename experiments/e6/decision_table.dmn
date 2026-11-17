@@ -1,0 +1,2198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20230324/MODEL/" id="monitor_decision" name="Monitor decision table" namespace="https://citadel.local/poc-ai-monitor/monitor-decision" expressionLanguage="https://www.omg.org/spec/DMN/20230324/FEEL/" typeLanguage="https://www.omg.org/spec/DMN/20230324/FEEL/">
+  <decision id="decision_cause" name="cause">
+    <description>Causa, fase y a qué alerta se engancha el aviso.</description>
+    <decisionTable id="table_cause" hitPolicy="FIRST">
+      <input id="cause_in_0" label="rule">
+        <inputExpression id="cause_ie_0">
+          <text>rule</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_1" label="kind">
+        <inputExpression id="cause_ie_1">
+          <text>kind</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_2" label="link_recovery">
+        <inputExpression id="cause_ie_2">
+          <text>link_recovery</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_3" label="gps_alert_recent">
+        <inputExpression id="cause_ie_3">
+          <text>gps_alert_recent</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_4" label="gps_step_m">
+        <inputExpression id="cause_ie_4">
+          <text>gps_step_m</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_5" label="gps_radar_disagreed">
+        <inputExpression id="cause_ie_5">
+          <text>gps_radar_disagreed</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_6" label="gps_radar_agree_now">
+        <inputExpression id="cause_ie_6">
+          <text>gps_radar_agree_now</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_7" label="position_conflict">
+        <inputExpression id="cause_ie_7">
+          <text>position_conflict</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_8" label="gps_loss_open">
+        <inputExpression id="cause_ie_8">
+          <text>gps_loss_open</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_9" label="open_gps_alert_cause">
+        <inputExpression id="cause_ie_9">
+          <text>open_gps_alert_cause</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_10" label="gps_fix_bad">
+        <inputExpression id="cause_ie_10">
+          <text>gps_fix_bad</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_11" label="gps_dev_mean_m">
+        <inputExpression id="cause_ie_11">
+          <text>gps_dev_mean_m</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_12" label="radar_minus_gps_now_m">
+        <inputExpression id="cause_ie_12">
+          <text>radar_minus_gps_now_m</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_13" label="radar_trend">
+        <inputExpression id="cause_ie_13">
+          <text>radar_trend</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_14" label="radar_silent">
+        <inputExpression id="cause_ie_14">
+          <text>radar_silent</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_15" label="radar_quality_min">
+        <inputExpression id="cause_ie_15">
+          <text>radar_quality_min</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_16" label="wind_notable">
+        <inputExpression id="cause_ie_16">
+          <text>wind_notable</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_17" label="wind_with_drift">
+        <inputExpression id="cause_ie_17">
+          <text>wind_with_drift</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_18" label="link_controller_changed">
+        <inputExpression id="cause_ie_18">
+          <text>link_controller_changed</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_19" label="link_anomalous">
+        <inputExpression id="cause_ie_19">
+          <text>link_anomalous</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_20" label="course_vs_waypoint_deg">
+        <inputExpression id="cause_ie_20">
+          <text>course_vs_waypoint_deg</text>
+        </inputExpression>
+      </input>
+      <input id="cause_in_21" label="gps_dev_trend">
+        <inputExpression id="cause_ie_21">
+          <text>gps_dev_trend</text>
+        </inputExpression>
+      </input>
+      <output id="cause_out_0" name="cause"/>
+      <output id="cause_out_1" name="phase"/>
+      <output id="cause_out_2" name="attach"/>
+      <rule id="cause_C01">
+        <description>C01: source-discrepancy 5: a silent source is always its own fault</description>
+        <inputEntry id="C01_i0">
+          <text>&quot;SOURCE_SILENT&quot;</text>
+        </inputEntry>
+        <inputEntry id="C01_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C01_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C01_o0">
+          <text>&quot;SENSOR_FAULT&quot;</text>
+        </outputEntry>
+        <outputEntry id="C01_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C01_o2">
+          <text>&quot;none&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C02">
+        <description>C02: link-anomaly 4: the link is back with the drone still off the route</description>
+        <inputEntry id="C02_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i2">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C02_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C02_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C02_o0">
+          <text>&quot;HIJACK&quot;</text>
+        </outputEntry>
+        <outputEntry id="C02_o1">
+          <text>&quot;recovering&quot;</text>
+        </outputEntry>
+        <outputEntry id="C02_o2">
+          <text>&quot;hijack_alert&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C03">
+        <description>C03: link-anomaly 2: another controller has the link</description>
+        <inputEntry id="C03_i0">
+          <text>&quot;LINK_ANOMALY&quot;</text>
+        </inputEntry>
+        <inputEntry id="C03_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i18">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C03_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C03_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C03_o0">
+          <text>&quot;HIJACK&quot;</text>
+        </outputEntry>
+        <outputEntry id="C03_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C03_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C04">
+        <description>C04: link-anomaly 3: same controller, degraded link</description>
+        <inputEntry id="C04_i0">
+          <text>&quot;LINK_ANOMALY&quot;</text>
+        </inputEntry>
+        <inputEntry id="C04_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C04_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C04_o0">
+          <text>&quot;SENSOR_FAULT&quot;</text>
+        </outputEntry>
+        <outputEntry id="C04_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C04_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C05">
+        <description>C05: source-discrepancy 4: bad fix</description>
+        <inputEntry id="C05_i0">
+          <text>&quot;GPS_DEGRADED&quot;</text>
+        </inputEntry>
+        <inputEntry id="C05_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i10">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C05_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C05_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C05_o0">
+          <text>&quot;GPS_JAMMING&quot;</text>
+        </outputEntry>
+        <outputEntry id="C05_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C05_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C06">
+        <description>C06: source-discrepancy 4: somewhat high hdop or few satellites</description>
+        <inputEntry id="C06_i0">
+          <text>&quot;GPS_DEGRADED&quot;</text>
+        </inputEntry>
+        <inputEntry id="C06_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C06_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C06_o0">
+          <text>&quot;SENSOR_FAULT&quot;</text>
+        </outputEntry>
+        <outputEntry id="C06_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C06_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C07">
+        <description>C07: route-deviation 2: the GPS is back (jump) and GPS and radar agree now</description>
+        <inputEntry id="C07_i0">
+          <text>&quot;ROUTE_DEVIATION&quot;</text>
+        </inputEntry>
+        <inputEntry id="C07_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i3">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C07_i4">
+          <text>&gt;= 30</text>
+        </inputEntry>
+        <inputEntry id="C07_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i6">
+          <text>not(false)</text>
+        </inputEntry>
+        <inputEntry id="C07_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C07_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C07_o0">
+          <text>&quot;SAME_AS_GPS_ALERT&quot;</text>
+        </outputEntry>
+        <outputEntry id="C07_o1">
+          <text>&quot;recovering&quot;</text>
+        </outputEntry>
+        <outputEntry id="C07_o2">
+          <text>&quot;gps_alert&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C08">
+        <description>C08: route-deviation 2: the deviation belongs to the GPS alert, the problem goes on</description>
+        <inputEntry id="C08_i0">
+          <text>&quot;ROUTE_DEVIATION&quot;</text>
+        </inputEntry>
+        <inputEntry id="C08_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i3">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C08_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i5">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C08_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C08_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C08_o0">
+          <text>&quot;SAME_AS_GPS_ALERT&quot;</text>
+        </outputEntry>
+        <outputEntry id="C08_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C08_o2">
+          <text>&quot;gps_alert&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C09">
+        <description>C09: route-deviation 2: a jump but GPS and radar still disagree now</description>
+        <inputEntry id="C09_i0">
+          <text>&quot;ROUTE_DEVIATION&quot;</text>
+        </inputEntry>
+        <inputEntry id="C09_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i3">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C09_i4">
+          <text>&gt;= 30</text>
+        </inputEntry>
+        <inputEntry id="C09_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C09_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C09_o0">
+          <text>&quot;SAME_AS_GPS_ALERT&quot;</text>
+        </outputEntry>
+        <outputEntry id="C09_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C09_o2">
+          <text>&quot;gps_alert&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C10">
+        <description>C10: source-discrepancy 0: the GPS loss is confirmed (sensor fault → jamming)</description>
+        <inputEntry id="C10_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i7">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C10_i8">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C10_i9">
+          <text>&quot;SENSOR_FAULT&quot;</text>
+        </inputEntry>
+        <inputEntry id="C10_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C10_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C10_o0">
+          <text>&quot;GPS_JAMMING&quot;</text>
+        </outputEntry>
+        <outputEntry id="C10_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C10_o2">
+          <text>&quot;gps_alert&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C11">
+        <description>C11: source-discrepancy 0: consequence of the GPS loss already alerted</description>
+        <inputEntry id="C11_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i7">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C11_i8">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C11_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C11_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C11_o0">
+          <text>&quot;GPS_JAMMING&quot;</text>
+        </outputEntry>
+        <outputEntry id="C11_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C11_o2">
+          <text>&quot;gps_alert&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C12">
+        <description>C12: source-discrepancy 2: bad fix in the last GPS reports</description>
+        <inputEntry id="C12_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i7">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C12_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i10">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C12_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C12_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C12_o0">
+          <text>&quot;GPS_JAMMING&quot;</text>
+        </outputEntry>
+        <outputEntry id="C12_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C12_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C13">
+        <description>C13: source-discrepancy 1: the radar is silent, the GPS cannot be checked</description>
+        <inputEntry id="C13_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i7">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C13_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i14">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C13_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C13_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C13_o0">
+          <text>&quot;UNKNOWN&quot;</text>
+        </outputEntry>
+        <outputEntry id="C13_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C13_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C14">
+        <description>C14: source-discrepancy 2: the GPS is on the plan and the radar is off and moving away</description>
+        <inputEntry id="C14_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i5">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C14_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i7">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C14_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i11">
+          <text>&lt; 15</text>
+        </inputEntry>
+        <inputEntry id="C14_i12">
+          <text>&gt; 15</text>
+        </inputEntry>
+        <inputEntry id="C14_i13">
+          <text>&quot;increasing&quot;</text>
+        </inputEntry>
+        <inputEntry id="C14_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C14_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C14_o0">
+          <text>&quot;GPS_SPOOFING&quot;</text>
+        </outputEntry>
+        <outputEntry id="C14_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C14_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C15">
+        <description>C15: source-discrepancy 3: poor radar quality</description>
+        <inputEntry id="C15_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i7">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C15_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i15">
+          <text>&lt; 0.5</text>
+        </inputEntry>
+        <inputEntry id="C15_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C15_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C15_o0">
+          <text>&quot;SENSOR_FAULT&quot;</text>
+        </outputEntry>
+        <outputEntry id="C15_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C15_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C16">
+        <description>C16: source-discrepancy 3: a discrepancy without the pattern of a spoofing</description>
+        <inputEntry id="C16_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i7">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C16_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C16_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C16_o0">
+          <text>&quot;SENSOR_FAULT&quot;</text>
+        </outputEntry>
+        <outputEntry id="C16_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C16_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C17">
+        <description>C17: route-deviation 4: notable wind that pushes the same way as the drift</description>
+        <inputEntry id="C17_i0">
+          <text>&quot;ROUTE_DEVIATION&quot;</text>
+        </inputEntry>
+        <inputEntry id="C17_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i16">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C17_i17">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C17_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C17_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C17_o0">
+          <text>&quot;WIND&quot;</text>
+        </outputEntry>
+        <outputEntry id="C17_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C17_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C18">
+        <description>C18: route-deviation 5: anomalous link</description>
+        <inputEntry id="C18_i0">
+          <text>&quot;ROUTE_DEVIATION&quot;</text>
+        </inputEntry>
+        <inputEntry id="C18_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i19">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="C18_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C18_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C18_o0">
+          <text>&quot;HIJACK&quot;</text>
+        </outputEntry>
+        <outputEntry id="C18_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C18_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C19">
+        <description>C19: route-deviation 5: normal link, but the course leaves the waypoint and the deviation grows</description>
+        <inputEntry id="C19_i0">
+          <text>&quot;ROUTE_DEVIATION&quot;</text>
+        </inputEntry>
+        <inputEntry id="C19_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i3">
+          <text>false</text>
+        </inputEntry>
+        <inputEntry id="C19_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C19_i20">
+          <text>&gt; 45</text>
+        </inputEntry>
+        <inputEntry id="C19_i21">
+          <text>&quot;increasing&quot;</text>
+        </inputEntry>
+        <outputEntry id="C19_o0">
+          <text>&quot;HIJACK&quot;</text>
+        </outputEntry>
+        <outputEntry id="C19_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C19_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="cause_C20">
+        <description>C20: route-deviation 6: nothing fits</description>
+        <inputEntry id="C20_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i7">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i8">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i9">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i10">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i11">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i12">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i13">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i14">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i15">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i16">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i17">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i18">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i19">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i20">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="C20_i21">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="C20_o0">
+          <text>&quot;UNKNOWN&quot;</text>
+        </outputEntry>
+        <outputEntry id="C20_o1">
+          <text>&quot;active&quot;</text>
+        </outputEntry>
+        <outputEntry id="C20_o2">
+          <text>&quot;same_cause&quot;</text>
+        </outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+  <decision id="decision_severity" name="severity">
+    <description>Riesgo operativo ahora (criterio de monitor_output.md).</description>
+    <decisionTable id="table_severity" hitPolicy="FIRST">
+      <input id="severity_in_0" label="cause">
+        <inputExpression id="severity_ie_0">
+          <text>cause</text>
+        </inputExpression>
+      </input>
+      <input id="severity_in_1" label="phase">
+        <inputExpression id="severity_ie_1">
+          <text>phase</text>
+        </inputExpression>
+      </input>
+      <input id="severity_in_2" label="fault_source">
+        <inputExpression id="severity_ie_2">
+          <text>fault_source</text>
+        </inputExpression>
+      </input>
+      <input id="severity_in_3" label="gps_radar_disagreed">
+        <inputExpression id="severity_ie_3">
+          <text>gps_radar_disagreed</text>
+        </inputExpression>
+      </input>
+      <input id="severity_in_4" label="gps_radar_agree_now">
+        <inputExpression id="severity_ie_4">
+          <text>gps_radar_agree_now</text>
+        </inputExpression>
+      </input>
+      <input id="severity_in_5" label="deviation_now_m">
+        <inputExpression id="severity_ie_5">
+          <text>deviation_now_m</text>
+        </inputExpression>
+      </input>
+      <input id="severity_in_6" label="route_trend">
+        <inputExpression id="severity_ie_6">
+          <text>route_trend</text>
+        </inputExpression>
+      </input>
+      <input id="severity_in_7" label="other_position_detection_open">
+        <inputExpression id="severity_ie_7">
+          <text>other_position_detection_open</text>
+        </inputExpression>
+      </input>
+      <output id="severity_out_0" name="severity"/>
+      <rule id="severity_S01">
+        <description>S01: a recovery while the drone is still far from the route: something to watch</description>
+        <inputEntry id="S01_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S01_i1">
+          <text>&quot;recovering&quot;</text>
+        </inputEntry>
+        <inputEntry id="S01_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S01_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S01_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S01_i5">
+          <text>&gt; 30</text>
+        </inputEntry>
+        <inputEntry id="S01_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S01_i7">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="S01_o0">
+          <text>&quot;medium&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="severity_S02">
+        <description>S02: a recovery close to the route: watching is enough</description>
+        <inputEntry id="S02_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S02_i1">
+          <text>&quot;recovering&quot;</text>
+        </inputEntry>
+        <inputEntry id="S02_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S02_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S02_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S02_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S02_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S02_i7">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="S02_o0">
+          <text>&quot;low&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="severity_S03">
+        <description>S03: the control may be in somebody else's hands</description>
+        <inputEntry id="S03_i0">
+          <text>&quot;HIJACK&quot;</text>
+        </inputEntry>
+        <inputEntry id="S03_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S03_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S03_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S03_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S03_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S03_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S03_i7">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="S03_o0">
+          <text>&quot;high&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="severity_S04">
+        <description>S04: the position cannot be trusted</description>
+        <inputEntry id="S04_i0">
+          <text>&quot;GPS_SPOOFING&quot;</text>
+        </inputEntry>
+        <inputEntry id="S04_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S04_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S04_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S04_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S04_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S04_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S04_i7">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="S04_o0">
+          <text>&quot;high&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="severity_S05">
+        <description>S05: GPS loss with the drone drifting off</description>
+        <inputEntry id="S05_i0">
+          <text>&quot;GPS_JAMMING&quot;</text>
+        </inputEntry>
+        <inputEntry id="S05_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S05_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S05_i3">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="S05_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S05_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S05_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S05_i7">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="S05_o0">
+          <text>&quot;high&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="severity_S06">
+        <description>S06: GPS loss, no drift yet</description>
+        <inputEntry id="S06_i0">
+          <text>&quot;GPS_JAMMING&quot;</text>
+        </inputEntry>
+        <inputEntry id="S06_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S06_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S06_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S06_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S06_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S06_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S06_i7">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="S06_o0">
+          <text>&quot;medium&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="severity_S07">
+        <description>S07: physical cause and the drone under control</description>
+        <inputEntry id="S07_i0">
+          <text>&quot;WIND&quot;</text>
+        </inputEntry>
+        <inputEntry id="S07_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S07_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S07_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S07_i4">
+          <text>true</text>
+        </inputEntry>
+        <inputEntry id="S07_i5">
+          <text>&lt; 80</text>
+        </inputEntry>
+        <inputEntry id="S07_i6">
+          <text>not(&quot;moving_away&quot;)</text>
+        </inputEntry>
+        <inputEntry id="S07_i7">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="S07_o0">
+          <text>&quot;low&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="severity_S08">
+        <description>S08: wind and the situation is getting worse</description>
+        <inputEntry id="S08_i0">
+          <text>&quot;WIND&quot;</text>
+        </inputEntry>
+        <inputEntry id="S08_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S08_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S08_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S08_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S08_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S08_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S08_i7">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="S08_o0">
+          <text>&quot;medium&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="severity_S09">
+        <description>S09: a position source is lost while another position detection is open</description>
+        <inputEntry id="S09_i0">
+          <text>&quot;SENSOR_FAULT&quot;</text>
+        </inputEntry>
+        <inputEntry id="S09_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S09_i2">
+          <text>&quot;gps&quot;,&quot;radar&quot;</text>
+        </inputEntry>
+        <inputEntry id="S09_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S09_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S09_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S09_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S09_i7">
+          <text>true</text>
+        </inputEntry>
+        <outputEntry id="S09_o0">
+          <text>&quot;high&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="severity_S10">
+        <description>S10: a source that cannot be trusted</description>
+        <inputEntry id="S10_i0">
+          <text>&quot;SENSOR_FAULT&quot;</text>
+        </inputEntry>
+        <inputEntry id="S10_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S10_i2">
+          <text>&quot;gps&quot;,&quot;radar&quot;,&quot;link&quot;,&quot;position&quot;</text>
+        </inputEntry>
+        <inputEntry id="S10_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S10_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S10_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S10_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S10_i7">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="S10_o0">
+          <text>&quot;medium&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="severity_S11">
+        <description>S11: minor fault (weather station, battery)</description>
+        <inputEntry id="S11_i0">
+          <text>&quot;SENSOR_FAULT&quot;</text>
+        </inputEntry>
+        <inputEntry id="S11_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S11_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S11_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S11_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S11_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S11_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S11_i7">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="S11_o0">
+          <text>&quot;low&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="severity_S12">
+        <description>S12: unknown cause: something to check</description>
+        <inputEntry id="S12_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S12_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S12_i2">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S12_i3">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S12_i4">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S12_i5">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S12_i6">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="S12_i7">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="S12_o0">
+          <text>&quot;medium&quot;</text>
+        </outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+  <decision id="decision_confidence" name="confidence">
+    <description>Fuentes independientes que apoyan la causa y contradicciones (criterio de monitor_output.md). Criterio propuesto para la E6, no derivado de datos.</description>
+    <decisionTable id="table_confidence" hitPolicy="FIRST">
+      <input id="confidence_in_0" label="cause">
+        <inputExpression id="confidence_ie_0">
+          <text>cause</text>
+        </inputExpression>
+      </input>
+      <input id="confidence_in_1" label="n_support">
+        <inputExpression id="confidence_ie_1">
+          <text>n_support</text>
+        </inputExpression>
+      </input>
+      <input id="confidence_in_2" label="n_contra">
+        <inputExpression id="confidence_ie_2">
+          <text>n_contra</text>
+        </inputExpression>
+      </input>
+      <output id="confidence_out_0" name="confidence"/>
+      <rule id="confidence_K01">
+        <description>K01: unknown cause: a conjecture</description>
+        <inputEntry id="K01_i0">
+          <text>&quot;UNKNOWN&quot;</text>
+        </inputEntry>
+        <inputEntry id="K01_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="K01_i2">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="K01_o0">
+          <text>0.3</text>
+        </outputEntry>
+      </rule>
+      <rule id="confidence_K02">
+        <description>K02: two or more sources and nothing against</description>
+        <inputEntry id="K02_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="K02_i1">
+          <text>&gt;= 2</text>
+        </inputEntry>
+        <inputEntry id="K02_i2">
+          <text>0</text>
+        </inputEntry>
+        <outputEntry id="K02_o0">
+          <text>0.8</text>
+        </outputEntry>
+      </rule>
+      <rule id="confidence_K03">
+        <description>K03: two or more sources and one contradiction, or one source and nothing against</description>
+        <inputEntry id="K03_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="K03_i1">
+          <text>&gt;= 2</text>
+        </inputEntry>
+        <inputEntry id="K03_i2">
+          <text>1</text>
+        </inputEntry>
+        <outputEntry id="K03_o0">
+          <text>0.6</text>
+        </outputEntry>
+      </rule>
+      <rule id="confidence_K04">
+        <description>K04: one source and nothing against</description>
+        <inputEntry id="K04_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="K04_i1">
+          <text>1</text>
+        </inputEntry>
+        <inputEntry id="K04_i2">
+          <text>0</text>
+        </inputEntry>
+        <outputEntry id="K04_o0">
+          <text>0.6</text>
+        </outputEntry>
+      </rule>
+      <rule id="confidence_K05">
+        <description>K05: one source with a contradiction, or several contradictions</description>
+        <inputEntry id="K05_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="K05_i1">
+          <text>&gt;= 1</text>
+        </inputEntry>
+        <inputEntry id="K05_i2">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="K05_o0">
+          <text>0.4</text>
+        </outputEntry>
+      </rule>
+      <rule id="confidence_K06">
+        <description>K06: nothing supports it</description>
+        <inputEntry id="K06_i0">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="K06_i1">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="K06_i2">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="K06_o0">
+          <text>0.3</text>
+        </outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+</definitions>

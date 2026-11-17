@@ -1,0 +1,81 @@
+# Un ejemplo por fila de la tabla de decisión (E6): las entradas que difieren de `defaults` y con
+# las que debe ganar esa fila (política FIRST). La prueba comprueba que cada fila tiene el suyo.
+defaults:
+  cause:
+    rule: ROUTE_DEVIATION
+    kind: raised
+    link_recovery: false
+    gps_alert_recent: false
+    gps_step_m: 3.0
+    gps_radar_disagreed: false
+    gps_radar_agree_now: true
+    position_conflict: false
+    gps_loss_open: false
+    open_gps_alert_cause: none
+    gps_fix_bad: false
+    gps_dev_mean_m: 30.0
+    radar_minus_gps_now_m: 0.0
+    radar_trend: stable
+    radar_silent: false
+    radar_quality_min: 0.9
+    wind_notable: false
+    wind_with_drift: false
+    link_controller_changed: false
+    link_anomalous: false
+    course_vs_waypoint_deg: 10.0
+    gps_dev_trend: stable
+  severity:
+    cause: UNKNOWN
+    phase: active
+    fault_source: position
+    gps_radar_disagreed: false
+    gps_radar_agree_now: true
+    deviation_now_m: 40.0
+    route_trend: steady
+    other_position_detection_open: false
+  confidence:
+    cause: WIND
+    n_support: 0
+    n_contra: 0
+examples:
+  cause:
+    C01: {rule: SOURCE_SILENT}
+    C02: {rule: LINK_ANOMALY, kind: cleared, link_recovery: true}
+    C03: {rule: LINK_ANOMALY, link_controller_changed: true}
+    C04: {rule: LINK_ANOMALY}
+    C05: {rule: GPS_DEGRADED, gps_fix_bad: true}
+    C06: {rule: GPS_DEGRADED}
+    C07: {gps_alert_recent: true, gps_step_m: 67.9, gps_radar_disagreed: true}
+    C08: {gps_alert_recent: true, gps_radar_disagreed: true}
+    C09: {gps_alert_recent: true, gps_step_m: 40.0, gps_radar_agree_now: false}
+    C10: {rule: SOURCE_DISCREPANCY, position_conflict: true, gps_loss_open: true, open_gps_alert_cause: SENSOR_FAULT}
+    C11: {rule: SOURCE_DISCREPANCY, position_conflict: true, gps_loss_open: true, open_gps_alert_cause: GPS_JAMMING}
+    C12: {rule: SOURCE_DISCREPANCY, position_conflict: true, gps_fix_bad: true}
+    C13: {rule: SOURCE_DISCREPANCY, position_conflict: true, radar_silent: true}
+    C14: {rule: SOURCE_DISCREPANCY, position_conflict: true, gps_radar_disagreed: true, gps_dev_mean_m: 4.3, radar_minus_gps_now_m: 27.5, radar_trend: increasing}
+    C15: {rule: SOURCE_DISCREPANCY, position_conflict: true, radar_quality_min: 0.3}
+    C16: {rule: SOURCE_DISCREPANCY, position_conflict: true}
+    C17: {wind_notable: true, wind_with_drift: true}
+    C18: {link_anomalous: true}
+    C19: {course_vs_waypoint_deg: 80.0, gps_dev_trend: increasing}
+    C20: {}
+  severity:
+    S01: {cause: GPS_SPOOFING, phase: recovering, deviation_now_m: 77.7}
+    S02: {cause: GPS_SPOOFING, phase: recovering, deviation_now_m: 5.0}
+    S03: {cause: HIJACK}
+    S04: {cause: GPS_SPOOFING}
+    S05: {cause: GPS_JAMMING, gps_radar_disagreed: true}
+    S06: {cause: GPS_JAMMING}
+    S07: {cause: WIND, deviation_now_m: 32.0, route_trend: approaching}
+    S08: {cause: WIND, route_trend: moving_away}
+    S09: {cause: SENSOR_FAULT, fault_source: gps, other_position_detection_open: true}
+    S10: {cause: SENSOR_FAULT, fault_source: radar}
+    S11: {cause: SENSOR_FAULT, fault_source: battery}
+    S12: {}
+  confidence:
+    K01: {cause: UNKNOWN, n_support: 3}
+    K02: {n_support: 2}
+    K03: {n_support: 2, n_contra: 1}
+    K04: {n_support: 1}
+    K05: {n_support: 1, n_contra: 1}
+    K06: {}

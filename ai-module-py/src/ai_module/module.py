@@ -35,6 +35,7 @@ class AiModule:
         detector: Detector,
         *,
         with_agents: bool = True,
+        with_llm_agents: bool = True,
         on_detection: Callable[[str], None] | None = None,
     ) -> None:
         self.rt = rt
@@ -43,7 +44,9 @@ class AiModule:
         self.formatter = DetectionFormatter()
         self._on_detection = on_detection
         self.monitor = Monitor(rt) if with_agents else None
-        self.report = ReportAgent(rt, self.monitor) if self.monitor else None
+        # E6 (`--no-llm`): con la tabla de decisión y sin LLM no hay informe ni chats
+        llm_agents = with_agents and with_llm_agents
+        self.report = ReportAgent(rt, self.monitor) if self.monitor and llm_agents else None
         self.chats = (
             {
                 c: InstructorChat(rt)
@@ -51,7 +54,7 @@ class AiModule:
                 else Chat(rt, c, self.report)
                 for c in ConversationId
             }
-            if with_agents
+            if llm_agents
             else {}
         )
         self._tasks: list[asyncio.Task[None]] = []

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AgentToolCall, Envelope } from './contracts.ts'
-import { callsByCause, chatEntries, type ToolCallEvent } from './derive.ts'
+import { callsByCause, chatEntries, groupByWarning, type ToolCallEvent } from './derive.ts'
 
 const base = { asset: null, event_time: '2026-10-20T10:00:01Z', ingestion_time: '2026-10-20T10:00:01.000Z', ephemeral: false }
 const call = (id: string, cause: string, agent: AgentToolCall['agent'], index: number): ToolCallEvent => ({
@@ -41,4 +41,21 @@ test('la cadena de una alerta se cuenta como estados: causa → recovering → c
   assert.deepEqual(episodePath([{ cause: 'WIND' }], false), ['Wind'])
   assert.equal(phaseOf({}), 'active') // ejecución anterior a la v0.14
   assert.equal(phaseOf({ phase: 'recovering' }), 'recovering')
+})
+
+test('E6: las respuestas del monitor van bajo su aviso y lo demás queda arriba', () => {
+  const ev = (id: string, source: string, type: string, cause: string | null, seq: number): Envelope => ({
+    ...base, event_id: id, topic: 't', type, source, seq, sim_time: seq, causation_id: cause, payload: {},
+  }) as unknown as Envelope
+  const feed = [
+    ev('det-0001', 'ai-detector', 'DetectionRaised', null, 1),
+    ev('det-0002', 'ai-detector', 'DetectionRaised', null, 2),
+    ev('ai-0001', 'ai-monitor', 'AnomalyDetected', 'det-0001', 3),
+    ev('ai-0002', 'ai-monitor', 'DetectionAcknowledged', 'det-0002', 4),
+    ev('ai-0003', 'ai-monitor', 'AlertClosed', 'det-9999', 5),
+  ]
+  const { top, responses } = groupByWarning(feed)
+  assert.deepEqual(top.map((e) => e.event_id), ['det-0001', 'det-0002', 'ai-0003'])
+  assert.deepEqual(responses.get('det-0001')?.map((e) => e.event_id), ['ai-0001'])
+  assert.deepEqual(responses.get('det-0002')?.map((e) => e.event_id), ['ai-0002'])
 })

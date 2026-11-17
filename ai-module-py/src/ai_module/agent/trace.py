@@ -106,6 +106,12 @@ class InvocationTrace:
     """Fase 15.1: eventos de resultados de tools de datos posteriores al `as_of` de la
     invocación. Debe ser 0: el corte temporal."""
     conversation_id: str | None = None
+    engine: str = ""
+    """E6: quién diagnosticó (`table` o `hybrid`); vacío con el LLM (las trazas de siempre)."""
+    table_hash: str = ""
+    """E6: sha256 del archivo de la tabla de decisión con el que se decidió."""
+    table: list[dict[str, Any]] = field(default_factory=list)
+    """E6: por aviso, la fila de cada tabla, sus entradas, las salidas y el resultado."""
 
     def to_dict(self) -> dict[str, Any]:
         data = {k: v for k, v in self.__dict__.items() if k != "calls"}

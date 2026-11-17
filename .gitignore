@@ -234,3 +234,7 @@ runs/_servers/
 experiments/**
 !experiments/*/
 !experiments/*/compare.md
+# E6: la congelación de la tabla de decisión y su exportación a DMN se versionan (protocolo
+# contra el sobreajuste: el hash queda en git antes de ver el conjunto reservado)
+!experiments/e6/table_freeze.json
+!experiments/e6/decision_table.dmn

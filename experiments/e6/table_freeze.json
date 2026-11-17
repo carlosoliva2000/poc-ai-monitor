@@ -1,0 +1,21 @@
+{
+  "frozen_at": "2026-11-17T10:54:19Z",
+  "combined_sha256": "e14af918419f7c5e758693a9202355c6e34dd0db9cef1a4a34a65a552348455b",
+  "files": {
+    "ai-module-py/src/ai_module/config/decision_table.yaml": "6d1d305c93e4d228161d14ba03c8fd696c8550aabb2c209c714aa4d0b7611ff5",
+    "ai-module-py/src/ai_module/decision/table.py": "c1922b3dc56d69d32b0e58ca47258af5478da09b160030225b3ddc80c50626e8",
+    "ai-module-py/src/ai_module/decision/features.py": "762bdda9886252a15e19104a2573621d67cdc003e42a73c1a0842eb7fa5cbd87",
+    "ai-module-py/src/ai_module/decision/decider.py": "37bfd24509158b0b1086676f6ddeacde961852fd8715bc988ac560eb083054b0",
+    "ai-module-py/src/ai_module/decision/templates.py": "be8d87dc269737d5a371178e959c8fb5f2ebe211bc083aa0b73e01f85fdb6969",
+    "ai-module-py/src/ai_module/agent/guardrails.py": "518402f80fa31fd2c296611cfe3bc2753aa678efdea1726205948043b6be0e98",
+    "ai-module-py/src/ai_module/monitor_state.py": "6588ee224f1cee3e90f0df5d3e6b8444be188d809c5ecdedb8eeba820beadb5f",
+    "ai-module-py/src/ai_module/monitor.py": "062cb20e305c61f4f01a43813afcf9f5596a69fa2f6372b7d6b2ccc8504593e2",
+    "ai-module-py/src/ai_module/agent/tools.py": "6b632ac63f441a32c97486c6419c20dd718b087c6e6fbb6cc479b6a07dce6447",
+    "ai-module-py/src/ai_module/config/detector.yaml": "b84e869452b306bf5d8ef649e966b1f19ad8afcd981c913e892608a2646ae54f",
+    "platform/src/platform_app/tools/metrics.py": "ebdcdfd7a9a2cd8d8cd2d21d9b50dd4b887706c95762b37166f95cf7086fd23f",
+    "platform/src/platform_app/tools/events.py": "a9901c1b4691be50354e5469d1624729df98eb3441cf81525b2190af04983c57",
+    "platform/src/platform_app/tools/context.py": "f809f2e49309111f6c2888e9d7267717c5eb313670a4c45c7d8b0a365ef48999",
+    "platform/src/platform_app/geometry.py": "f8587dbcf845f02a491ebf2933baf36e138ce0963bcc20fa4c443756431426d4",
+    "contracts/python/src/poc_contracts/times.py": "9e55f1a446cbc54a37371fe81475d9aaf66930efface4fcb4f6e0c9677b40372"
+  }
+}

@@ -33,13 +33,16 @@ async def run(
     llm_url: str | None = None,
     profile: str | None = None,
     tool_call_events: bool = True,
+    no_llm: bool = False,
 ) -> None:
     chosen = load_profile(profile, DEFAULT_PROFILES) if profile else None
     if chosen is not None and assets_dir == DEFAULT_ASSETS:
         assets_dir = chosen.assets_dir  # un perfil puede pedir una copia congelada de los assets
     assets = Assets(assets_dir, chosen)
     url = llm_url or assets.llm.base_url
-    if not detector_only:
+    if no_llm and assets.agent("monitor").engine != "table":
+        raise SystemExit("error: --no-llm only works with monitor.engine: table")
+    if not detector_only and not no_llm:
         # en una prueba manual vLLM servía Qwen3 y el módulo arrancó con la configuración de
         # Qwen2.5 sin avisar: la primera alerta salió como fallback
         try:
@@ -67,6 +70,7 @@ async def run(
             rt,
             detector,
             with_agents=not detector_only,
+            with_llm_agents=not no_llm,
             on_detection=lambda line: print(line, flush=True),
         )
         module.start()
@@ -94,6 +98,12 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="no publica AgentToolCall (las llamadas a tool que muestra la web para depurar)",
     )
+    parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="sin LLM (solo con monitor.engine: table): el monitor es la tabla de decisión y no "
+        "hay informe ni chats",
+    )
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
     logging.basicConfig(
@@ -109,6 +119,7 @@ def main(argv: list[str] | None = None) -> None:
                 llm_url=args.llm_url,
                 profile=args.profile,
                 tool_call_events=not args.no_tool_call_events,
+                no_llm=args.no_llm,
             )
         )
     log.info("stopped")

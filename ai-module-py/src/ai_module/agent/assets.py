@@ -131,6 +131,9 @@ class AgentConfig:
     """Interruptor del monitor (modo guiado): el módulo mete en el primer mensaje de usuario la
     skill de la regla de cada aviso, sin que el modelo tenga que pedirla."""
     guided_skill_by_rule: dict[str, str] = field(default_factory=dict)
+    engine: str = "llm"
+    """Quién diagnostica (E6, contrato v0.19): `llm` (el modelo, por defecto), `table` (la tabla de
+    decisión del módulo, sin LLM) o `hybrid` (la tabla decide y el LLM solo añade el texto)."""
     last_decisions_in_state: int = 3
     memory: str = "per_detection"
     """Memoria del monitor: `per_detection` (una conversación nueva por invocación, la opción B) o
@@ -217,6 +220,7 @@ class AgentConfig:
             "max_invocation_s": self.max_invocation_s,
             "llm_timeout_s": self.llm_timeout_s,
             "aids": self.aids() if self.name == "monitor" else None,
+            **({"engine": self.engine} if self.engine != "llm" else {}),
             **(
                 {
                     "now_facts": self.now_facts,
@@ -249,6 +253,20 @@ def _memory_mode(agent: str, value: object) -> str:
     if mode not in MEMORY_MODES:
         raise AssetError(f"monitor.memory must be one of {MEMORY_MODES}, not {mode!r}")
     return mode
+
+
+ENGINES = ("llm", "table", "hybrid")
+
+
+def _engine(agent: str, value: object) -> str:
+    """`monitor.engine` (E6): `llm` sin la clave. Solo el monitor la admite."""
+    if value is None:
+        return "llm"
+    if agent != "monitor":
+        raise AssetError(f"{agent}.engine: only the monitor has an engine")
+    if value not in ENGINES:
+        raise AssetError(f"monitor.engine must be one of {ENGINES}, not {value!r}")
+    return str(value)
 
 
 def _route_trend_mode(value: object) -> str:
@@ -461,6 +479,7 @@ class Assets:
             link_anomaly=bool(spec.get("link_anomaly", False)),
             guided_skills=bool(spec.get("guided_skills", False)),
             guided_skill_by_rule=dict(spec.get("guided_skill_by_rule", {})),
+            engine=_engine(name, spec.get("engine")),
             last_decisions_in_state=int(spec.get("last_decisions_in_state", 3)),
             memory=_memory_mode(name, spec.get("memory")),
             memory_prompt=spec.get("memory_prompt"),

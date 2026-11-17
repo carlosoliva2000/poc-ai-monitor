@@ -229,6 +229,25 @@ export function callsByCause(toolCalls: ToolCallEvent[], agents: AgentToolCall['
   return out
 }
 
+/** E6: la consola del monitor agrupa por aviso. Separa las entradas del feed en las de primer
+ *  nivel (avisos del detector y respuestas que no responden a un aviso visible) y, por cada aviso,
+ *  sus respuestas del monitor (`causation_id` = el aviso), en el orden en que llegaron. */
+export function groupByWarning(feed: Envelope[]): { top: Envelope[]; responses: Map<string, Envelope[]> } {
+  const detectors = new Set(feed.filter((e) => e.source === 'ai-detector').map((e) => e.event_id))
+  const responses = new Map<string, Envelope[]>()
+  const top: Envelope[] = []
+  for (const e of feed) {
+    if (e.source === 'ai-monitor' && e.causation_id && detectors.has(e.causation_id)) {
+      const list = responses.get(e.causation_id) ?? []
+      list.push(e)
+      responses.set(e.causation_id, list)
+    } else {
+      top.push(e)
+    }
+  }
+  return { top, responses }
+}
+
 /** Mensajes de una conversación: pregunta del operador, respuesta completa o, mientras llega,
  *  los trozos acumulados (`chunks` por `reply_to`) y las llamadas a tool que lleva hasta ahora. */
 export function chatEntries(

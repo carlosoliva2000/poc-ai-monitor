@@ -48,6 +48,7 @@ Anotadas el 16/10/2026 durante el diseño. Sirven de lista para la Fase 5 y para
 - **Refactor con LangChain4j:** probar el módulo Java con [LangChain4j agents](https://docs.langchain4j.dev/tutorials/agents/) (`langchain4j-agentic`, marcado experimental en su documentación a 16/10/2026) o con AI Services, y comparar cuánto cambia frente al bucle a mano.
 - **NATS de verdad** en lugar del bus en memoria (los topics ya siguen la taxonomía de David); integración con el Worker Core SDK de Jesús.
 - Retroceso y salto a un instante en el reproductor (descartado para la PoC).
+- **Seguridad: actualizar Next.js (pendiente, no durante la E6).** `pnpm build` con la 16.4.1 (`web/package.json`) se para la primera vez con un `SecurityFatalError` («affected by a known security vulnerability»): el propio `next build` lo comprueba contra el registro de npm. Repetido, compila. La salida no dice qué vulnerabilidad es: hay que mirarlo en el aviso de seguridad de Next.js, elegir la versión corregida, actualizar `next` y repetir `pnpm test`, `typecheck`, `build` y las capturas. Visto el 17/11/2026 (E6, paso 1); por decisión de Carlos no se actualiza durante la E6.
 - **Observabilidad:** OpenTelemetry o Langfuse autoalojado en lugar del JSONL propio (nunca LangSmith en la nube).
 - **Visor con historial:** que el visor en directo recupere lo ya publicado al conectarse a mitad de ejecución, pidiéndolo a `GET /api/timeline` (hoy empieza a pintar desde que se conecta).
 

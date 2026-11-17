@@ -162,6 +162,7 @@ def start_ai_module(
     llm_url: str | None = None,
     profile: str | None = None,
     tool_call_events: bool = True,
+    no_llm: bool = False,
 ) -> subprocess.Popen:
     """Arranca el módulo de IA (proceso aparte) y espera a que esté conectado y suscrito."""
     command = ["uv", "run", "--project", str(REPO_ROOT / "ai-module-py"), "python", "-m",
@@ -174,6 +175,8 @@ def start_ai_module(
         command += ["--profile", profile]
     if not tool_call_events:
         command.append("--no-tool-call-events")
+    if no_llm:
+        command.append("--no-llm")
     proc = subprocess.Popen(
         command, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         bufsize=1,
@@ -544,6 +547,11 @@ def main() -> int:
         help="el módulo de IA no publica AgentToolCall (lo que la web muestra para depurar)",
     )
     parser.add_argument("--no-ai", action="store_true", help="no arrancar el módulo de IA")
+    parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="módulo de IA sin LLM (perfil con monitor.engine: table): sin informe ni chats",
+    )
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument(
         "--timeout", type=float, default=900.0, help="segundos de reloj por escenario"
@@ -553,7 +561,8 @@ def main() -> int:
     names = list_scenarios() if args.all else args.scenario
     if not names:
         parser.error("indica --scenario NOMBRE (repetible) o --all")
-    agents = not (args.no_ai or args.detector_only)
+    # con `--no-llm` (E6) no hay informe que esperar: el monitor es la tabla de decisión
+    agents = not (args.no_ai or args.detector_only or args.no_llm)
     if args.wait_agent and args.no_ai:
         parser.error("--wait-agent necesita el módulo de IA")
 
@@ -573,6 +582,7 @@ def main() -> int:
                 llm_url=args.llm_url,
                 profile=args.profile,
                 tool_call_events=not args.no_tool_call_events,
+                no_llm=args.no_llm,
             )
         ws_url = url.replace("http", "ws", 1).rstrip("/") + "/ws"
         with connect(ws_url, open_timeout=5) as ws:

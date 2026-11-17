@@ -1,0 +1,250 @@
+# Tabla de decisión del monitor (E6, `monitor.engine: table | hybrid`).
+#
+# Forma de DMN: entradas con nombre, salidas y reglas con política FIRST (gana la primera que
+# encaja, como el «para en el primer paso que encaje» de las skills). Las celdas son unary tests
+# de FEEL: '-' (cualquiera), 'true', 'false', 'null', números, cadenas entre comillas ('"WIND"'),
+# comparaciones ('> 30'), intervalos ('[10..25]'), listas ('"gps","radar"') y 'not(...)'. Sin
+# código: las entradas las calcula `ai_module/decision/features.py` con las tools de la
+# plataforma. El ciclo de vida (sustituir, reconocer, cerrar) no está aquí: DMN no tiene estado;
+# lo hace `decider.py`.
+#
+# Origen de cada regla: los pasos de las skills `route-deviation`, `source-discrepancy` y
+# `link-anomaly` y el criterio de severidad y confianza de `monitor_output.md`. Las causas
+# `SAME_AS_GPS_ALERT` se resuelven en código con la causa de la alerta del GPS reciente (la
+# recuperación conserva la causa del episodio).
+
+version: 1
+tables:
+  cause:
+    description: Causa, fase y a qué alerta se engancha el aviso.
+    hit_policy: FIRST
+    inputs:
+      - rule
+      - kind
+      - link_recovery
+      - gps_alert_recent
+      - gps_step_m
+      - gps_radar_disagreed
+      - gps_radar_agree_now
+      - position_conflict
+      - gps_loss_open
+      - open_gps_alert_cause
+      - gps_fix_bad
+      - gps_dev_mean_m
+      - radar_minus_gps_now_m
+      - radar_trend
+      - radar_silent
+      - radar_quality_min
+      - wind_notable
+      - wind_with_drift
+      - link_controller_changed
+      - link_anomalous
+      - course_vs_waypoint_deg
+      - gps_dev_trend
+    outputs: [cause, phase, attach]
+    rules:
+      - id: C01
+        note: "source-discrepancy 5: a silent source is always its own fault"
+        when: {rule: '"SOURCE_SILENT"'}
+        then: {cause: SENSOR_FAULT, phase: active, attach: none}
+      - id: C02
+        note: "link-anomaly 4: the link is back with the drone still off the route"
+        when: {link_recovery: 'true'}
+        then: {cause: HIJACK, phase: recovering, attach: hijack_alert}
+      - id: C03
+        note: "link-anomaly 2: another controller has the link"
+        when: {rule: '"LINK_ANOMALY"', link_controller_changed: 'true'}
+        then: {cause: HIJACK, phase: active, attach: same_cause}
+      - id: C04
+        note: "link-anomaly 3: same controller, degraded link"
+        when: {rule: '"LINK_ANOMALY"'}
+        then: {cause: SENSOR_FAULT, phase: active, attach: same_cause}
+      - id: C05
+        note: "source-discrepancy 4: bad fix"
+        when: {rule: '"GPS_DEGRADED"', gps_fix_bad: 'true'}
+        then: {cause: GPS_JAMMING, phase: active, attach: same_cause}
+      - id: C06
+        note: "source-discrepancy 4: somewhat high hdop or few satellites"
+        when: {rule: '"GPS_DEGRADED"'}
+        then: {cause: SENSOR_FAULT, phase: active, attach: same_cause}
+      - id: C07
+        note: "route-deviation 2: the GPS is back (jump) and GPS and radar agree now"
+        when:
+          rule: '"ROUTE_DEVIATION"'
+          gps_alert_recent: 'true'
+          gps_step_m: '>= 30'
+          gps_radar_agree_now: 'not(false)'
+        then: {cause: SAME_AS_GPS_ALERT, phase: recovering, attach: gps_alert}
+      - id: C08
+        note: "route-deviation 2: the deviation belongs to the GPS alert, the problem goes on"
+        when:
+          rule: '"ROUTE_DEVIATION"'
+          gps_alert_recent: 'true'
+          gps_radar_disagreed: 'true'
+        then: {cause: SAME_AS_GPS_ALERT, phase: active, attach: gps_alert}
+      - id: C09
+        note: "route-deviation 2: a jump but GPS and radar still disagree now"
+        when:
+          rule: '"ROUTE_DEVIATION"'
+          gps_alert_recent: 'true'
+          gps_step_m: '>= 30'
+        then: {cause: SAME_AS_GPS_ALERT, phase: active, attach: gps_alert}
+      - id: C10
+        note: "source-discrepancy 0: the GPS loss is confirmed (sensor fault → jamming)"
+        when:
+          position_conflict: 'true'
+          gps_loss_open: 'true'
+          open_gps_alert_cause: '"SENSOR_FAULT"'
+        then: {cause: GPS_JAMMING, phase: active, attach: gps_alert}
+      - id: C11
+        note: "source-discrepancy 0: consequence of the GPS loss already alerted"
+        when: {position_conflict: 'true', gps_loss_open: 'true'}
+        then: {cause: GPS_JAMMING, phase: active, attach: gps_alert}
+      - id: C12
+        note: "source-discrepancy 2: bad fix in the last GPS reports"
+        when: {position_conflict: 'true', gps_fix_bad: 'true'}
+        then: {cause: GPS_JAMMING, phase: active, attach: same_cause}
+      - id: C13
+        note: "source-discrepancy 1: the radar is silent, the GPS cannot be checked"
+        when: {position_conflict: 'true', radar_silent: 'true'}
+        then: {cause: UNKNOWN, phase: active, attach: same_cause}
+      - id: C14
+        note: "source-discrepancy 2: the GPS is on the plan and the radar is off and moving away"
+        when:
+          position_conflict: 'true'
+          gps_radar_disagreed: 'true'
+          gps_dev_mean_m: '< 15'
+          radar_minus_gps_now_m: '> 15'
+          radar_trend: '"increasing"'
+        then: {cause: GPS_SPOOFING, phase: active, attach: same_cause}
+      - id: C15
+        note: "source-discrepancy 3: poor radar quality"
+        when: {position_conflict: 'true', radar_quality_min: '< 0.5'}
+        then: {cause: SENSOR_FAULT, phase: active, attach: same_cause}
+      - id: C16
+        note: "source-discrepancy 3: a discrepancy without the pattern of a spoofing"
+        when: {position_conflict: 'true'}
+        then: {cause: SENSOR_FAULT, phase: active, attach: same_cause}
+      - id: C17
+        note: "route-deviation 4: notable wind that pushes the same way as the drift"
+        when: {rule: '"ROUTE_DEVIATION"', wind_notable: 'true', wind_with_drift: 'true'}
+        then: {cause: WIND, phase: active, attach: same_cause}
+      - id: C18
+        note: "route-deviation 5: anomalous link"
+        when: {rule: '"ROUTE_DEVIATION"', link_anomalous: 'true'}
+        then: {cause: HIJACK, phase: active, attach: same_cause}
+      - id: C19
+        note: "route-deviation 5: normal link, but the course leaves the waypoint and the deviation grows"
+        when:
+          rule: '"ROUTE_DEVIATION"'
+          gps_alert_recent: 'false'
+          course_vs_waypoint_deg: '> 45'
+          gps_dev_trend: '"increasing"'
+        then: {cause: HIJACK, phase: active, attach: same_cause}
+      - id: C20
+        note: "route-deviation 6: nothing fits"
+        when: {}
+        then: {cause: UNKNOWN, phase: active, attach: same_cause}
+
+  severity:
+    description: Riesgo operativo ahora (criterio de monitor_output.md).
+    hit_policy: FIRST
+    inputs:
+      - cause
+      - phase
+      - fault_source
+      - gps_radar_disagreed
+      - gps_radar_agree_now
+      - deviation_now_m
+      - route_trend
+      - other_position_detection_open
+    outputs: [severity]
+    rules:
+      - id: S01
+        note: "a recovery while the drone is still far from the route: something to watch"
+        when: {phase: '"recovering"', deviation_now_m: '> 30'}
+        then: {severity: medium}
+      - id: S02
+        note: "a recovery close to the route: watching is enough"
+        when: {phase: '"recovering"'}
+        then: {severity: low}
+      - id: S03
+        note: "the control may be in somebody else's hands"
+        when: {cause: '"HIJACK"'}
+        then: {severity: high}
+      - id: S04
+        note: "the position cannot be trusted"
+        when: {cause: '"GPS_SPOOFING"'}
+        then: {severity: high}
+      - id: S05
+        note: "GPS loss with the drone drifting off"
+        when: {cause: '"GPS_JAMMING"', gps_radar_disagreed: 'true'}
+        then: {severity: high}
+      - id: S06
+        note: "GPS loss, no drift yet"
+        when: {cause: '"GPS_JAMMING"'}
+        then: {severity: medium}
+      - id: S07
+        note: "physical cause and the drone under control"
+        when:
+          cause: '"WIND"'
+          gps_radar_agree_now: 'true'
+          deviation_now_m: '< 80'
+          route_trend: 'not("moving_away")'
+        then: {severity: low}
+      - id: S08
+        note: "wind and the situation is getting worse"
+        when: {cause: '"WIND"'}
+        then: {severity: medium}
+      - id: S09
+        note: "a position source is lost while another position detection is open"
+        when:
+          cause: '"SENSOR_FAULT"'
+          fault_source: '"gps","radar"'
+          other_position_detection_open: 'true'
+        then: {severity: high}
+      - id: S10
+        note: "a source that cannot be trusted"
+        when: {cause: '"SENSOR_FAULT"', fault_source: '"gps","radar","link","position"'}
+        then: {severity: medium}
+      - id: S11
+        note: "minor fault (weather station, battery)"
+        when: {cause: '"SENSOR_FAULT"'}
+        then: {severity: low}
+      - id: S12
+        note: "unknown cause: something to check"
+        when: {}
+        then: {severity: medium}
+
+  confidence:
+    description: >-
+      Fuentes independientes que apoyan la causa y contradicciones (criterio de
+      monitor_output.md). Criterio propuesto para la E6, no derivado de datos.
+    hit_policy: FIRST
+    inputs: [cause, n_support, n_contra]
+    outputs: [confidence]
+    rules:
+      - id: K01
+        note: "unknown cause: a conjecture"
+        when: {cause: '"UNKNOWN"'}
+        then: {confidence: 0.3}
+      - id: K02
+        note: "two or more sources and nothing against"
+        when: {n_support: '>= 2', n_contra: '0'}
+        then: {confidence: 0.8}
+      - id: K03
+        note: "two or more sources and one contradiction, or one source and nothing against"
+        when: {n_support: '>= 2', n_contra: '1'}
+        then: {confidence: 0.6}
+      - id: K04
+        note: "one source and nothing against"
+        when: {n_support: '1', n_contra: '0'}
+        then: {confidence: 0.6}
+      - id: K05
+        note: "one source with a contradiction, or several contradictions"
+        when: {n_support: '>= 1'}
+        then: {confidence: 0.4}
+      - id: K06
+        note: "nothing supports it"
+        when: {}
+        then: {confidence: 0.3}

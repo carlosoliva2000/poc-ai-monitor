@@ -7,6 +7,8 @@ export type Phase = 'active' | 'recovering'
 export type SensorSource = 'gps' | 'radar' | 'meteo' | 'link' | 'battery'
 export type FaultMode = 'mute' | 'loss'
 export type Cause = 'WIND' | 'HIJACK' | 'GPS_SPOOFING' | 'SENSOR_FAULT' | 'GPS_JAMMING' | 'UNKNOWN'
+/** Quién decidió una alerta (v0.19, E6): la tabla de decisión del módulo o el LLM del monitor. */
+export type DecidedBy = 'table' | 'llm'
 export type Conversation = 'monitor' | 'report' | 'instructor'
 export type PlayerStatus = 'idle' | 'running' | 'paused' | 'finished'
 
@@ -81,6 +83,10 @@ export type Anomaly = {
   checks: Checks | null
   /** Ausente en las ejecuciones anteriores a la v0.14: se lee como `active`. */
   phase?: Phase
+  /** v0.19 (E6): quién la decidió; ausente = el LLM (las alertas anteriores a la v0.19). */
+  decided_by?: DecidedBy | null
+  /** v0.19 (E6): la fila de la tabla de decisión que dio la causa (`C05`…), solo con `table`. */
+  rule_id?: string | null
 }
 export type AlertClosed = { alert_id: string; reason: string; as_of_sim_time: number }
 export type DetectionAcknowledged = {

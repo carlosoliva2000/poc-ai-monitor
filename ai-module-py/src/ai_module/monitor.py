@@ -18,6 +18,7 @@ import logging
 import re
 import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -26,7 +27,13 @@ from poc_contracts.enums import ActivityState, AgentName, AlertStatus, EventType
 from poc_contracts.envelope import Envelope
 
 from .agent.assets import AgentConfig, render, sections
-from .agent.engine import AbortInvocation, AgentEngine, EngineResult, compact_json
+from .agent.engine import (
+    AbortInvocation,
+    AgentEngine,
+    EngineResult,
+    ToolCallRecord,
+    compact_json,
+)
 from .agent.guardrails import (
     RECOVERY_STEP_M,
     InvocationFacts,
@@ -41,6 +48,8 @@ from .agent.guardrails import (
 from .agent.llm import Messages
 from .agent.tools import Toolbox, strip_computed_facts, strip_now_facts, strip_route_trend
 from .agent.trace import InvocationTrace
+from .decision.decider import decide
+from .decision.table import DecisionTables, load_tables
 from .monitor_memory import MonitorMemory, chars_of
 from .outbox import format_t
 from .runtime import Runtime
@@ -106,6 +115,11 @@ class Invocation:
     history_ids: set[str] = field(default_factory=set)
     """Con la memoria A: ids que solo se ven en el historial de turnos anteriores (no son
     evidencia válida hasta que el modelo vuelva a pedir el dato en esta invocación)."""
+    decided_by: str | None = None
+    """E6 (contrato v0.19): `table` si responde la tabla de decisión; con el LLM, `None` (las
+    alertas no llevan el campo, como antes)."""
+    rule_id: str | None = None
+    """E6: la fila de la tabla `cause` de la alerta que se está publicando."""
     state_jump_m: float | None = None
     """Salto del GPS (≥ 30 m) que el módulo ha visto antes de la primera llamada al modelo, para la
     línea de estado (`state_line: recovery_data`, Fase 14.3). `None` si no hay o no se calculó."""
@@ -139,6 +153,13 @@ class Monitor:
         self._idle.set()
         self._skills_by_model = 0
         self.memory: MonitorMemory | None = None
+        self.tables: DecisionTables | None = (
+            load_tables() if self.config.engine in ("table", "hybrid") else None
+        )
+        self.enrich_hook: Callable[[dict[str, Any]], None] | None = None
+        """E6 (`engine: hybrid`): lo fija el módulo; recibe cada alerta que publica la tabla (con
+        la fila, sus entradas y los hechos) para que el LLM le añada el texto **después**, sin
+        esperar. Con `table` o sin el gancho, no se llama."""
 
     # --- Cola -----------------------------------------------------------------------------
 
@@ -230,6 +251,8 @@ class Monitor:
         if not pending:
             trace.deterministic = True
             trace.end_reason = "deterministic"
+        elif self.tables is not None:
+            await self._invoke_table(inv)
         else:
             await self._invoke_llm(inv)
         trace.sim_time_end = rt.clock.now()
@@ -385,6 +408,129 @@ class Monitor:
             await rt.activity(AgentName.MONITOR, ActivityState.FINISHED, inv.invocation_id, first)
             if memory is not None:
                 self._remember(memory, inv, messages, chars_start)
+
+    async def _invoke_table(self, inv: Invocation) -> None:
+        """E6 (`monitor.engine: table | hybrid`): responde cada aviso con la tabla de decisión, sin
+        LLM. Pide las tools por el mismo `Toolbox` que el modelo (con el corte del aviso) y publica
+        por las mismas rutas (`_publish_alert`, `_ack_tool`, `_close_tool`), así que pasa por los
+        mismos guardrails; un rechazo queda en la traza y responde `_guarantee`."""
+        rt, cfg = self.rt, self.config
+        assert self.tables is not None
+        trace = inv.trace
+        trace.engine = cfg.engine
+        trace.table_hash = self.tables.sha256
+        inv.decided_by = "table"
+        await self._module_jump(inv)
+        jump = inv.facts.module_jump
+        toolbox = Toolbox(
+            rt.assets,
+            [],
+            rt.platform_url,
+            as_of=inv.as_of,
+            platform_call=rt.platform_call,
+            window_rules=cfg.as_of_from_warning,
+        )
+
+        async def call(name: str, args: dict[str, Any]) -> Any:
+            result = await toolbox(name, args)
+            inv.seen_ids |= set(ID_RE.findall(compact_json(result)))
+            return result
+
+        handlers = {
+            "publish_alert": self._publish_alert,
+            "acknowledge_detection": self._ack_tool,
+            "close_alert": self._close_tool,
+        }
+        first = inv.pending[0].event_id
+        await rt.activity(AgentName.MONITOR, ActivityState.STARTED, inv.invocation_id, first)
+        try:
+            for p in inv.pending:
+                if p.answered:
+                    continue
+                try:
+                    choice = await decide(
+                        self.tables,
+                        call,
+                        kind=p.kind,
+                        detection=p.event.payload,
+                        state=rt.state,
+                        as_of=inv.as_of,
+                        link_recovery=p.link_recovery,
+                        last_open_of=p.last_open_of,
+                        module_jump=jump,
+                        mission_controller=rt.link_log.mission_controller,
+                        link_back_change=self._link_back(p, inv.as_of),
+                    )
+                except Exception as exc:  # un fallo de la tabla no deja el aviso sin respuesta
+                    log.exception("decision table failed")
+                    trace.table.append({"detection_id": p.detection_id, "error": str(exc)})
+                    continue
+                inv.facts = choice.invocation_facts
+                inv.rule_id = choice.rows.get("cause")
+                entry = choice.trace(p.detection_id)
+                entry["result"] = await handlers[choice.action](inv, choice.args)
+                trace.table.append(entry)
+                await self._show_table_row(inv, p, entry, len(trace.table))
+                alert_id = (entry["result"] or {}).get("alert_id")
+                if (
+                    cfg.engine == "hybrid"
+                    and self.enrich_hook is not None
+                    and choice.action == "publish_alert"
+                    and alert_id
+                ):
+                    self.enrich_hook(
+                        {
+                            "alert_id": alert_id,
+                            "as_of": inv.as_of,
+                            "detection": dict(p.event.payload),
+                            "rows": entry["rows"],
+                            "inputs": entry["inputs"],
+                            "args": choice.args,
+                            "metrics": choice.facts.metrics,
+                            "link": choice.facts.link,
+                            "gps": choice.facts.gps,
+                            "seen_ids": sorted(inv.seen_ids),
+                        }
+                    )
+            trace.events_after_as_of = toolbox.after_as_of
+            trace.end_reason = "table" if inv.all_answered else "table_incomplete"
+            await self._guarantee(inv, None)
+        finally:
+            await rt.activity(AgentName.MONITOR, ActivityState.FINISHED, inv.invocation_id, first)
+
+    async def _show_table_row(
+        self, inv: Invocation, p: Pending, entry: dict[str, Any], index: int
+    ) -> None:
+        """Para la web (como las tool calls del modelo): una «llamada» `decision_table` con las
+        entradas de la fila como argumentos y las filas, las salidas y la respuesta como resultado,
+        enganchada al aviso. No entra en el estado ni en la traza (la traza ya la lleva)."""
+        rt = self.rt
+        if not rt.tool_call_events:
+            return
+        result = entry.get("result") or {}
+        record = ToolCallRecord(
+            index=index,
+            iteration=1,
+            name="decision_table",
+            arguments=compact_json(entry["inputs"]),
+            status="ok" if result.get("ok", True) else "rejected",
+            content=compact_json(
+                {"rows": entry["rows"], "action": entry["action"], "outputs": entry["outputs"]}
+            ),
+            error=None if result.get("ok", True) else "; ".join(result.get("errors", [])),
+        )
+        await rt.tool_call(AgentName.MONITOR, inv.invocation_id, p.event_id, record)
+
+    def _link_back(self, p: Pending, as_of: float) -> tuple[float, str] | None:
+        """En la recuperación del secuestro: el primer `LinkStatus` con el controlador de la misión
+        tras el inicio de la `LINK_ANOMALY` (como el informe), sin pasar de `as_of`."""
+        if not p.link_recovery:
+            return None
+        record = self.rt.state.detections.get(p.detection_id)
+        change = self.rt.link_log.back_after(record.since) if record else None
+        if change is None or change.sim_time > as_of:
+            return None
+        return change.sim_time, change.event_id
 
     def _shows_route_trend(self, inv: Invocation) -> bool:
         """Fase 15.1 (`monitor.now_route_trend`): `all` en todas las invocaciones; `link_recovery`,
@@ -756,6 +902,9 @@ class Monitor:
         payload = {**fields, "alert_id": alert_id, "as_of_sim_time": inv.as_of,
                    "fallback": fallback, "supersedes": fields.get("supersedes"),
                    "phase": fields.get("phase") or "active"}  # fmt: skip
+        if inv.decided_by is not None:  # E6, v0.19: solo con la tabla (las del LLM, como antes)
+            payload["decided_by"] = inv.decided_by
+            payload["rule_id"] = None if fallback else inv.rule_id
         event = await rt.emit(
             EventType.ANOMALY_DETECTED,
             payload,

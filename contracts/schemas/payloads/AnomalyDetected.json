@@ -69,6 +69,15 @@
       "title": "Cause",
       "type": "string"
     },
+    "DecidedBy": {
+      "description": "Quién decidió una alerta (v0.19): la tabla de decisión del módulo o el LLM del monitor.",
+      "enum": [
+        "table",
+        "llm"
+      ],
+      "title": "DecidedBy",
+      "type": "string"
+    },
     "Severity": {
       "enum": [
         "low",
@@ -157,6 +166,29 @@
     "phase": {
       "$ref": "#/$defs/AlertPhase",
       "default": "active"
+    },
+    "decided_by": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DecidedBy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "rule_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rule Id"
     }
   },
   "required": [

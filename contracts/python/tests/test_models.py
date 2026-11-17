@@ -349,3 +349,19 @@ def test_link_anomaly_is_about_the_link_in_milliseconds() -> None:
             DetectionRaised.model_validate({**link, "source": bad})
     with pytest.raises(ValidationError, match="milisegundos"):
         DetectionRaised.model_validate({**link, "unit": "m"})
+
+
+def test_anomaly_decided_by_is_optional_and_closed() -> None:
+    """v0.19: `decided_by` (`table` | `llm`) y `rule_id` son opcionales; sin ellos, el LLM."""
+    base = {
+        "alert_id": "ai-0001", "detection_ids": ["det-0001"], "cause": "WIND",
+        "severity": "low", "confidence": 0.8, "summary": "s", "explanation": "e",
+        "recommendation": "r", "evidence_event_ids": [], "supersedes": None,
+        "as_of_sim_time": 1.0, "fallback": False,
+    }  # fmt: skip
+    old = AnomalyDetected.model_validate(base)
+    assert old.decided_by is None and old.rule_id is None
+    new = AnomalyDetected.model_validate({**base, "decided_by": "table", "rule_id": "C17"})
+    assert new.decided_by == "table" and new.rule_id == "C17"
+    with pytest.raises(ValidationError):
+        AnomalyDetected.model_validate({**base, "decided_by": "rules"})

@@ -101,6 +101,13 @@ class AlertPhase(StrEnum):
     RECOVERING = "recovering"
 
 
+class DecidedBy(StrEnum):
+    """Quién decidió una alerta (v0.19): la tabla de decisión del módulo o el LLM del monitor."""
+
+    TABLE = "table"
+    LLM = "llm"
+
+
 class Cause(StrEnum):
     """Causas del diagnóstico (`REPLAY` queda reservada para el futuro)."""
 

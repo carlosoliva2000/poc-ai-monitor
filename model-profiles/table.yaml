@@ -1,0 +1,13 @@
+# E6: el monitor es la tabla de decisión del módulo (`monitor.engine: table`), sin LLM. El resto
+# es `actual` (el informe y los chats siguen con el LLM; para ejecutar sin GPU, `--no-llm`).
+# Ficha del modelo de los demás agentes: https://huggingface.co/Qwen/Qwen3-14B-AWQ
+description: monitor con la tabla de decisión (sin LLM); informe y chats como actual
+server:
+  model: Qwen/Qwen3-14B-AWQ
+  tool_call_parser: hermes
+  reasoning_parser: qwen3
+  max_model_len: 32768
+  extra_args: []
+agents:
+  monitor:
+    engine: table

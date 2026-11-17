@@ -59,8 +59,10 @@ AID_KEYS = (
 )
 # La memoria del monitor no es una ayuda: cambia lo que el modelo recuerda, no lo que se le quita.
 MEMORY_KEYS = ("memory", "memory_budget_tokens", "memory_target_tokens")
+# Quién diagnostica (E6): tampoco es una ayuda; cambia el monitor entero.
+ENGINE_KEYS = ("engine",)
 REASONING_KEYS = ("reasoning", "reasoning_effort", "reasoning_field")
-AGENT_KEYS = (*SAMPLING_KEYS, *REASONING_KEYS, *LIMIT_KEYS, *AID_KEYS, *MEMORY_KEYS)
+AGENT_KEYS = (*SAMPLING_KEYS, *REASONING_KEYS, *LIMIT_KEYS, *AID_KEYS, *MEMORY_KEYS, *ENGINE_KEYS)
 ALLOWED = {
     "description": None,
     "assets": None,

@@ -13,6 +13,7 @@ from .enums import (
     CommandIssuer,
     CompletionReason,
     ConversationId,
+    DecidedBy,
     EventType,
     FaultMode,
     FaultOrigin,
@@ -261,6 +262,11 @@ class AnomalyDetected(Payload):
     checks: AlertChecks | None = None
     phase: AlertPhase = AlertPhase.ACTIVE
     """Fase de la alerta (v0.14): `active` por defecto; `recovering` en la recuperación del GPS."""
+    decided_by: DecidedBy | None = None
+    """Quién la decidió (v0.19): `table` (la tabla de decisión, `monitor.engine: table` o
+    `hybrid`) o `llm`. Sin el campo, el LLM (las alertas anteriores a la v0.19)."""
+    rule_id: str | None = None
+    """v0.19: la fila de la tabla de decisión que dio la causa (`C05`…), solo con `table`."""
 
 
 class AlertClosed(Payload):

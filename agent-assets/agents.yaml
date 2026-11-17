@@ -58,6 +58,10 @@ agents:
     disabled_tools: []      # experimento: [get_track_metrics]
     skills: [route-deviation, source-discrepancy, link-anomaly]
     max_iterations: 12
+    # Quién diagnostica (E6, contrato v0.19): `llm` (el modelo, por defecto), `table` (la tabla de
+    # decisión del módulo, ai_module/config/decision_table.yaml, sin LLM) o `hybrid` (la tabla
+    # decide y el LLM solo añade una frase de interpretación). Se cambia con un perfil.
+    engine: llm
     # Tiempos medidos con las invocaciones del monitor (ver docs de la fase). Condición:
     # max_invocation_s + 15 < 90 (la plataforma espera al agente 90 s como mucho).
     max_invocation_s: 60
