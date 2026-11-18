@@ -13,7 +13,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Estado del autopiloto (v1.0, cada 1 s): modo, rumbo del **morro**, velocidad respecto al\naire, viento estimado a bordo (m/s y procedencia) e innovación (|GPS − estima|, m; `null` sin\nGPS: la estima no se corrige).",
+  "description": "Estado del autopiloto (v1.0, cada 1 s): modo, rumbo del **morro**, velocidad respecto al\naire, viento estimado a bordo (m/s y procedencia), innovación (|GPS − estima|, m; `null` sin\nGPS: la estima no se corrige) y la **estima** del dron: posición (`est_x`, `est_y`), velocidad\ny rumbo sobre el suelo (lo que el GPS ya no da sin fix).",
   "properties": {
     "mode": {
       "$ref": "#/$defs/AutopilotMode"
@@ -44,6 +44,22 @@
         }
       ],
       "title": "Innovation M"
+    },
+    "est_x": {
+      "title": "Est X",
+      "type": "number"
+    },
+    "est_y": {
+      "title": "Est Y",
+      "type": "number"
+    },
+    "ground_speed_mps": {
+      "title": "Ground Speed Mps",
+      "type": "number"
+    },
+    "course_deg": {
+      "title": "Course Deg",
+      "type": "number"
     }
   },
   "required": [
@@ -52,7 +68,11 @@
     "airspeed_mps",
     "wind_est_speed_mps",
     "wind_est_from_deg",
-    "innovation_m"
+    "innovation_m",
+    "est_x",
+    "est_y",
+    "ground_speed_mps",
+    "course_deg"
   ],
   "title": "AutopilotStatus",
   "type": "object"

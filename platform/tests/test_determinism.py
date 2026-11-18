@@ -43,7 +43,7 @@ def test_another_seed_changes_the_noise_but_not_the_trajectory(tmp_path: Path) -
 @pytest.mark.parametrize(
     "name",
     ["nominal", "wind", "spoofing", "hijack", "faults", "demo", "demo-battery", "demo-meteo",
-     "nominal-wind-cmd"],
+     "nominal-wind-cmd", "endurance", "jamming"],
 )  # fmt: skip
 def test_the_committed_runs_are_what_the_scenarios_generate(tmp_path: Path, name: str) -> None:
     """`runs/<escenario>/` versionado = lo que genera el escenario tal cual (con los interruptores

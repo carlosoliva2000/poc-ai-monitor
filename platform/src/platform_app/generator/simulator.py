@@ -40,7 +40,7 @@ from poc_contracts.run_files import TruthFile, TruthSample, TruthWind
 from poc_contracts.scenario import ScenarioConfig
 
 from ..geometry import Point, angle_diff_deg, bearing_deg, project_on_segment
-from . import sensors
+from . import radio, sensors
 from .controller import (
     STEP_S,
     Sample,
@@ -52,12 +52,14 @@ from .controller import (
     unit,
 )
 from .disturbances import CommandWind, Wind, is_hijacked, spoof_offset, spoof_offset_rate, wind_at
+from .energy import Battery
 from .events import make_event
-from .receiver import Estimator, GnssEpoch, GnssModel
+from .receiver import Estimator, GnssEpoch, GnssModel, stable_rng
 
 HOLD_MAX_SPEED_MPS = 3.0  # lazo P del punto de espera: tope de la velocidad sobre el suelo
 LATERAL_INT_WINDOW_M = 15.0  # la integral solo acumula con un error lateral menor que esto
 LATERAL_CORR_MAX_MPS = 3.0  # tope de la corrección integral (anti-windup)
+ENDURANCE_HOLD_S = 5.0  # segundos seguidos sin llegar a casa para que salte el failsafe ⚠️
 
 
 @dataclass(frozen=True)
@@ -187,6 +189,16 @@ class Simulator:
             else None
         )
         self._innovation: float | None = None
+        # Enlace con física, batería con consumo y emisores (pasos 5 y 6).
+        self._link_phys = sim.link_physics
+        self._emitters_on = sim.emitters
+        self._link_rng = stable_rng(config.seed, "link_loss")
+        self._pkt_total = self._pkt_lost = 0  # paquetes de telemetría desde el último `LinkStatus`
+        self._link_down_s = 0.0  # segundos seguidos sin enlace con nuestra estación (en el dron)
+        self._battery = Battery(config.sensors.battery) if sim.battery_model else None
+        self._emitter_state: tuple[float, float, tuple[str, ...]] = (0.0, 0.0, ())
+        self._land_end: float | None = None  # instante en que acaba el aterrizaje
+        self._cannot_reach_s = 0.0  # segundos seguidos en que la estima dice que no llega a casa
         self._radar_geometry = sim.radar_geometry
         self._ground_station = sim.ground_station
         self._hold: Point | None = None  # punto de espera en `failsafe_hold`
@@ -253,13 +265,16 @@ class Simulator:
         return (p[0] - a[0]) * u[0] + (p[1] - a[1]) * u[1] >= math.hypot(b[0] - a[0], b[1] - a[1])
 
     def set_mode(self, mode: str) -> None:
-        """Cambia el modo del autopiloto (`mission`, `failsafe_hold`, `failsafe_return`); solo con
-        el guiado de multirrotor. `failsafe_hold` mantiene la posición donde cree estar;
-        `failsafe_return` va en línea recta a casa desde ahí."""
+        """Cambia el modo del autopiloto (`mission`, `failsafe_hold`, `failsafe_return`,
+        `failsafe_land`); solo con el guiado de multirrotor. `failsafe_hold` mantiene la posición
+        donde cree estar; `failsafe_return` va en línea recta a casa desde ahí y `failsafe_land` se
+        mantiene y aterriza (`drone.land_duration_s`: termina el vuelo con `reason: landed`)."""
         if not self._multirotor:
             raise ValueError("the autopilot modes need simulator.multirotor_guidance")
         p = self._believed()
-        self._hold = p if mode == "failsafe_hold" else None
+        self._hold = p if mode in ("failsafe_hold", "failsafe_land") else None
+        if mode == "failsafe_land":
+            self._land_end = self.t + self.config.drone.land_duration_s
         self._leg_start = p if mode == "failsafe_return" else None
         if mode == "failsafe_return":
             self._i = len(self.route) - 1
@@ -445,6 +460,7 @@ class Simulator:
             self._apply_scheduled_commands()
         commands = self._command_events()
         self._gnss_epoch()
+        self._check_failsafes()
 
         mission: list[EventDraft] = []
         timeout = self.n >= self._max_steps
@@ -455,16 +471,17 @@ class Simulator:
                 and self._waypoint_reached()
             ):
                 self.reached.append((self.n, self._i))
-                if self._events:
+                if self._events and self._delivered():  # el aviso viaja por el enlace
                     payload = {"waypoint_id": self.route_ids[self._i], "index": self._i}
                     mission.append(self._mission_event(EventType.WAYPOINT_REACHED, payload))
                 self._i += 1
-        if timeout or self._i >= len(self.route):
+        landed = self._land_end is not None and t >= self._land_end
+        if timeout or landed or self._i >= len(self.route):
             self.finished = True
-            self.completed = self._i >= len(self.route)
+            self.completed = self._i >= len(self.route) and not landed
             self._record_aux()
             if self._events:
-                reason = "returned_to_base" if self.completed else "timeout"
+                reason = "landed" if landed else "returned_to_base" if self.completed else "timeout"
                 payload = {
                     "mission_id": self.config.mission.id,
                     "completed": self.completed,
@@ -488,7 +505,10 @@ class Simulator:
         estimador a bordo corrige con ella (sin GPS solo predice)."""
         if self._gnss is None or self.n == 0 or self.n % self._periods["gps"] != 0:
             return
-        ep = self._gnss.epoch(self.config, self.t)
+        s = self.samples[self.n]
+        if self._emitters_on:
+            self._emitter_state = radio.emitter_effects(self.config, self.t, s.x, s.y)
+        ep = self._gnss.epoch(self.config, self.t, self._emitter_state[0], self._emitter_state[1])
         self._gnss_last = ep
         if self._filter is None:
             return
@@ -499,6 +519,95 @@ class Simulator:
         self._innovation = self._filter.correct(
             (round(gx + ep.noise[0], 1), round(gy + ep.noise[1], 1))
         )
+
+    def _delivered(self) -> bool:
+        """Llega el paquete de telemetría (la del dron: GPS, receptor, autopiloto, batería y
+        puntos de paso). Siempre saca su número aleatorio, esté el enlace como esté, para que el
+        resto no cambie. Sin `link_physics` todo llega. Cuenta los perdidos para `LinkStatus`."""
+        if not self._link_phys:
+            return True
+        u = self._link_rng.random()
+        s = self.samples[self.n]
+        up = self._ours_link_up(s.x, s.y)
+        lost = (not up) or u < radio.loss_probability(
+            self.config, radio.rssi_dbm(self.config, s.x, s.y, self.t)
+        )
+        self._pkt_total += 1
+        self._pkt_lost += lost
+        return not lost
+
+    def _link_down_physical(self, x: float, y: float) -> bool:
+        """Lo que nota el dron: no le llega nada de nuestra estación (enlace silenciado o señal
+        por debajo del mínimo). Un secuestro no cuenta: el dron sí tiene enlace, con el otro."""
+        if (SensorSource.LINK, FaultMode.MUTE) in self._faults:
+            return True
+        return radio.rssi_dbm(self.config, x, y, self.t) < self.config.sensors.link.rssi_floor_dbm
+
+    def _ours_link_up(self, x: float, y: float) -> bool:
+        """Nuestra estación recibe al dron: ni secuestro ni enlace caído."""
+        return not is_hijacked(self.t, self._hijack) and not self._link_down_physical(x, y)
+
+    def _check_failsafes(self) -> None:
+        """Failsafe del enlace (tras `link_loss_timeout_s` sin enlace) y de la batería (niveles de
+        PX4 o «no llega a casa»). Con el dron secuestrado no obedece: manda el otro."""
+        if not self._multirotor or not self.perturbed:
+            return
+        if is_hijacked(self.t, self._hijack):
+            self._link_down_s = 0.0
+            return
+        d, s = self.config.drone, self.samples[self.n]
+        if self._link_phys:
+            down = self._link_down_physical(s.x, s.y)
+            self._link_down_s = self._link_down_s + STEP_S if down else 0.0
+            action = {"hold": "failsafe_hold", "return": "failsafe_return", "land": "failsafe_land"}
+            if (
+                self._link_down_s >= d.link_loss_timeout_s
+                and self._mode == "mission"
+                and d.link_loss_action in action
+            ):
+                self.set_mode(action[d.link_loss_action])
+        b = self._battery
+        if b is None or self._mode == "failsafe_land":
+            return
+        cfg = self.config.sensors.battery
+        if b.soc_pct < cfg.failsafe_land_pct:
+            self.set_mode("failsafe_land")
+        elif b.soc_pct < cfg.failsafe_return_pct and self._mode != "failsafe_return":
+            self.set_mode("failsafe_return")
+        elif cfg.endurance_action == "return" and self._mode == "mission":
+            # «No llega a casa»: la estimación depende mucho del viento estimado (al acercarse a la
+            # velocidad máxima respecto al aire), así que tiene que mantenerse unos segundos.
+            wind = self._filter.wind if self._filter else None
+            if self._can_reach_home(self._believed(), wind):
+                self._cannot_reach_s = 0.0
+            else:
+                self._cannot_reach_s += STEP_S
+                if self._cannot_reach_s >= ENDURANCE_HOLD_S:
+                    self.set_mode("failsafe_return")
+
+    def _can_reach_home(self, pos: Point, wind: Point | None) -> bool:
+        """Con la energía que queda, ¿llega a casa con ese viento (el estimado a bordo o, sin
+        estimador, el real)?"""
+        assert self._battery is not None
+        d = self.config.drone
+        w = wind if wind is not None else self._wind(self.t).vector()
+        return self._battery.can_reach_home(pos, w, d.cruise_speed_mps, d.max_airspeed_mps)
+
+    def _loss_pct(self, x: float, y: float) -> float:
+        """Paquetes que se pierden de verdad (modelo, sin azar); 100 con el enlace caído."""
+        if not self._link_phys:
+            return 0.0
+        if not self._ours_link_up(x, y):
+            return 100.0
+        return 100.0 * radio.loss_probability(
+            self.config, radio.rssi_dbm(self.config, x, y, self.t)
+        )
+
+    def _truth_can_reach_home(self, s: Sample) -> bool:
+        """Verdad: con la energía que queda, la posición real y el viento real, ¿llega a casa?"""
+        if self._battery is None:
+            return True
+        return self._can_reach_home((s.x, s.y), None)
 
     def _station_wind(self, t: float) -> Wind:
         """Lo que mide la estación en tierra: el viento del dron por un factor, con retraso (media
@@ -515,6 +624,17 @@ class Simulator:
             return True
         return sensors.radar_range_m(self.config, x, y) <= self.config.sensors.radar.max_range_m
 
+    def _link_payload(self, rng: random.Random) -> dict:
+        """`LinkStatus` que mide nuestra estación (nunca se silencia: el enlace caído se ve como
+        100 % de paquetes perdidos). Los paquetes se cuentan desde el último estado."""
+        s = self.samples[self.n]
+        up = self._ours_link_up(s.x, s.y)
+        lost = 100.0 * self._pkt_lost / self._pkt_total if self._pkt_total else 0.0
+        self._pkt_total = self._pkt_lost = 0
+        rssi = radio.rssi_dbm(self.config, s.x, s.y, self.t)
+        latency = sensors.link_quality(self.config, self.t)[1]
+        return sensors.link_payload_physics(self.config, rng, rssi, latency, up, lost)
+
     def _gnss_payload(self, loss: bool) -> dict:
         ep = self._gnss_last
         assert ep is not None
@@ -527,6 +647,10 @@ class Simulator:
     def _autopilot_payload(self) -> dict:
         f = self._filter
         assert f is not None
+        gx, gy = (
+            self._va[0] + f.wind[0],
+            self._va[1] + f.wind[1],
+        )  # velocidad sobre el suelo estimada
         return {
             "mode": self._mode,
             "heading_deg": round(self._heading, 1),
@@ -534,6 +658,12 @@ class Simulator:
             "wind_est_speed_mps": round(math.hypot(*f.wind), 1),
             "wind_est_from_deg": round(f.wind_from_deg(), 1),
             "innovation_m": None if self._innovation is None else round(self._innovation, 1),
+            "est_x": round(f.p[0], 1),
+            "est_y": round(f.p[1], 1),
+            "ground_speed_mps": round(math.hypot(gx, gy), 1),
+            "course_deg": round(
+                bearing_deg(gx, gy) if math.hypot(gx, gy) > 0.1 else self._heading, 1
+            ),
         }
 
     def _readings(self) -> list[EventDraft]:
@@ -544,8 +674,15 @@ class Simulator:
         s = self.samples[n]
         out: list[EventDraft] = []
 
-        def emit(name: str, et: EventType, source: SensorSource | None, payload: dict) -> None:
-            if source is None or (source, FaultMode.MUTE) not in self._faults:
+        def emit(
+            name: str,
+            et: EventType,
+            source: SensorSource | None,
+            payload: dict,
+            telemetry: bool = False,
+        ) -> None:
+            delivered = self._delivered() if telemetry else True  # saca su número aunque calle
+            if delivered and (source is None or (source, FaultMode.MUTE) not in self._faults):
                 out.append(make_event(cfg, et, t, n // self._periods[name], payload))
 
         if n % self._periods["gps"] == 0:
@@ -563,11 +700,13 @@ class Simulator:
                 dvx, dvy = spoof_offset_rate(t, self._spoofing)
                 pos, vel = s.gps, (s.vx + dvx, s.vy + dvy)
             payload = sensors.gps_payload(cfg, rng, pos, vel, loss, t, self._gnss_last)
-            emit("gps", EventType.POSITION_UPDATED, SensorSource.GPS, payload)
+            emit("gps", EventType.POSITION_UPDATED, SensorSource.GPS, payload, telemetry=True)
             if self._gnss_last is not None:
-                emit("gps", EventType.GNSS_STATUS, SensorSource.GPS, self._gnss_payload(loss))
+                payload = self._gnss_payload(loss)
+                emit("gps", EventType.GNSS_STATUS, SensorSource.GPS, payload, telemetry=True)
             if self._filter is not None:
-                emit("gps", EventType.AUTOPILOT_STATUS, None, self._autopilot_payload())
+                payload = self._autopilot_payload()
+                emit("gps", EventType.AUTOPILOT_STATUS, None, payload, telemetry=True)
         if n % self._periods["radar"] == 0:
             payload = sensors.radar_payload(cfg, rng, s, self._radar_geometry)
             if self._radar_in_range(s.x, s.y):  # fuera de alcance no hay traza (el ruido se gasta)
@@ -582,19 +721,18 @@ class Simulator:
                 ),
             )
         if n % self._periods["link"] == 0:
-            emit(
-                "link",
-                EventType.LINK_STATUS,
-                SensorSource.LINK,
-                sensors.link_payload(cfg, rng, t),
-            )
+            if self._link_phys:
+                emit("link", EventType.LINK_STATUS, None, self._link_payload(rng))
+            else:
+                payload = sensors.link_payload(cfg, rng, t)
+                emit("link", EventType.LINK_STATUS, SensorSource.LINK, payload)
         if n % self._periods["battery"] == 0:
-            emit(
-                "battery",
-                EventType.BATTERY_STATUS,
-                SensorSource.BATTERY,
-                sensors.battery_payload(cfg, rng, t),
-            )
+            model = None
+            if self._battery is not None:
+                b = self._battery
+                model = (b.soc_pct, b.power_w, b.time_remaining_s())
+            payload = sensors.battery_payload(cfg, rng, t, model)
+            emit("battery", EventType.BATTERY_STATUS, SensorSource.BATTERY, payload, telemetry=True)
         return out
 
     def _ground_command(self, p: Point, hijacked: bool) -> Point:
@@ -607,7 +745,7 @@ class Simulator:
             aim = end = self._target
             assert aim is not None
             v_pass, corr = 0.0, (0.0, 0.0)
-        elif self._mode == "failsafe_hold":
+        elif self._mode in ("failsafe_hold", "failsafe_land"):
             assert self._hold is not None
             gx, gy = 0.5 * (self._hold[0] - p[0]), 0.5 * (self._hold[1] - p[1])
             m = math.hypot(gx, gy)
@@ -670,7 +808,9 @@ class Simulator:
         vx, vy = self._va[0] + wind[0], self._va[1] + wind[1]
         # el morro mira al siguiente punto (en espera se queda como está)
         target = self._target if hijacked else self.route[min(self._i, len(self.route) - 1)]
-        if target is not None and (hijacked or self._mode != "failsafe_hold"):
+        if target is not None and (
+            hijacked or self._mode not in ("failsafe_hold", "failsafe_land")
+        ):
             dx, dy = target[0] - p[0], target[1] - p[1]
             if math.hypot(dx, dy) > 1.0:
                 err = angle_diff_deg(bearing_deg(dx, dy), self._heading)
@@ -687,7 +827,14 @@ class Simulator:
     def _advance(self) -> None:
         """Guiado, giro, aceleración, viento e integración: de `t` a `t + 0,1 s`."""
         if self._multirotor:
-            return self._advance_multirotor()
+            self._advance_multirotor()
+        else:
+            self._advance_legacy()
+        if self._battery is not None:
+            air = math.hypot(*self._va) if self._multirotor else self._speed
+            self._battery.step(air, STEP_S)
+
+    def _advance_legacy(self) -> None:
         d, t = self.config.drone, self.t
         believed = self._believed()
         if is_hijacked(t, self._hijack):
@@ -734,11 +881,15 @@ class Simulator:
             ref_dist_m=ref,
             est=self._believed(),
             mode="foreign_control" if hijack else self._mode,
-            link_up=not (hijack or down[SensorSource.LINK]),
-            battery_soc=max(0.0, min(100.0, b.start_pct - b.drain_pct_per_min * t / 60)),
+            link_up=self._ours_link_up(s.x, s.y)
+            if self._link_phys
+            else not (hijack or down[SensorSource.LINK]),
+            battery_soc=self._battery.soc_pct
+            if self._battery is not None
+            else max(0.0, min(100.0, b.start_pct - b.drain_pct_per_min * t / 60)),
             gps_sigma_m=sigma,
-            cn0_dbhz=sensors.GNSS_CN0_NOMINAL_DBHZ,
-            emitters_active=(),
+            cn0_dbhz=sensors.GNSS_CN0_NOMINAL_DBHZ + self._emitter_state[0],
+            emitters_active=self._emitter_state[2],
             wind_speed_mps=w.speed_mps,
             wind_from_deg=w.from_deg,
             gps_mute=down[SensorSource.GPS],
@@ -751,9 +902,9 @@ class Simulator:
             and self._spoofing.start_s <= t < self._spoofing.end_s,
             hijack=hijack,
             link_latency_ms=sensors.link_quality(cfg, t)[1],
-            link_loss_pct=0.0,
+            link_loss_pct=self._loss_pct(s.x, s.y),
             radar_in_range=self._radar_in_range(s.x, s.y),
-            can_reach_home=True,
+            can_reach_home=self._truth_can_reach_home(s),
         )
 
     def truth(self) -> TruthFile:
@@ -791,6 +942,7 @@ class Simulator:
                 )
                 for s in chosen
             ],
+            emitters=radio.truth_emitters(self.config) if self._emitters_on else [],
         )
 
 

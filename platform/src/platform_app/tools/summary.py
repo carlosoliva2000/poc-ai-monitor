@@ -23,7 +23,7 @@ def _path_length(ctx: ToolContext, source: str, event_type: EventType) -> float 
     events, _ = ctx.events(source=source, type=event_type)
     if not events:
         return None
-    pts = [(e.payload["x"], e.payload["y"]) for e in events]
+    pts = [(e.payload["x"], e.payload["y"]) for e in events if e.payload["x"] is not None]
     return round(sum(math.dist(a, b) for a, b in zip(pts, pts[1:], strict=False)), 1)
 
 

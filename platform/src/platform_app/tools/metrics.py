@@ -75,7 +75,11 @@ Sample = tuple[float, float, float]  # (sim_time, x, y)
 
 
 def _samples(events: Sequence[Envelope]) -> list[Sample]:
-    return [(e.sim_time, float(e.payload["x"]), float(e.payload["y"])) for e in events]
+    return [
+        (e.sim_time, float(e.payload["x"]), float(e.payload["y"]))
+        for e in events
+        if e.payload["x"] is not None  # sin fix el receptor no da posición (simulador v2)
+    ]
 
 
 def _trend(values: list[float]) -> Trend | None:

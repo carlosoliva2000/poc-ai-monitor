@@ -73,11 +73,15 @@ class MissionCompleted(Payload):
 
 
 class PositionUpdated(Payload):
-    x: float
-    y: float
-    alt_m: float
-    speed_mps: float
-    course_deg: float
+    """Posición del GPS. Con `simulator.gps_receiver`, **sin fix** (`fix: none`, `sats: 0`) el
+    receptor no da posición, altitud, velocidad ni rumbo: van a `null` (la estima del dron va en
+    `AutopilotStatus`). Sin ese interruptor, sin fix publica su posición estimada (v0.19)."""
+
+    x: float | None
+    y: float | None
+    alt_m: float | None
+    speed_mps: float | None
+    course_deg: float | None
     fix: GpsFix
     sats: int
     hdop: float
@@ -96,13 +100,25 @@ class WindReported(Payload):
 
 
 class LinkStatus(Payload):
-    controller_id: str
-    rssi_dbm: float
-    latency_ms: float
+    """Enlace de mando medido por **nuestra estación** (v1.0). Con `simulator.link_physics`:
+    `rssi_dbm` y `latency_ms` (`null` si no llega nada) y `packet_loss_pct` (paquetes perdidos desde
+    el último estado; 100 con el enlace caído). `controller_id` es de antes de la v1.0: se retira al
+    cerrar la E7a (paso 7b) y no lo publica el enlace con física (desde tierra el controlador
+    ajeno no se ve: queda solo en la verdad)."""
+
+    controller_id: str | None = None
+    rssi_dbm: float | None
+    latency_ms: float | None
+    packet_loss_pct: float | None = None
 
 
 class BatteryStatus(Payload):
+    """Batería. Con `simulator.battery_model` lleva además la potencia consumida y el tiempo
+    restante al ritmo actual."""
+
     battery_pct: float
+    power_w: float | None = None
+    time_remaining_s: float | None = None
 
 
 class GnssStatus(Payload):
@@ -117,8 +133,9 @@ class GnssStatus(Payload):
 
 class AutopilotStatus(Payload):
     """Estado del autopiloto (v1.0, cada 1 s): modo, rumbo del **morro**, velocidad respecto al
-    aire, viento estimado a bordo (m/s y procedencia) e innovación (|GPS − estima|, m; `null` sin
-    GPS: la estima no se corrige)."""
+    aire, viento estimado a bordo (m/s y procedencia), innovación (|GPS − estima|, m; `null` sin
+    GPS: la estima no se corrige) y la **estima** del dron: posición (`est_x`, `est_y`), velocidad
+    y rumbo sobre el suelo (lo que el GPS ya no da sin fix)."""
 
     mode: AutopilotMode
     heading_deg: float
@@ -126,6 +143,10 @@ class AutopilotStatus(Payload):
     wind_est_speed_mps: float
     wind_est_from_deg: float
     innovation_m: float | None
+    est_x: float
+    est_y: float
+    ground_speed_mps: float
+    course_deg: float
 
 
 # --- Del reproductor -------------------------------------------------------------------------

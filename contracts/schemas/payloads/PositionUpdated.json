@@ -11,26 +11,62 @@
     }
   },
   "additionalProperties": false,
+  "description": "Posición del GPS. Con `simulator.gps_receiver`, **sin fix** (`fix: none`, `sats: 0`) el\nreceptor no da posición, altitud, velocidad ni rumbo: van a `null` (la estima del dron va en\n`AutopilotStatus`). Sin ese interruptor, sin fix publica su posición estimada (v0.19).",
   "properties": {
     "x": {
-      "title": "X",
-      "type": "number"
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "X"
     },
     "y": {
-      "title": "Y",
-      "type": "number"
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Y"
     },
     "alt_m": {
-      "title": "Alt M",
-      "type": "number"
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Alt M"
     },
     "speed_mps": {
-      "title": "Speed Mps",
-      "type": "number"
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Speed Mps"
     },
     "course_deg": {
-      "title": "Course Deg",
-      "type": "number"
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Course Deg"
     },
     "fix": {
       "$ref": "#/$defs/GpsFix"

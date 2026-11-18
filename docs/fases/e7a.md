@@ -1,6 +1,6 @@
 # E7a · Simulador v2
 
-Informe de la fase, **actualizado paso a paso**. Referencia: especificación del núcleo v2 (v1.0, 18/11/2026) y las dos consultas del 18/11. Estado: **pasos 1 a 4 hechos (parada del paso 3+4 para revisar)**; pasos 5 a 7 pendientes.
+Informe de la fase, **actualizado paso a paso**. Referencia: especificación del núcleo v2 (v1.0, 18/11/2026) y las dos consultas del 18/11. Estado: **pasos 1 a 6 hechos (parada del paso 5+6 para revisar)**; paso 7 pendiente.
 
 ## Decisiones de Carlos (18/11/2026)
 1. `runs/` se regenera en el paso 1 solo por el contrato, con la prueba de la proyección.
@@ -49,7 +49,7 @@ module tests that depend on the v0.19 payloads are marked pending for E7c.
 
 ### Qué se cambió
 - **Interruptor** `simulator.multirotor_guidance` (por defecto `false` = el guiado de hoy). Con él **apagado, `runs/` sale byte a byte igual** (`git status` limpio tras regenerar; test nuevo `test_the_committed_runs_are_what_the_scenarios_generate` para los 9 escenarios).
-- **Valores del dron con fuente.** `max_airspeed_mps` = **17 m/s** (modo P del DJI Matrice 300 RTK; en modo S, 23 m/s), `wind_limit_mps` = **12 m/s** (resistencia al viento) y, desde la revisión del paso 2, giro del morro de **100 °/s** (yaw máximo de la ficha; la especificación decía 90 °/s: **hay que actualizarla**). Fuente, comprobada por Carlos el 19/11/2026: <https://www.dji.com/matrice-300/info>: sin ⚠️. Decisión de Carlos: `wind_limit` se queda en 12 (el de la ficha): entre 12 y 17 m/s el entorno está `beyond_limit` mientras el dron aguanta. El resto (aceleración 2 m/s², radio 5 m, punto de mira 40 m, `lateral_ki_per_s` 0,05) son los de la especificación o ⚠️.
+- **Valores del dron con fuente.** `max_airspeed_mps` = **17 m/s** (modo P del DJI Matrice 300 RTK; en modo S, 23 m/s), `wind_limit_mps` = **12 m/s** (resistencia al viento) y, desde la revisión del paso 2, giro del morro de **100 °/s** (yaw máximo de la ficha; la especificación decía 90 °/s: **hay que actualizarla**). Fuente, comprobada el 18/11/2026: <https://www.dji.com/matrice-300/info>: sin ⚠️. Decisión de Carlos: `wind_limit` se queda en 12 (el de la ficha): entre 12 y 17 m/s el entorno está `beyond_limit` mientras el dron aguanta. El resto (aceleración 2 m/s², radio 5 m, punto de mira 40 m, `lateral_ki_per_s` 0,05) son los de la especificación o ⚠️.
 - **Guiado** (`generator/controller.py` y `Simulator._advance_multirotor`):
   - punto de mira sobre el tramo (como hoy) para la dirección;
   - **perfil de velocidad**: `v = min(crucero, √(v_paso² + 2·a·(d − r/2)))`; `v_paso` = crucero · cos(giro), 0 con un giro ≥ 90° o en el último punto, y limitada para que el cambio de velocidad con la aceleración limitada no abra la esquina más de 6 m (⚠️ `CORNER_OPENING_M`);
@@ -72,7 +72,7 @@ module tests that depend on the v0.19 payloads are marked pending for E7c.
 - **Duración:** +18 s en `nominal` (frena en las esquinas y llega a casa casi parado).
 - **Esquinas:** < 11 m, sin falsas desviaciones. `spoofing` pasa de 7 s `unexplained` (artefacto de las esquinas) a 0.
 - **Viento:** con 12 m/s (el del episodio de `demo` hoy) **no hay desviación** (máx. 9 m en el episodio); con 6 m/s de costado se queda a menos de 3 m de la línea (el guiado de hoy, 16 m). Con viento por encima de 17 m/s deriva: 17 → 27 m, 17,5 → 46 m, **18 → 66 m**, 19 → 105 m, 22 → 225 m. En el acto 1 de `demo` pondré **18 m/s** (≈ el desvío de unos 50 m de hoy; ⚠️ 18 m/s es mucho viento: es la forma de que supere la velocidad máxima del dron).
-- `environment.wind` pasa a `beyond_limit` por encima de 12 m/s, pero el dron solo se desvía por encima de 17: entre 12 y 17 el entorno está «fuera de límites» y el dron aguanta (decisión de especificación: `wind_limit` es el viento máximo con el que mantiene la ruta; con la ficha de DJI es menor que la velocidad máxima respecto al aire). **A decidir contigo en la parada:** si prefieres que `wind_limit` y `max_airspeed` coincidan (17) o que el dron se desvíe a partir de 12.
+- `environment.wind` pasa a `beyond_limit` por encima de 12 m/s (`wind_limit_mps`, el de la ficha: decidido), pero el dron solo se desvía por encima de 17: entre 12 y 17 el entorno está «fuera de límites» y el dron aguanta la ruta.
 - Con el interruptor encendido **no cambia ningún escenario** (siguen apagados: se encienden en el paso 7).
 
 ### Tests
@@ -154,4 +154,57 @@ sigma and slow sats/hdop variation, a radar with position, range and
 distance-dependent sigma, and a ground station with factor and lag. New
 events GnssStatus and AutopilotStatus (contract v1.0). Corner speed now
 keeps the corner opening under about 7 m.
+```
+
+## Pasos 5 y 6 · Enlace con física, failsafes, emisores y batería
+
+Interruptores nuevos en `simulator`: `link_physics`, `battery_model` y `emitters` (este necesita `gps_receiver`). Apagados: **`runs/` sale byte a byte igual** (git limpio y test de `runs/` versionados). Dos escenarios nuevos con todo encendido: `endurance` y `jamming` (se generan en `runs/` con sus gráficas).
+
+### Qué se cambió
+- **Enlace** (`generator/radio.py`): RSSI = `rssi_dbm` (el de 1 km) − 20·log10(d_km) con la distancia a la base y menos la atenuación de un episodio; pérdida de paquetes logística en el RSSI (50 % con −85 dBm, pendiente 3 dB ⚠️). **La telemetría del dron (GPS, receptor, autopiloto, batería y `WaypointReached`) solo llega si llega su paquete** (generador propio `link_loss`; saca su número aunque la fuente calle); el radar y la estación son independientes. `LinkStatus` lo mide **nuestra estación** (sin `controller_id`; `rssi_dbm` y `latency_ms` a `null` y `packet_loss_pct` 100 con el enlace caído; el porcentaje es el de los paquetes realmente perdidos desde el último estado) y nunca se silencia. **Secuestro = nuestro enlace caído**; el `mute` del enlace es enlace caído en los dos sentidos (y no `LinkStatus` callado).
+- **Failsafe del enlace:** tras `drone.link_loss_timeout_s` (10 s, PX4 `COM_DL_LOSS_T`) sin enlace (silenciado o señal bajo −95 dBm ⚠️) actúa según `drone.link_loss_action`: `continue` (por defecto, como `NAV_DLL_ACT` = 0), `hold`, `return` o `land`. Un secuestro no lo dispara (el dron obedece a otro).
+- **`failsafe_land`** (revisión del paso 2): se mantiene en el sitio `drone.land_duration_s` (20 s ⚠️: 60 m a 3 m/s) y termina el vuelo con `MissionCompleted` `completed: false`, `reason: landed` (valor nuevo).
+- **Batería** (`generator/energy.py`): potencia de multirrotor en forma normalizada de Zeng et al. (arXiv:1804.02238, ec. 6 y tabla I; <https://arxiv.org/html/1804.02238v1>; curva en U con el mínimo en torno a 20 m/s), con `hover_power_w` 400 W, 450 Wh y eficiencia 0,75 ⚠️, integrada en el tiempo; `BatteryStatus` lleva `power_w` y `time_remaining_s`. **Energía para volver a casa** con el viento estimado (la de la verdad usa el real), con una reserva del 10 % ⚠️.
+- **Failsafe de la batería**, niveles de PX4 (`BAT_LOW_THR` 15 %, `BAT_CRIT_THR` 7 %, `BAT_EMERGEN_THR` 5 %): **al 15 % solo aviso** (`battery.level: low`, sin cambio de modo), **por debajo del 7 % vuelve a casa** (`critical`), **por debajo del 5 % aterriza**; o vuelve cuando **no llega a casa** (`battery.endurance: cannot_reach_home`; la estimación depende mucho del viento estimado cuando se acerca a la velocidad máxima respecto al aire, así que tiene que mantenerse 5 s).
+- **Emisores** (`generator/radio.py`, `emitters`): cada emisor llega con `L = P − 20·log10(d_km)` (dB sobre el ruido, `P` a 1 km). **Interferencia** (`emitters:` del YAML, con posición y ventana): el C/N0 baja `10·log10(1 + 10^(L/10))` y **el AGC baja lo mismo**. **Engaño** (`spoofing.emitter`): la señal falsa es más fuerte: **el C/N0 sube** (como mucho 8 dB) y **el AGC baja** la mitad de esa ganancia. El secuestrador es una estación con posición (el `target`), sin efecto de radio. Todo en `truth.json` (`emitters`, `emitters_active`, `cn0_dbhz`), nunca en un evento.
+
+### C/N0 y AGC con los emisores (revisión): ejemplos (`tools/e7a_gnss_example.py` → `experiments/e7a/gnss_examples.{png,md}`)
+| Caso | Tramo | C/N0 (dB-Hz) | AGC (dB) |
+|---|---|---|---|
+| `demo` (engaño, emisor en 1400, 1900) | T+0–160 (sin emisor) | 45,0 | 0,0 |
+| | **T+175–220 (engaño)** | **53,1 (sube)** | **−8,8 (baja)** |
+| | T+240–330 (después) | 45,0 | 0,0 |
+| `jamming` (emisor en 900, 1500) | T+0–100 (sin emisor) | 45,0 | 0,0 |
+| | **T+130–170 (interferencia)** | **28,3 (baja)** | **−16,5 (baja)** |
+| | T+270–400 (después) | 45,0 | 0,0 |
+
+En `jamming` el efecto sigue la distancia: el C/N0 cae a 21,7 dB-Hz cuando el dron pasa a 187 m del emisor (T+124) y vuelve a subir al alejarse (hasta 40 dB-Hz a T+270), y el GPS pierde el fix (T+190–215). La figura está en `experiments/e7a/gnss_examples.png`.
+
+### Duda de la revisión: ¿qué se publica en `PositionUpdated` durante la pérdida de GPS?
+**Hasta ahora era la estima** (posición estimada, y velocidad y rumbo de la estima) con `fix: none`; en los pasos 3 y 4 la dejé así «por continuidad» con la E6. Tienes razón: un GPS sin fix no da nada de eso. **Cambiado** (solo con `simulator.gps_receiver`; sin él, como en la v0.19): `fix: none`, `sats: 0`, `hdop: 99.9` y **`x`, `y`, `alt_m`, `speed_mps` y `course_deg` a `null`** (campos nulos en el contrato). La estima va en **`AutopilotStatus`**: `est_x`, `est_y`, `ground_speed_mps` y `course_deg` (campos nuevos), más `innovation_m: null` sin GPS. Consecuencias: las tools de datos y el visor saltan las posiciones nulas (adaptados); la web tendrá que dibujar el hueco sin posición (paso 7: huecos de telemetría).
+
+### Escenarios nuevos
+- **`endurance`** (10 m/s del oeste, 6 km, 100 Wh): `battery.endurance` pasa a `cannot_reach_home` a T+262, el dron vuelve solo a T+270 (`failsafe_return`), `battery.level` `low` T+727, `critical` T+804 y **aterriza al 5 % a T+823** (`landed`). Cada km contra el viento cuesta ~1,6 veces más que a favor (el test lo comprueba).
+- **`jamming`**: emisor + degradación del GPS (σ real 5,7 m: `gps.quality: degraded`) + 25 s sin fix; `dead_reckoning` no sale (el viento es constante; ver el paso 3).
+
+### Tests
+- **Nuevos** (`test_link_battery.py`, 10 casos): secuestro = enlace perdido (hueco de telemetría, radar sigue, `LinkStatus` 100 %, sin controlador, no salta nuestro failsafe); failsafe tras 10 s con cada acción (`continue`, `hold`, `return`, `land`: `landed` con `completed: false`); pérdida de ~50 % de paquetes; sin fix el GPS da `null` y la estima va en el autopiloto; curva de potencia en U y el km contra el viento cuesta más; `endurance` (vuelve antes del punto de giro, `cannot_reach_home` antes de `low`, `low` antes de `critical`, aterriza); emisores (interferencia baja C/N0 y AGC con la distancia, engaño sube C/N0 y baja AGC, posiciones y activos en la verdad).
+- `test_determinism` y `test_generator`/`test_api` incluyen `endurance` y `jamming`. Plataforma **360**, contratos **202**. Ninguno borrado.
+
+### Pendiente para el paso 7
+- **Web:** `lib/contracts.ts` sigue con los tipos antiguos (`PositionUpdated.x` no nulo, `LinkStatus.controller_id`…): se adapta en el paso 7 (huecos de telemetría, línea dron–base con el estado del enlace, radar, emisores y secuestrador).
+- `faults` con un cambio de viento durante la pérdida de GPS (para `dead_reckoning`); `demo` v2 con el emisor de engaño y la estación del secuestrador con posición; encender todos los interruptores y regenerar `runs/`.
+
+### Mensaje de commit propuesto (pasos 5 y 6)
+```
+feat: E7a steps 5-6 - link physics, failsafes, emitters and battery
+
+Behind three switches (all off: runs/ is byte for byte the same). RSSI by
+distance and logistic packet loss; the drone telemetry only arrives if its
+packet arrives; a hijack or a link mute is a lost link for our station and
+trips the link failsafe after 10 s (continue, hold, return or land). Battery
+with multirotor power, energy to get home and the PX4 levels (15 % warn, 7 %
+return, 5 % land). GNSS C/N0 and AGC depend on the distance to the jammer and
+the spoofer. Without a fix the GPS gives null position and the estimate goes in
+AutopilotStatus. New scenarios: endurance and jamming.
 ```

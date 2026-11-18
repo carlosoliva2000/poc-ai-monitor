@@ -1,0 +1,61 @@
+name: jamming
+description: >-
+  GPS interference: a jammer next to the first legs lowers the receiver's C/N0 and AGC with its
+  distance, the GPS degrades (fewer satellites, worse hdop) and loses the fix for a few seconds.
+seed: 42
+t0: "2026-10-20T10:00:00Z"
+max_duration_s: 900
+
+drone:
+  cruise_speed_mps: 15.0
+  max_accel_mps2: 2.0
+  max_turn_rate_dps: 100.0
+  altitude_m: 60.0
+  acceptance_radius_m: 5.0
+  lookahead_m: 40.0
+  wind_limit_mps: 12.0
+
+mission:
+  id: MSN-JAMMING
+  waypoints:            # BASE = (0, 0) se añade al principio y al final
+    - {id: WP1, x: 500.0, y: 1200.0}
+    - {id: WP2, x: 1600.0, y: 1500.0}
+    - {id: WP3, x: 2400.0, y: 800.0}
+    - {id: WP4, x: 1900.0, y: -200.0}
+  return_to_base: true
+
+sensors:
+  gps:
+    period_s: 1.0
+    sigma_m: 1.5
+    sats: 14
+    hdop: 0.8
+    episodes: [{start_s: 120.0, end_s: 260.0, ramp_s: 25.0, sats: 7, hdop: 3.0}]
+  radar: {period_s: 2.0, sigma_m: 5.0}
+  meteo: {period_s: 10.0, sigma_mps: 0.5, sigma_deg: 8.0}
+  link: {period_s: 5.0, controller_id: GCS-1, rssi_dbm: -62.0, latency_ms: 45.0}
+  battery: {period_s: 10.0, start_pct: 100.0, drain_pct_per_min: 1.2}
+
+wind:
+  base: {speed_mps: 2.0, from_deg: 300.0}
+  episodes: []
+
+spoofing: null
+
+hijack: null
+
+faults:
+  - {source: gps, mode: loss, start_s: 190.0, end_s: 215.0}   # la interferencia fuerte quita el fix
+
+emitters:
+  - {id: jammer-1, x: 900.0, y: 1500.0, power_db: 8.0, start_s: 110.0, end_s: 270.0}
+
+simulator:
+  multirotor_guidance: true
+  onboard_estimator: true
+  gps_receiver: true
+  radar_geometry: true
+  ground_station: true
+  link_physics: true
+  battery_model: true
+  emitters: true

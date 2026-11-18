@@ -19,8 +19,10 @@ ALL = [
     "demo",
     "demo-battery",
     "demo-meteo",
+    "endurance",
     "faults",
     "hijack",
+    "jamming",
     "nominal",
     "nominal-wind-cmd",
     "spoofing",
@@ -28,7 +30,7 @@ ALL = [
 ]
 
 
-def test_all_scenarios_in_the_repo_are_the_seven_expected() -> None:
+def test_all_scenarios_in_the_repo_are_the_expected_ones() -> None:
     assert list_scenarios() == ALL
 
 

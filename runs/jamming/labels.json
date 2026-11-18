@@ -1,0 +1,42 @@
+{
+  "labels": [
+    {
+      "id": "F1",
+      "type": "gps_degraded",
+      "source": "gps",
+      "start_s": 120.0,
+      "end_s": 190.0,
+      "expected_rules": [
+        "GPS_DEGRADED"
+      ],
+      "expected_cause": "SENSOR_FAULT",
+      "also_accepted_causes": [
+        "GPS_JAMMING"
+      ],
+      "eval_window": [
+        120.0,
+        250.0
+      ]
+    },
+    {
+      "id": "F2",
+      "type": "gps_loss",
+      "source": "gps",
+      "start_s": 190.0,
+      "end_s": 215.0,
+      "expected_rules": [
+        "GPS_DEGRADED",
+        "SOURCE_DISCREPANCY",
+        "ROUTE_DEVIATION"
+      ],
+      "expected_cause": "GPS_JAMMING",
+      "also_accepted_causes": [
+        "SENSOR_FAULT"
+      ],
+      "eval_window": [
+        190.0,
+        275.0
+      ]
+    }
+  ]
+}

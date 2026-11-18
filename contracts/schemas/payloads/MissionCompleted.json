@@ -3,7 +3,8 @@
     "CompletionReason": {
       "enum": [
         "returned_to_base",
-        "timeout"
+        "timeout",
+        "landed"
       ],
       "title": "CompletionReason",
       "type": "string"

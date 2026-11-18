@@ -141,6 +141,8 @@ class ViewerState:
     def apply_event(self, ev: dict) -> None:
         kind, p, t = ev["type"], ev["payload"], ev["sim_time"]
         if kind == "PositionUpdated":
+            if p["x"] is None:  # sin fix el receptor no da posición (simulador v2)
+                return
             self.gps.append(GpsPoint(t, p["x"], p["y"], p["fix"]))
             self.heading_deg = p["course_deg"]
             while self.gps and self.gps[0].t < t - TRAIL_S:

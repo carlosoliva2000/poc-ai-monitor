@@ -154,6 +154,7 @@ class RouteTrend(StrEnum):
 class CompletionReason(StrEnum):
     RETURNED_TO_BASE = "returned_to_base"
     TIMEOUT = "timeout"
+    LANDED = "landed"
 
 
 class PauseReason(StrEnum):

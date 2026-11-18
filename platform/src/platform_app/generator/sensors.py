@@ -93,7 +93,7 @@ def gps_payload(
         rng.gauss(0, 1)
         sats, hdop = (0, GPS_LOSS_HDOP) if loss else (receiver.sats, receiver.hdop)
         x, y = round(pos[0] + receiver.noise[0], 1), round(pos[1] + receiver.noise[1], 1)
-    return {
+    payload: dict = {
         "x": x,
         "y": y,
         "alt_m": round(config.drone.altitude_m + rng.gauss(0, GPS_ALT_SIGMA_M), 1),
@@ -103,6 +103,9 @@ def gps_payload(
         "sats": sats,
         "hdop": hdop,
     }
+    if loss and receiver is not None:  # un receptor sin fix no da posición, velocidad ni rumbo
+        payload.update(x=None, y=None, alt_m=None, speed_mps=None, course_deg=None)
+    return payload
 
 
 def radar_range_m(config: ScenarioConfig, x: float, y: float) -> float:
@@ -172,11 +175,43 @@ def link_payload(config: ScenarioConfig, rng: random.Random, t: float) -> dict:
     }
 
 
-def battery_payload(config: ScenarioConfig, rng: random.Random, t: float) -> dict:
+def link_payload_physics(
+    config: ScenarioConfig,
+    rng: random.Random,
+    rssi: float,
+    latency: float,
+    up: bool,
+    loss_pct: float,
+) -> dict:
+    """`LinkStatus` con física: lo mide nuestra estación. Con el enlace caído no llega señal ni
+    latencia (`null`) y se pierde el 100 %. Gasta los mismos números aleatorios de siempre."""
+    noisy_rssi = rssi + rng.gauss(0, LINK_RSSI_SIGMA_DB)
+    noisy_latency = max(1.0, latency + rng.gauss(0, LINK_LATENCY_SIGMA_MS))
+    if not up:
+        return {"rssi_dbm": None, "latency_ms": None, "packet_loss_pct": 100.0}
+    return {
+        "rssi_dbm": round(noisy_rssi, 1),
+        "latency_ms": round(noisy_latency, 1),
+        "packet_loss_pct": round(loss_pct, 1),
+    }
+
+
+def battery_payload(
+    config: ScenarioConfig,
+    rng: random.Random,
+    t: float,
+    model: tuple[float, float, float] | None = None,
+) -> dict:
+    """`BatteryStatus`. Con `battery_model`, `model` = (carga %, potencia W, tiempo restante s)."""
     b = config.sensors.battery
-    pct = min(
-        100.0,
-        max(0.0, b.start_pct - b.drain_pct_per_min * t / 60 + rng.gauss(0, BATTERY_PCT_SIGMA)),
-    )
+    noise = rng.gauss(0, BATTERY_PCT_SIGMA)
     rng.gauss(0, BATTERY_VOLTAGE_SIGMA_V)  # `voltage_v` ya no existe: se gasta y se descarta
+    if model is not None:
+        pct = min(100.0, max(0.0, model[0] + noise))
+        return {
+            "battery_pct": round(pct, 1),
+            "power_w": round(model[1], 0),
+            "time_remaining_s": round(model[2], 0),
+        }
+    pct = min(100.0, max(0.0, b.start_pct - b.drain_pct_per_min * t / 60 + noise))
     return {"battery_pct": round(pct, 1)}

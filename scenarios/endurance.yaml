@@ -1,0 +1,50 @@
+name: endurance
+description: >-
+  Long flight with a tailwind on the way out and a headwind on the way back: the battery runs out
+  before the drone can get home. The estimate of the energy to get home with the wind drops below
+  what is left, so the drone turns back on its own (return failsafe) and arrives with little charge.
+seed: 42
+t0: "2026-10-20T10:00:00Z"
+max_duration_s: 2400
+
+drone:
+  cruise_speed_mps: 15.0
+  max_accel_mps2: 2.0
+  max_turn_rate_dps: 100.0
+  altitude_m: 60.0
+  acceptance_radius_m: 5.0
+  lookahead_m: 40.0
+  wind_limit_mps: 12.0
+
+mission:
+  id: MSN-ENDURANCE
+  waypoints:            # BASE = (0, 0) se añade al principio y al final
+    - {id: WP1, x: 6000.0, y: 0.0}
+  return_to_base: true
+
+sensors:
+  gps: {period_s: 1.0, sigma_m: 1.5, sats: 14, hdop: 0.8}
+  radar: {period_s: 2.0, sigma_m: 5.0, max_range_m: 8000.0}
+  meteo: {period_s: 10.0, sigma_mps: 0.5, sigma_deg: 8.0}
+  link: {period_s: 5.0, controller_id: GCS-1, rssi_dbm: -62.0, latency_ms: 45.0}
+  battery: {period_s: 10.0, start_pct: 100.0, drain_pct_per_min: 1.2, capacity_wh: 100.0}
+
+wind:
+  base: {speed_mps: 10.0, from_deg: 270.0}   # del oeste: a favor hacia el este, de cara a la vuelta
+  episodes: []
+
+spoofing: null
+
+hijack: null
+
+faults: []
+
+simulator:
+  multirotor_guidance: true
+  onboard_estimator: true
+  gps_receiver: true
+  radar_geometry: true
+  ground_station: true
+  link_physics: true
+  battery_model: true
+  emitters: true

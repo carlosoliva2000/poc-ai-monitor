@@ -34,6 +34,14 @@ class DroneConfig(Config):
     viento la supera, el dron deriva. Solo con `simulator.multirotor_guidance`."""
     lateral_ki_per_s: float = Field(default=0.05, ge=0)
     """Ganancia integral del error lateral (1/s) del guiado de multirrotor ⚠️."""
+    link_loss_timeout_s: Positive = 10.0
+    """Failsafe de enlace: segundos sin enlace antes de actuar (PX4 `COM_DL_LOSS_T`: 10 s). Solo
+    con `simulator.link_physics`."""
+    link_loss_action: Literal["continue", "hold", "return", "land"] = "continue"
+    """Qué hace al saltar el failsafe del enlace: seguir el plan (por defecto, como `NAV_DLL_ACT`
+    = 0 de PX4), mantener la posición, volver a casa o aterrizar."""
+    land_duration_s: Positive = 20.0
+    """Lo que tarda en aterrizar (⚠️: 60 m a 3 m/s); termina el vuelo con `reason: landed`."""
     estimator_position_gain: float = Field(default=0.6, ge=0, le=1)
     """Estimador a bordo (filtro complementario): cuánto de la innovación del GPS corrige la
     posición en cada medida ⚠️."""
@@ -162,7 +170,13 @@ class LinkConfig(Config):
     period_s: Positive
     controller_id: str
     rssi_dbm: float
+    """RSSI nominal. Con `simulator.link_physics`, el de 1 km de la base (cae 20·log10(d))."""
     latency_ms: float
+    rssi_floor_dbm: float = -95.0
+    """Por debajo de esta señal no hay enlace (el failsafe empieza a contar) ⚠️."""
+    loss_rssi50_dbm: float = -85.0
+    """Señal con la que se pierde el 50 % de los paquetes (logística en el RSSI) ⚠️."""
+    loss_slope_db: Positive = 3.0
     episodes: list[LinkEpisode] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -175,6 +189,21 @@ class BatteryConfig(Config):
     period_s: Positive
     start_pct: float = Field(ge=0, le=100)
     drain_pct_per_min: float = Field(ge=0)
+    capacity_wh: Positive = 450.0
+    """`simulator.battery_model`: energía de la batería (⚠️, un cuadricóptero de ~5 kg)."""
+    hover_power_w: Positive = 400.0
+    """Potencia en estacionario (⚠️); la curva en U del resto sale de Zeng et al."""
+    efficiency: float = Field(default=0.75, gt=0, le=1)
+    """Eficiencia eléctrica y del motor (⚠️ 0,7–0,8)."""
+    return_reserve: float = Field(default=0.1, ge=0)
+    """Reserva sobre la energía para volver a casa para decir que «no llega» ⚠️."""
+    failsafe_return_pct: float = Field(default=7.0, ge=0)
+    """Carga por debajo de la cual vuelve a casa (PX4 `BAT_CRIT_THR`: 7 %)."""
+    failsafe_land_pct: float = Field(default=5.0, ge=0)
+    """Y por debajo de la cual aterriza (PX4 `BAT_EMERGEN_THR`: 5 %). Con el 15 % (`BAT_LOW_THR`)
+    solo hay aviso: no cambia de modo."""
+    endurance_action: Literal["none", "return"] = "return"
+    """Qué hace al no llegar a casa con la energía que queda."""
 
 
 class SensorsConfig(Config):
@@ -209,8 +238,36 @@ class WindConfig(Config):
     episodes: list[WindEpisode]
 
 
+class EmitterPosition(Config):
+    x: float
+    y: float
+    power_db: float = 12.0
+    """Nivel a 1 km de distancia, en dB sobre el ruido (cae 20·log10(d))."""
+
+
+class JammerConfig(Config):
+    """Emisor de interferencia con posición (`simulator.emitters`): baja el C/N0 y el AGC del
+    receptor según su distancia. Solo en la verdad y en la vista del instructor."""
+
+    id: str
+    x: float
+    y: float
+    power_db: float = 25.0
+    start_s: float = Field(ge=0)
+    end_s: float
+
+    @model_validator(mode="after")
+    def _check_window(self) -> "JammerConfig":
+        if self.end_s <= self.start_s:
+            raise ValueError("end_s must be greater than start_s")
+        return self
+
+
 class SpoofingConfig(Config):
     """GPS reportado = real + desfase que crece a `drift_rate_mps` hacia `direction_deg`."""
+
+    emitter: EmitterPosition | None = None
+    """Posición del emisor de engaño (por defecto, la base): sube el C/N0 y baja el AGC."""
 
     start_s: float = Field(ge=0)
     end_s: float
@@ -241,7 +298,9 @@ class HijackConfig(Config):
     start_s: float = Field(ge=0)
     end_s: float | None
     target: Point
-    link_hint: LinkHint
+    link_hint: LinkHint | None = None
+    """Pista del enlace de antes de la v1.0 (el controlador ajeno ya no se ve desde tierra); se
+    retira al cerrar la E7a. `target` es la posición de la estación del secuestrador."""
 
     @model_validator(mode="after")
     def _check_window(self) -> "HijackConfig":
@@ -299,11 +358,23 @@ class SimulatorConfig(Config):
     """Radar con posición: σ que crece con la distancia y alcance máximo."""
     ground_station: bool = False
     """Estación en tierra: viento del dron por un factor, con retraso."""
+    link_physics: bool = False
+    """Enlace con física: RSSI según la distancia a la base, pérdida de paquetes, telemetría que
+    solo llega si llega el paquete, y failsafe tras `drone.link_loss_timeout_s` sin enlace. El
+    secuestro y el `mute` del enlace son enlace caído; `LinkStatus` lo mide nuestra estación."""
+    battery_model: bool = False
+    """Batería con consumo (potencia de multirrotor), tiempo restante, energía para volver a casa y
+    failsafe por niveles o «no llega a casa»."""
+    emitters: bool = False
+    """C/N0 y AGC del receptor según la distancia a los emisores (engaño e interferencia).
+    Necesita `gps_receiver`."""
 
     @model_validator(mode="after")
     def _check_dependencies(self) -> "SimulatorConfig":
         if self.onboard_estimator and not (self.multirotor_guidance and self.gps_receiver):
             raise ValueError("onboard_estimator needs multirotor_guidance and gps_receiver")
+        if self.emitters and not self.gps_receiver:
+            raise ValueError("emitters needs gps_receiver")
         return self
 
 
@@ -320,6 +391,7 @@ class ScenarioConfig(Config):
     spoofing: SpoofingConfig | None
     hijack: HijackConfig | None
     faults: list[FaultConfig]
+    emitters: list[JammerConfig] = Field(default_factory=list)
     labeling: LabelingConfig = Field(default_factory=LabelingConfig)
     simulator: SimulatorConfig = Field(default_factory=SimulatorConfig)
     commands: list[ScheduledCommand] = []  # opcional (v0.18): comandos del instructor programados

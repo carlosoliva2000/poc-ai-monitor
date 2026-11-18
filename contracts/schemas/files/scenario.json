@@ -18,6 +18,52 @@
           "minimum": 0,
           "title": "Drain Pct Per Min",
           "type": "number"
+        },
+        "capacity_wh": {
+          "default": 450.0,
+          "exclusiveMinimum": 0,
+          "title": "Capacity Wh",
+          "type": "number"
+        },
+        "hover_power_w": {
+          "default": 400.0,
+          "exclusiveMinimum": 0,
+          "title": "Hover Power W",
+          "type": "number"
+        },
+        "efficiency": {
+          "default": 0.75,
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Efficiency",
+          "type": "number"
+        },
+        "return_reserve": {
+          "default": 0.1,
+          "minimum": 0,
+          "title": "Return Reserve",
+          "type": "number"
+        },
+        "failsafe_return_pct": {
+          "default": 7.0,
+          "minimum": 0,
+          "title": "Failsafe Return Pct",
+          "type": "number"
+        },
+        "failsafe_land_pct": {
+          "default": 5.0,
+          "minimum": 0,
+          "title": "Failsafe Land Pct",
+          "type": "number"
+        },
+        "endurance_action": {
+          "default": "return",
+          "enum": [
+            "none",
+            "return"
+          ],
+          "title": "Endurance Action",
+          "type": "string"
         }
       },
       "required": [
@@ -78,6 +124,29 @@
           "title": "Lateral Ki Per S",
           "type": "number"
         },
+        "link_loss_timeout_s": {
+          "default": 10.0,
+          "exclusiveMinimum": 0,
+          "title": "Link Loss Timeout S",
+          "type": "number"
+        },
+        "link_loss_action": {
+          "default": "continue",
+          "enum": [
+            "continue",
+            "hold",
+            "return",
+            "land"
+          ],
+          "title": "Link Loss Action",
+          "type": "string"
+        },
+        "land_duration_s": {
+          "default": 20.0,
+          "exclusiveMinimum": 0,
+          "title": "Land Duration S",
+          "type": "number"
+        },
         "estimator_position_gain": {
           "default": 0.6,
           "maximum": 1,
@@ -101,6 +170,30 @@
         "lookahead_m"
       ],
       "title": "DroneConfig",
+      "type": "object"
+    },
+    "EmitterPosition": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "power_db": {
+          "default": 12.0,
+          "title": "Power Db",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "EmitterPosition",
       "type": "object"
     },
     "FaultConfig": {
@@ -279,14 +372,21 @@
           "$ref": "#/$defs/Point"
         },
         "link_hint": {
-          "$ref": "#/$defs/LinkHint"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinkHint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
         "start_s",
         "end_s",
-        "target",
-        "link_hint"
+        "target"
       ],
       "title": "HijackConfig",
       "type": "object"
@@ -299,6 +399,47 @@
       ],
       "title": "InstructorCommandName",
       "type": "string"
+    },
+    "JammerConfig": {
+      "additionalProperties": false,
+      "description": "Emisor de interferencia con posición (`simulator.emitters`): baja el C/N0 y el AGC del\nreceptor según su distancia. Solo en la verdad y en la vista del instructor.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "power_db": {
+          "default": 25.0,
+          "title": "Power Db",
+          "type": "number"
+        },
+        "start_s": {
+          "minimum": 0,
+          "title": "Start S",
+          "type": "number"
+        },
+        "end_s": {
+          "title": "End S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "x",
+        "y",
+        "start_s",
+        "end_s"
+      ],
+      "title": "JammerConfig",
+      "type": "object"
     },
     "LabelingConfig": {
       "additionalProperties": false,
@@ -374,6 +515,22 @@
         },
         "latency_ms": {
           "title": "Latency Ms",
+          "type": "number"
+        },
+        "rssi_floor_dbm": {
+          "default": -95.0,
+          "title": "Rssi Floor Dbm",
+          "type": "number"
+        },
+        "loss_rssi50_dbm": {
+          "default": -85.0,
+          "title": "Loss Rssi50 Dbm",
+          "type": "number"
+        },
+        "loss_slope_db": {
+          "default": 3.0,
+          "exclusiveMinimum": 0,
+          "title": "Loss Slope Db",
           "type": "number"
         },
         "episodes": {
@@ -704,6 +861,21 @@
           "default": false,
           "title": "Ground Station",
           "type": "boolean"
+        },
+        "link_physics": {
+          "default": false,
+          "title": "Link Physics",
+          "type": "boolean"
+        },
+        "battery_model": {
+          "default": false,
+          "title": "Battery Model",
+          "type": "boolean"
+        },
+        "emitters": {
+          "default": false,
+          "title": "Emitters",
+          "type": "boolean"
         }
       },
       "title": "SimulatorConfig",
@@ -713,6 +885,17 @@
       "additionalProperties": false,
       "description": "GPS reportado = real + desfase que crece a `drift_rate_mps` hacia `direction_deg`.",
       "properties": {
+        "emitter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmitterPosition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "start_s": {
           "minimum": 0,
           "title": "Start S",
@@ -951,6 +1134,13 @@
         "$ref": "#/$defs/FaultConfig"
       },
       "title": "Faults",
+      "type": "array"
+    },
+    "emitters": {
+      "items": {
+        "$ref": "#/$defs/JammerConfig"
+      },
+      "title": "Emitters",
       "type": "array"
     },
     "labeling": {

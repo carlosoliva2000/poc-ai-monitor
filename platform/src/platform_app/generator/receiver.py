@@ -90,7 +90,9 @@ class GnssModel:
         )
         self._receiver = stable_rng(seed, "gnss_receiver")
 
-    def epoch(self, config: ScenarioConfig, t: float) -> GnssEpoch:
+    def epoch(
+        self, config: ScenarioConfig, t: float, d_cn0: float = 0.0, d_agc: float = 0.0
+    ) -> GnssEpoch:
         g = config.sensors.gps
         drift = (round(self._sats.step()), self._hdop.step())
         sats, hdop = sensors.gps_quality(config, t, drift)
@@ -101,8 +103,8 @@ class GnssModel:
         sigma = math.hypot(g.gm_sigma_m, g.white_sigma_m) * ratio
         r = self._receiver
         h_acc = max(0.1, math.sqrt(2.0) * sigma * (1.0 + H_ACC_SIGMA_REL * r.gauss(0, 1)))
-        cn0 = sensors.GNSS_CN0_NOMINAL_DBHZ + r.gauss(0, CN0_SIGMA_DBHZ)
-        agc = r.gauss(0, AGC_SIGMA_DB)
+        cn0 = max(5.0, sensors.GNSS_CN0_NOMINAL_DBHZ + d_cn0 + r.gauss(0, CN0_SIGMA_DBHZ))
+        agc = d_agc + r.gauss(0, AGC_SIGMA_DB)
         return GnssEpoch(noise, sats, hdop, sigma, h_acc, cn0, agc)
 
 
