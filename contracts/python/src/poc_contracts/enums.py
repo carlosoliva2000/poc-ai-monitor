@@ -13,6 +13,15 @@ class SensorSource(StrEnum):
     BATTERY = "battery"
 
 
+class AutopilotMode(StrEnum):
+    """Modo del autopiloto (v1.0): `mission`, o el failsafe activo (volver, mantener, aterrizar)."""
+
+    MISSION = "mission"
+    FAILSAFE_RETURN = "failsafe_return"
+    FAILSAFE_HOLD = "failsafe_hold"
+    FAILSAFE_LAND = "failsafe_land"
+
+
 class ToolSource(StrEnum):
     """Valores del parámetro `source` de `get_events` (nunca el dominio `sim`)."""
 
@@ -54,6 +63,8 @@ class EventType(StrEnum):
     WIND_REPORTED = "WindReported"
     LINK_STATUS = "LinkStatus"
     BATTERY_STATUS = "BatteryStatus"
+    GNSS_STATUS = "GnssStatus"
+    AUTOPILOT_STATUS = "AutopilotStatus"
     SIMULATION_STARTED = "SimulationStarted"
     SIMULATION_PAUSED = "SimulationPaused"
     SIMULATION_RESUMED = "SimulationResumed"

@@ -21,6 +21,7 @@ from poc_contracts.run_files import (
     Label,
     LabelsFile,
     PlanFile,
+    PlanRadar,
     PlanSample,
     TruthFile,
     UnlabeledEpisode,
@@ -272,7 +273,16 @@ def _plan_file(config: ScenarioConfig, plan: Flight, etas: list[float]) -> PlanF
             )
             for s in chosen
         ],
+        radar=_plan_radar(config),
     )
+
+
+def _plan_radar(config: ScenarioConfig) -> PlanRadar | None:
+    """Posición y alcance del radar, solo con `simulator.radar_geometry` (para pintarlo)."""
+    if not config.simulator.radar_geometry:
+        return None
+    r = config.sensors.radar
+    return PlanRadar(x=r.x, y=r.y, max_range_m=r.max_range_m)
 
 
 def plan_for(config: ScenarioConfig) -> tuple[PlanFile, list[float]]:
@@ -309,7 +319,9 @@ def write_run(run: Run, out_dir: Path | None = None) -> Path:
     episodios sin etiqueta, `unlabeled_episodes.json` (si no los hay, no queda ninguno de antes)."""
     out = out_dir if out_dir is not None else RUNS_DIR / run.name
     out.mkdir(parents=True, exist_ok=True)
-    (out / "plan.json").write_text(run.plan.model_dump_json() + "\n", encoding="utf-8")
+    (out / "plan.json").write_text(
+        run.plan.model_dump_json(exclude_none=True) + "\n", encoding="utf-8"
+    )
     (out / "truth.json").write_text(run.truth.model_dump_json() + "\n", encoding="utf-8")
     (out / "labels.json").write_text(run.labels.model_dump_json(indent=2) + "\n", encoding="utf-8")
     lines = "".join(e.model_dump_json() + "\n" for e in run.events)

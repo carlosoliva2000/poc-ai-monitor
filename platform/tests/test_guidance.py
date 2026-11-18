@@ -17,9 +17,9 @@ def multirotor(
     name: str = "nominal", wind: dict | None = None, **mission: object
 ) -> ScenarioConfig:
     """Escenario con el guiado de multirrotor y los valores de un multirrotor (radio 5 m, giro
-    90 °/s)."""
+    100 °/s, el yaw máximo del Matrice 300 RTK)."""
     base = scenario_config(name)
-    drone = {**base.drone.model_dump(), "acceptance_radius_m": 5.0, "max_turn_rate_dps": 90.0}
+    drone = {**base.drone.model_dump(), "acceptance_radius_m": 5.0, "max_turn_rate_dps": 100.0}
     over: dict = {"drone": drone, "simulator": {"multirotor_guidance": True}}
     if wind is not None:
         over["wind"] = wind

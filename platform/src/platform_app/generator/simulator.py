@@ -53,6 +53,7 @@ from .controller import (
 )
 from .disturbances import CommandWind, Wind, is_hijacked, spoof_offset, spoof_offset_rate, wind_at
 from .events import make_event
+from .receiver import Estimator, GnssEpoch, GnssModel
 
 HOLD_MAX_SPEED_MPS = 3.0  # lazo P del punto de espera: tope de la velocidad sobre el suelo
 LATERAL_INT_WINDOW_M = 15.0  # la integral solo acumula con un error lateral menor que esto
@@ -173,6 +174,21 @@ class Simulator:
         self._va: Point = (0.0, 0.0)
         self._int = 0.0
         self._mode = "mission"  # `mission` | `failsafe_hold` | `failsafe_return`
+        sim = config.simulator
+        # Receptor GPS realista y estimador a bordo (pasos 3 y 4): el ruido sale de generadores
+        # propios y se saca también en los vuelos sin eventos (la trayectoria depende de él).
+        self._gnss = GnssModel(config) if sim.gps_receiver and perturbed else None
+        self._gnss_last: GnssEpoch | None = None
+        self._filter = (
+            Estimator(
+                (0.0, 0.0), config.drone.estimator_position_gain, config.drone.estimator_wind_gain
+            )
+            if sim.onboard_estimator
+            else None
+        )
+        self._innovation: float | None = None
+        self._radar_geometry = sim.radar_geometry
+        self._ground_station = sim.ground_station
         self._hold: Point | None = None  # punto de espera en `failsafe_hold`
         self._leg_start: Point | None = None  # origen del tramo a casa en `failsafe_return`
         self.samples = [Sample(0, 0.0, 0.0, 0.0, 0.0, self._heading, (0.0, 0.0))]
@@ -206,7 +222,10 @@ class Simulator:
         return self.flight()
 
     def _believed(self) -> Point:
-        """Posición que cree tener el dron: la estima si no tiene GPS; si no, el GPS sin ruido."""
+        """Posición que cree tener el dron: la del estimador a bordo; si no, la estima sin GPS y, si
+        no, el GPS sin ruido."""
+        if self._filter is not None:
+            return self._filter.p
         return self._est if self._est is not None else self.samples[self.n].gps
 
     def _distance_to_waypoint(self) -> float:
@@ -425,6 +444,7 @@ class Simulator:
             faults += self._scheduled_transitions()
             self._apply_scheduled_commands()
         commands = self._command_events()
+        self._gnss_epoch()
 
         mission: list[EventDraft] = []
         timeout = self.n >= self._max_steps
@@ -463,6 +483,59 @@ class Simulator:
             self._advance()
         return [*mission, *faults, *commands, *readings]
 
+    def _gnss_epoch(self) -> None:
+        """Medida del receptor (cada periodo del GPS): saca su ruido, esté silenciado o no, y con el
+        estimador a bordo corrige con ella (sin GPS solo predice)."""
+        if self._gnss is None or self.n == 0 or self.n % self._periods["gps"] != 0:
+            return
+        ep = self._gnss.epoch(self.config, self.t)
+        self._gnss_last = ep
+        if self._filter is None:
+            return
+        if self._est is not None:  # sin GPS: no hay medida que corrija
+            self._innovation = None
+            return
+        gx, gy = self.samples[self.n].gps
+        self._innovation = self._filter.correct(
+            (round(gx + ep.noise[0], 1), round(gy + ep.noise[1], 1))
+        )
+
+    def _station_wind(self, t: float) -> Wind:
+        """Lo que mide la estación en tierra: el viento del dron por un factor, con retraso (media
+        móvil de los últimos `lag_s` segundos)."""
+        m = self.config.sensors.meteo
+        vecs = [self._wind(t - k).vector() for k in range(int(min(m.lag_s, t)) + 1)]
+        mx, my = sum(v[0] for v in vecs) / len(vecs), sum(v[1] for v in vecs) / len(vecs)
+        speed = math.hypot(mx, my)
+        from_deg = (bearing_deg(mx, my) + 180.0) % 360.0 if speed > 1e-9 else self._wind(t).from_deg
+        return Wind(m.factor * speed, from_deg)
+
+    def _radar_in_range(self, x: float, y: float) -> bool:
+        if not self._radar_geometry:
+            return True
+        return sensors.radar_range_m(self.config, x, y) <= self.config.sensors.radar.max_range_m
+
+    def _gnss_payload(self, loss: bool) -> dict:
+        ep = self._gnss_last
+        assert ep is not None
+        return {
+            "h_acc_m": 99.9 if loss else round(ep.h_acc_m, 2),
+            "cn0_dbhz": round(ep.cn0_dbhz, 1),
+            "agc_db": round(ep.agc_db, 2),
+        }
+
+    def _autopilot_payload(self) -> dict:
+        f = self._filter
+        assert f is not None
+        return {
+            "mode": self._mode,
+            "heading_deg": round(self._heading, 1),
+            "airspeed_mps": round(math.hypot(*self._va), 1),
+            "wind_est_speed_mps": round(math.hypot(*f.wind), 1),
+            "wind_est_from_deg": round(f.wind_from_deg(), 1),
+            "innovation_m": None if self._innovation is None else round(self._innovation, 1),
+        }
+
     def _readings(self) -> list[EventDraft]:
         """Medidas de las fuentes cuyo periodo cae en este instante (con ruido siempre)."""
         n, t, cfg, rng = self.n, self.t, self.config, self._rng
@@ -471,36 +544,42 @@ class Simulator:
         s = self.samples[n]
         out: list[EventDraft] = []
 
-        def emit(name: str, et: EventType, source: SensorSource, payload: dict) -> None:
-            if (source, FaultMode.MUTE) not in self._faults:
+        def emit(name: str, et: EventType, source: SensorSource | None, payload: dict) -> None:
+            if source is None or (source, FaultMode.MUTE) not in self._faults:
                 out.append(make_event(cfg, et, t, n // self._periods[name], payload))
 
         if n % self._periods["gps"] == 0:
-            if self._est is not None:
+            loss = self._est is not None
+            if loss:
                 rad = math.radians(s.heading_deg)
                 vel = (self._speed * math.sin(rad), self._speed * math.cos(rad))
+                pos = self._est
                 if self._multirotor:
                     vel = self._va  # a estima solo conoce su velocidad respecto al aire
-                payload = sensors.gps_payload(cfg, rng, self._est, vel, loss=True, t=t)
+                if self._filter is not None:  # y, con el estimador, su viento estimado
+                    pos = self._filter.p
+                    vel = (self._va[0] + self._filter.wind[0], self._va[1] + self._filter.wind[1])
             else:
                 dvx, dvy = spoof_offset_rate(t, self._spoofing)
-                payload = sensors.gps_payload(
-                    cfg, rng, s.gps, (s.vx + dvx, s.vy + dvy), loss=False, t=t
-                )
+                pos, vel = s.gps, (s.vx + dvx, s.vy + dvy)
+            payload = sensors.gps_payload(cfg, rng, pos, vel, loss, t, self._gnss_last)
             emit("gps", EventType.POSITION_UPDATED, SensorSource.GPS, payload)
+            if self._gnss_last is not None:
+                emit("gps", EventType.GNSS_STATUS, SensorSource.GPS, self._gnss_payload(loss))
+            if self._filter is not None:
+                emit("gps", EventType.AUTOPILOT_STATUS, None, self._autopilot_payload())
         if n % self._periods["radar"] == 0:
-            emit(
-                "radar",
-                EventType.TRACK_UPDATED,
-                SensorSource.RADAR,
-                sensors.radar_payload(cfg, rng, s),
-            )
+            payload = sensors.radar_payload(cfg, rng, s, self._radar_geometry)
+            if self._radar_in_range(s.x, s.y):  # fuera de alcance no hay traza (el ruido se gasta)
+                emit("radar", EventType.TRACK_UPDATED, SensorSource.RADAR, payload)
         if n % self._periods["meteo"] == 0:
             emit(
                 "meteo",
                 EventType.WIND_REPORTED,
                 SensorSource.METEO,
-                sensors.meteo_payload(cfg, rng, self._wind(t)),
+                sensors.meteo_payload(
+                    cfg, rng, self._station_wind(t) if self._ground_station else self._wind(t)
+                ),
             )
         if n % self._periods["link"] == 0:
             emit(
@@ -578,12 +657,16 @@ class Simulator:
         hijacked = is_hijacked(t, self._hijack)
         wind = self._wind(t).vector() if self.perturbed else (0.0, 0.0)
         known = (0.0, 0.0) if self._est is not None else wind
+        if self._filter is not None:  # el lazo de velocidad usa el viento que estima a bordo
+            known = self._filter.wind
         cmd = limit_air_velocity(self._ground_command(p, hijacked), known, d.max_airspeed_mps)
         dvx, dvy = cmd[0] - self._va[0], cmd[1] - self._va[1]
         m, step_a = math.hypot(dvx, dvy), d.max_accel_mps2 * STEP_S
         if m > step_a:
             dvx, dvy = dvx * step_a / m, dvy * step_a / m
         self._va = (self._va[0] + dvx, self._va[1] + dvy)
+        if self._filter is not None:
+            self._filter.predict(self._va, STEP_S)
         vx, vy = self._va[0] + wind[0], self._va[1] + wind[1]
         # el morro mira al siguiente punto (en espera se queda como está)
         target = self._target if hijacked else self.route[min(self._i, len(self.route) - 1)]
@@ -640,6 +723,9 @@ class Simulator:
         _, ref = project_on_segment((s.x, s.y), a, b)
         g, b = cfg.sensors.gps, cfg.sensors.battery
         _, hdop = sensors.gps_quality(cfg, t)
+        sigma = g.sigma_m * hdop / g.hdop
+        if self._gnss_last is not None:
+            sigma = self._gnss_last.sigma_m
         w = self._wind(t)
         down = {src: (src, FaultMode.MUTE) in self._faults for src in SensorSource}
         self.aux[n] = Aux(
@@ -650,7 +736,7 @@ class Simulator:
             mode="foreign_control" if hijack else self._mode,
             link_up=not (hijack or down[SensorSource.LINK]),
             battery_soc=max(0.0, min(100.0, b.start_pct - b.drain_pct_per_min * t / 60)),
-            gps_sigma_m=g.sigma_m * hdop / g.hdop,
+            gps_sigma_m=sigma,
             cn0_dbhz=sensors.GNSS_CN0_NOMINAL_DBHZ,
             emitters_active=(),
             wind_speed_mps=w.speed_mps,
@@ -666,7 +752,7 @@ class Simulator:
             hijack=hijack,
             link_latency_ms=sensors.link_quality(cfg, t)[1],
             link_loss_pct=0.0,
-            radar_in_range=True,
+            radar_in_range=self._radar_in_range(s.x, s.y),
             can_reach_home=True,
         )
 

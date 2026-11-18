@@ -26,6 +26,14 @@ class PlanSample(RunFile):
     heading_deg: float
 
 
+class PlanRadar(RunFile):
+    """Posición y alcance del radar (solo con `simulator.radar_geometry`): para pintarlo."""
+
+    x: float
+    y: float
+    max_range_m: float
+
+
 class PlanFile(RunFile):
     mission_id: str
     cruise_speed_mps: float
@@ -34,6 +42,7 @@ class PlanFile(RunFile):
     duration_s: float
     waypoints: list[Waypoint]
     trajectory: list[PlanSample]
+    radar: PlanRadar | None = None
 
 
 class TruthSample(RunFile):

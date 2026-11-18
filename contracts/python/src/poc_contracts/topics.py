@@ -39,6 +39,8 @@ EVENT_SPECS: dict[EventType, EventSpec] = {
     _T.WIND_REPORTED: EventSpec("env", "zone1", "met", "meteo-1"),
     _T.LINK_STATUS: EventSpec("air", "d1", "lnk", "d1-link"),
     _T.BATTERY_STATUS: EventSpec("air", "d1", "bat", "d1-bat"),
+    _T.GNSS_STATUS: EventSpec("air", "d1", "gns", "d1-gnss"),
+    _T.AUTOPILOT_STATUS: EventSpec("air", "d1", "apl", "d1-autopilot"),
     _T.SIMULATION_STARTED: EventSpec(SIM_DOMAIN, "player", "plr", "platform-player"),
     _T.SIMULATION_PAUSED: EventSpec(SIM_DOMAIN, "player", "plr", "platform-player"),
     _T.SIMULATION_RESUMED: EventSpec(SIM_DOMAIN, "player", "plr", "platform-player"),

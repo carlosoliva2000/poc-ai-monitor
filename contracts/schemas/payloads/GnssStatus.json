@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "description": "Estado del receptor GNSS (v1.0, cada 1 s): `h_acc_m` es la precisión horizontal que dice el\nreceptor, `cn0_dbhz` la relación portadora/ruido media y `agc_db` el control automático de\nganancia (0 = nominal; baja con potencia cercana).",
+  "properties": {
+    "h_acc_m": {
+      "title": "H Acc M",
+      "type": "number"
+    },
+    "cn0_dbhz": {
+      "title": "Cn0 Dbhz",
+      "type": "number"
+    },
+    "agc_db": {
+      "title": "Agc Db",
+      "type": "number"
+    }
+  },
+  "required": [
+    "h_acc_m",
+    "cn0_dbhz",
+    "agc_db"
+  ],
+  "title": "GnssStatus",
+  "type": "object"
+}

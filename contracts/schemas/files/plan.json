@@ -1,5 +1,30 @@
 {
   "$defs": {
+    "PlanRadar": {
+      "additionalProperties": false,
+      "description": "Posición y alcance del radar (solo con `simulator.radar_geometry`): para pintarlo.",
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "max_range_m": {
+          "title": "Max Range M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "max_range_m"
+      ],
+      "title": "PlanRadar",
+      "type": "object"
+    },
     "PlanSample": {
       "additionalProperties": false,
       "description": "Estado previsto en el vuelo sin perturbaciones, cada segundo.",
@@ -100,6 +125,17 @@
       },
       "title": "Trajectory",
       "type": "array"
+    },
+    "radar": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PlanRadar"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

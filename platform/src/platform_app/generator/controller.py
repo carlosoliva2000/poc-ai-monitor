@@ -84,13 +84,25 @@ def unit(dx: float, dy: float) -> Point:
 
 
 CORNER_OPENING_M = 6.0  # ⚠️ cuánto se puede abrir el dron en una esquina (fija la velocidad de paso)
+CORNER_PULL_FACTOR = 0.9  # factor calibrado con el vuelo (el punto de mira recoge el dron)
+
+
+def corner_opening(v_pass: float, cos_turn: float, cruise: float, accel: float) -> float:
+    """Apertura estimada de una esquina pasada a `v_pass`. Al cambiar de tramo el guiado pide la
+    velocidad de crucero por el tramo nuevo y la velocidad respecto al aire cambia con la
+    aceleración limitada (`T = |Δv| / a`): la velocidad perpendicular al tramo nuevo,
+    `v_pass · sin(giro)`, se anula linealmente en ese tiempo, así que el dron se abre
+    `v_pass · sin(giro) · T / 2`, ajustado con un factor calibrado con el vuelo (el punto de mira
+    recoge el dron)."""
+    sin_turn = math.sqrt(max(0.0, 1.0 - cos_turn**2))
+    dv = math.sqrt(max(0.0, cruise**2 + v_pass**2 - 2.0 * cruise * v_pass * cos_turn))
+    return CORNER_PULL_FACTOR * sin_turn * v_pass * sin_turn * dv / (2.0 * accel)
 
 
 def corner_speed(route: list[Point], i: int, cruise: float, accel: float) -> float:
     """Velocidad con la que se pasa por el punto `route[i]`: la de crucero en línea recta, 0 con un
-    giro de 90° o más (o en el último punto) y, entre medias, la menor de `cruise · cos(giro)` y la
-    que deja que el cambio de velocidad con la aceleración limitada no abra la esquina más de
-    `CORNER_OPENING_M` (`v² = a · d / sin(giro / 2)`)."""
+    giro de 90° o más (o en el último punto) y, entre medias, la mayor menor o igual que
+    `cruise · cos(giro)` con la que la esquina no se abre más de `CORNER_OPENING_M`."""
     if i + 1 >= len(route):
         return 0.0
     u1 = unit(route[i][0] - route[i - 1][0], route[i][1] - route[i - 1][1])
@@ -98,9 +110,17 @@ def corner_speed(route: list[Point], i: int, cruise: float, accel: float) -> flo
     cos_turn = u1[0] * u2[0] + u1[1] * u2[1]
     if cos_turn <= 0.0:
         return 0.0
-    half_sin = math.sqrt(max(0.0, (1.0 - cos_turn) / 2.0))  # sin(giro / 2)
-    limit = math.sqrt(accel * CORNER_OPENING_M / half_sin) if half_sin > 1e-6 else cruise
-    return min(cruise * cos_turn, limit)
+    hi = cruise * cos_turn
+    if corner_opening(hi, cos_turn, cruise, accel) <= CORNER_OPENING_M:
+        return hi
+    lo = 0.0  # la apertura crece con la velocidad de paso: bisección
+    for _ in range(30):
+        mid = 0.5 * (lo + hi)
+        if corner_opening(mid, cos_turn, cruise, accel) <= CORNER_OPENING_M:
+            lo = mid
+        else:
+            hi = mid
+    return lo
 
 
 def speed_profile(dist: float, v_pass: float, cruise: float, accel: float, radius: float) -> float:

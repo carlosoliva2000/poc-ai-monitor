@@ -1,0 +1,59 @@
+{
+  "$defs": {
+    "AutopilotMode": {
+      "description": "Modo del autopiloto (v1.0): `mission`, o el failsafe activo (volver, mantener, aterrizar).",
+      "enum": [
+        "mission",
+        "failsafe_return",
+        "failsafe_hold",
+        "failsafe_land"
+      ],
+      "title": "AutopilotMode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Estado del autopiloto (v1.0, cada 1 s): modo, rumbo del **morro**, velocidad respecto al\naire, viento estimado a bordo (m/s y procedencia) e innovación (|GPS − estima|, m; `null` sin\nGPS: la estima no se corrige).",
+  "properties": {
+    "mode": {
+      "$ref": "#/$defs/AutopilotMode"
+    },
+    "heading_deg": {
+      "title": "Heading Deg",
+      "type": "number"
+    },
+    "airspeed_mps": {
+      "title": "Airspeed Mps",
+      "type": "number"
+    },
+    "wind_est_speed_mps": {
+      "title": "Wind Est Speed Mps",
+      "type": "number"
+    },
+    "wind_est_from_deg": {
+      "title": "Wind Est From Deg",
+      "type": "number"
+    },
+    "innovation_m": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Innovation M"
+    }
+  },
+  "required": [
+    "mode",
+    "heading_deg",
+    "airspeed_mps",
+    "wind_est_speed_mps",
+    "wind_est_from_deg",
+    "innovation_m"
+  ],
+  "title": "AutopilotStatus",
+  "type": "object"
+}

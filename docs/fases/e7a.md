@@ -1,6 +1,6 @@
 # E7a · Simulador v2
 
-Informe de la fase, **actualizado paso a paso**. Referencia: especificación del núcleo v2 (v1.0, 18/11/2026) y las dos consultas del 18/11. Estado: **pasos 1 y 2 hechos (parada del paso 2 para revisar)**; pasos 3 a 7 pendientes.
+Informe de la fase, **actualizado paso a paso**. Referencia: especificación del núcleo v2 (v1.0, 18/11/2026) y las dos consultas del 18/11. Estado: **pasos 1 a 4 hechos (parada del paso 3+4 para revisar)**; pasos 5 a 7 pendientes.
 
 ## Decisiones de Carlos (18/11/2026)
 1. `runs/` se regenera en el paso 1 solo por el contrato, con la prueba de la proyección.
@@ -49,7 +49,7 @@ module tests that depend on the v0.19 payloads are marked pending for E7c.
 
 ### Qué se cambió
 - **Interruptor** `simulator.multirotor_guidance` (por defecto `false` = el guiado de hoy). Con él **apagado, `runs/` sale byte a byte igual** (`git status` limpio tras regenerar; test nuevo `test_the_committed_runs_are_what_the_scenarios_generate` para los 9 escenarios).
-- **Valores del dron con fuente.** `max_airspeed_mps` = **17 m/s** (modo P del DJI Matrice 300 RTK, el de una misión con GPS; en modo S, 23 m/s) y `wind_limit_mps` = **12 m/s** (resistencia al viento de la ficha: 12 m/s; los 15 m/s que cita el fabricante en sus blogs son pruebas de laboratorio, no el valor nominal). Fuentes (consultadas el 18/11/2026): <https://www.dji.com/support/product/matrice-300> y <https://enterprise-insights.dji.com/blog/matrice-300-weather-resistance>. ⚠️ Resumen de la búsqueda, no leído literalmente de la ficha. El resto (aceleración 2 m/s², giro 90 °/s, radio 5 m, punto de mira 40 m, `lateral_ki_per_s` 0,05) son los de la especificación o ⚠️.
+- **Valores del dron con fuente.** `max_airspeed_mps` = **17 m/s** (modo P del DJI Matrice 300 RTK; en modo S, 23 m/s), `wind_limit_mps` = **12 m/s** (resistencia al viento) y, desde la revisión del paso 2, giro del morro de **100 °/s** (yaw máximo de la ficha; la especificación decía 90 °/s: **hay que actualizarla**). Fuente, comprobada por Carlos el 19/11/2026: <https://www.dji.com/matrice-300/info>: sin ⚠️. Decisión de Carlos: `wind_limit` se queda en 12 (el de la ficha): entre 12 y 17 m/s el entorno está `beyond_limit` mientras el dron aguanta. El resto (aceleración 2 m/s², radio 5 m, punto de mira 40 m, `lateral_ki_per_s` 0,05) son los de la especificación o ⚠️.
 - **Guiado** (`generator/controller.py` y `Simulator._advance_multirotor`):
   - punto de mira sobre el tramo (como hoy) para la dirección;
   - **perfil de velocidad**: `v = min(crucero, √(v_paso² + 2·a·(d − r/2)))`; `v_paso` = crucero · cos(giro), 0 con un giro ≥ 90° o en el último punto, y limitada para que el cambio de velocidad con la aceleración limitada no abra la esquina más de 6 m (⚠️ `CORNER_OPENING_M`);
@@ -88,4 +88,70 @@ Velocity-controlled guidance with braking before each waypoint, lateral
 integral, air-speed limit separate from cruise, 5 m acceptance radius with
 the perpendicular rule and autopilot modes (mission, hold, return). Off by
 default: runs/ is byte for byte the same.
+```
+
+## Pasos 3 y 4 · Estimador a bordo, receptor GNSS, radar y estación
+
+Interruptores nuevos en `simulator`: `onboard_estimator` (necesita `multirotor_guidance` y `gps_receiver`), `gps_receiver`, `radar_geometry` y `ground_station`. Todos apagados por defecto: **`runs/` sale byte a byte igual** (comprobado: `git status` limpio tras regenerar y el test de `runs/` versionados). Cada fuente de ruido nueva usa su propio generador con semilla estable (`zlib.crc32`, `generator/receiver.py::stable_rng`: `gps_gm`, `gps_white`, `gps_hdop`, `gps_sats`, `gnss_receiver`); el del generador único sigue sacando (y descartando) los mismos números aleatorios, así que el resto del ruido no cambia.
+
+### Qué se cambió
+- **Estimador a bordo** (`receiver.Estimator`, filtro complementario a 1 Hz): predice con la velocidad respecto al aire más el viento estimado y se corrige con el GPS; la innovación mueve la posición (`α` = 0,6) y el viento (`k_w` = 0,5 m/s por m) ⚠️ (ver «Ajuste» abajo). **Sin GPS solo predice, con el último viento estimado** (decisión de la revisión). El guiado, la llegada a los puntos (radio 5 m y perpendicular) y el lazo de velocidad usan la estima y el viento estimado, no la verdad. `AutopilotStatus` (`apl-`, 1 s): modo, rumbo del morro, velocidad respecto al aire, viento estimado (m/s y procedencia) e innovación (`null` sin GPS).
+- **Receptor GPS** (`receiver.GnssModel`, `gps_receiver`): ruido de posición con memoria (Gauss-Markov de primer orden, σ 1,5 m y τ 90 s ⚠️) más un ruido blanco pequeño (0,3 m ⚠️), σ proporcional al `hdop` efectivo; `sats` (±1) y `hdop` (±0,25) con variación lenta y acotada (AR(1) recortado, sin saltos) ⚠️. `GnssStatus` (`gns-`, 1 s): `h_acc_m` (la precisión que dice el receptor; con el engaño no cambia: el receptor no sabe que lo engañan), `cn0_dbhz` y `agc_db` (hoy constantes más ruido: dependerán de los emisores en el paso 5). Con el receptor, `speed_mps`/`course_deg` publicados son siempre del suelo (en pérdida, el de la estima: ya no cambian de significado).
+- **Radar** (`radar_geometry`): `sensors.radar.x/y`, σ = `sigma_m` + `sigma_per_km_m` · distancia (2 m/km ⚠️) y `max_range_m` (6000 ⚠️): fuera de alcance no hay traza (`radar.availability: out_of_range`, el ruido se sigue gastando). `plan.json` lleva `radar` (posición y alcance) para pintarlo.
+- **Estación en tierra** (`ground_station`): viento del dron × `factor` (0,8 ⚠️), media móvil de `lag_s` (30 s ⚠️), con su ruido de siempre.
+- Contrato: eventos `GnssStatus` y `AutopilotStatus`, `AutopilotMode`, y la configuración (`eventos.md`, Pydantic, 66 esquemas).
+
+### Ajuste del estimador (por qué `α` 0,6 y `k_w` 0,5)
+Al acabar el episodio de viento (18 → 2 m/s) el viento estimado tarda en bajar y el dron **rebota al otro lado** de la ruta. Con `α` 0,4 y `k_w` 0,1 el rebote era de 43 m (y 4 s de `unexplained` en `spoofing`); con 0,6 y 0,5 es de **19 m** (por debajo de los 25 de «desviado») y `nominal` sigue en 9 m. Subir más empeora `nominal` (13 m con 0,8 y 1,2).
+
+### Esquinas (revisión, punto 3): de dónde salen los 9–10,7 m
+- **Causa:** al cambiar de tramo el guiado pide la velocidad de crucero por el tramo nuevo, y la velocidad respecto al aire cambia con la aceleración limitada (`T = |Δv| / a`, de 4 a 6 s). La velocidad perpendicular al tramo nuevo, `v_paso · sin(giro)`, se anula en ese tiempo y el dron se abre `v_paso · sin(giro) · T / 2`. Mi `CORNER_OPENING_M` de 6 m del paso 2 despreciaba que `Δv` es con el crucero y no con `v_paso`: la apertura real salía de 8,7 a 10,8 m.
+- **Arreglo** (`controller.corner_opening`/`corner_speed`): la velocidad de paso es la mayor con la que la apertura estimada no pasa de 6 m (bisección; el factor del punto de mira, 0,9 · sin(giro), calibrado con el vuelo). Resultado sin ruido: **6,2 a 7,1 m** (antes 8,7 a 10,8); con todo el ruido del estimador, el máximo de `nominal` es **9,1 m** (< 15). Coste: la velocidad de paso baja a 2–3 m/s y `nominal` dura 460 s (antes 459).
+- No lo bajo más: queda un margen de ~6 m para el ruido, sin alargar mucho el vuelo.
+
+### Resultado (`tools/e7a_guidance_compare.py` → `experiments/e7a/`)
+| Caso | Simulador | Duración (s) | Desviación máx. (m) | Segundos desviado |
+|---|---|---|---|---|
+| nominal | hoy | 441 | 11,2 | 0 |
+| nominal | multirrotor (paso 2) | 461 | 7,1 | 0 |
+| nominal | v2 completo | 460 | 9,1 | 0 |
+| wind (18 m/s) | hoy | 484 | 186,5 | 47 |
+| wind (18 m/s) | multirrotor (paso 2) | 504 | 59,7 | 42 |
+| wind (18 m/s) | v2 completo | 505 | 77,0 | 45 |
+| demo (18 m/s) | hoy | 570 | 631,8 | 108 |
+| demo (18 m/s) | multirrotor (paso 2) | 528 | 223,3 | 90 |
+| demo (18 m/s) | v2 completo | 525 | 155,2 | 92 |
+
+**Desviación máxima por acto de `demo`** (revisión, punto 4; acto 1 con 18 m/s en las tres columnas; el «hoy» con 18 m/s es mucho peor que con los 12 m/s de la demo actual, 52 m):
+
+| Simulador | Viento (T+95–168) | Engaño (T+168–335) | Secuestro (T+335–fin) |
+|---|---|---|---|
+| hoy | 186 m | 76 m | 632 m |
+| multirrotor (paso 2) | 60 m | 83 m | 223 m |
+| v2 completo (pasos 2-4) | 77 m | 76 m | 155 m |
+
+El secuestro llega menos lejos con el simulador v2 porque el dron frena en las esquinas y el punto del secuestrador se alcanza en menos tiempo de secuestro desde otra posición; no es comparable uno a uno.
+
+- **Estimador y engaño:** con `spoofing`, la innovación **no lo delata** (máx. 0,8 m) mientras el dron se va 82 m de la ruta; el viento estimado sube a 3,0 m/s (el real son 2): el estimador absorbe la deriva de 1,5 m/s como viento.
+- **Sin GPS** (revisión, punto 2): con el viento constante la estima, con el último viento estimado, apenas deriva (**8 m** en 45 s de pérdida: **`faults` ya no da `dead_reckoning`**). Si el viento cambia durante la pérdida (14 m/s del norte), el dron se desvía 181 m y el estado es `dead_reckoning`. **Para el paso 7:** `faults` tiene que llevar un cambio de viento durante la pérdida de GPS.
+- **Receptor:** `sats` 13–15 y `hdop` 0,55–0,88 en `nominal` (sin saltos); `h_acc_m` medio 1,9 m.
+
+### Tests
+- **Nuevos** (`test_receiver.py`, 7): la trayectoria depende del ruido pero no de si se publican eventos, y dos generaciones coinciden; el estimador aprende el viento sin sensor; el error del GPS tiene memoria y `sats`/`hdop` varían despacio; sin GPS la estima conserva el último viento (con viento constante no deriva, con un cambio sí y sale `dead_reckoning`); el estimador absorbe el engaño lento (innovación pequeña); el radar pierde precisión con la distancia y no llega más allá de su alcance (`out_of_range`); la estación mide una fracción del viento con retraso.
+- Plataforma **342**, contratos **199**. Ninguno borrado.
+
+### Pendientes de la revisión del paso 2
+- **`failsafe_land`** (punto 1): se añade en el **paso 5**, junto con los failsafes del enlace y de la batería (el aterrizaje termina el vuelo con `MissionCompleted.reason: landed`).
+
+### Mensaje de commit propuesto (pasos 3 y 4)
+```
+feat: E7a steps 3-4 - onboard estimator, GNSS receiver, radar and station
+
+Behind four switches (all off: runs/ is byte for byte the same). A
+complementary-filter estimator with an estimated wind (dead reckoning keeps
+the last estimate), a GPS receiver with Gauss-Markov error, hdop-scaled
+sigma and slow sats/hdop variation, a radar with position, range and
+distance-dependent sigma, and a ground station with factor and lag. New
+events GnssStatus and AutopilotStatus (contract v1.0). Corner speed now
+keeps the corner opening under about 7 m.
 ```

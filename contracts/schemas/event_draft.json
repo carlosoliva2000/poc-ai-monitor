@@ -12,6 +12,8 @@
         "WindReported",
         "LinkStatus",
         "BatteryStatus",
+        "GnssStatus",
+        "AutopilotStatus",
         "SimulationStarted",
         "SimulationPaused",
         "SimulationResumed",

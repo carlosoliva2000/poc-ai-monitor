@@ -75,6 +75,8 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ('{ "speed_mps": 4.2', payload_of(T.WIND_REPORTED)),
     ('{ "controller_id"', payload_of(T.LINK_STATUS)),
     ('{ "battery_pct"', payload_of(T.BATTERY_STATUS)),
+    ('{ "h_acc_m"', payload_of(T.GNSS_STATUS)),
+    ('{ "mode": "mission", "heading_deg"', payload_of(T.AUTOPILOT_STATUS)),
     ('{ "scenario": "demo", "run_id": "20261020', payload_of(T.SIMULATION_STARTED)),
     ('{ "reason": "user" }', payload_of(T.SIMULATION_PAUSED)),
     ("{}", payload_of(T.SIMULATION_RESUMED)),

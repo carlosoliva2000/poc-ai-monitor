@@ -10,6 +10,7 @@ from .enums import (
     AgentName,
     AlertPhase,
     AlertStatus,
+    AutopilotMode,
     Cause,
     CommandIssuer,
     CompletionReason,
@@ -102,6 +103,29 @@ class LinkStatus(Payload):
 
 class BatteryStatus(Payload):
     battery_pct: float
+
+
+class GnssStatus(Payload):
+    """Estado del receptor GNSS (v1.0, cada 1 s): `h_acc_m` es la precisión horizontal que dice el
+    receptor, `cn0_dbhz` la relación portadora/ruido media y `agc_db` el control automático de
+    ganancia (0 = nominal; baja con potencia cercana)."""
+
+    h_acc_m: float
+    cn0_dbhz: float
+    agc_db: float
+
+
+class AutopilotStatus(Payload):
+    """Estado del autopiloto (v1.0, cada 1 s): modo, rumbo del **morro**, velocidad respecto al
+    aire, viento estimado a bordo (m/s y procedencia) e innovación (|GPS − estima|, m; `null` sin
+    GPS: la estima no se corrige)."""
+
+    mode: AutopilotMode
+    heading_deg: float
+    airspeed_mps: float
+    wind_est_speed_mps: float
+    wind_est_from_deg: float
+    innovation_m: float | None
 
 
 # --- Del reproductor -------------------------------------------------------------------------
@@ -408,6 +432,8 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.WIND_REPORTED: WindReported,
     EventType.LINK_STATUS: LinkStatus,
     EventType.BATTERY_STATUS: BatteryStatus,
+    EventType.GNSS_STATUS: GnssStatus,
+    EventType.AUTOPILOT_STATUS: AutopilotStatus,
     EventType.SIMULATION_STARTED: SimulationStarted,
     EventType.SIMULATION_PAUSED: SimulationPaused,
     EventType.SIMULATION_RESUMED: SimulationResumed,

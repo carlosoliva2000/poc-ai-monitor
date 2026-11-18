@@ -26,14 +26,19 @@ class DroneConfig(Config):
     acceptance_radius_m: Positive
     lookahead_m: Positive
     wind_limit_mps: Positive = 12.0
-    """Viento máximo con el que mantiene la ruta (resistencia al viento de la ficha del DJI Matrice
-    300 RTK: 12 m/s)."""
+    """Viento máximo con el que mantiene la ruta: resistencia al viento de la ficha del DJI Matrice
+    300 RTK, 12 m/s (https://www.dji.com/matrice-300/info)."""
     max_airspeed_mps: Positive = 17.0
-    """Velocidad máxima respecto al aire en vuelo con posicionamiento (modo P del Matrice 300 RTK:
-    17 m/s). Separada de la de crucero: si el viento la supera, el dron deriva. Solo con
-    `simulator.multirotor_guidance`."""
+    """Velocidad máxima respecto al aire con posicionamiento: modo P del Matrice 300 RTK, 17 m/s
+    (en modo S, 23 m/s; https://www.dji.com/matrice-300/info). Separada de la de crucero: si el
+    viento la supera, el dron deriva. Solo con `simulator.multirotor_guidance`."""
     lateral_ki_per_s: float = Field(default=0.05, ge=0)
     """Ganancia integral del error lateral (1/s) del guiado de multirrotor ⚠️."""
+    estimator_position_gain: float = Field(default=0.6, ge=0, le=1)
+    """Estimador a bordo (filtro complementario): cuánto de la innovación del GPS corrige la
+    posición en cada medida ⚠️."""
+    estimator_wind_gain: float = Field(default=0.5, ge=0)
+    """Y cuánto (m/s por m de innovación) corrige el viento estimado ⚠️."""
 
 
 class WaypointConfig(Config):
@@ -116,6 +121,13 @@ class GpsConfig(Config):
     sats: int
     hdop: float
     episodes: list[GpsEpisode] = Field(default_factory=list)
+    gm_sigma_m: float = Field(default=1.5, ge=0)
+    """Receptor realista (`simulator.gps_receiver`): σ del error de posición con memoria
+    (Gauss-Markov de primer orden) en cada eje ⚠️."""
+    gm_tau_s: Positive = 90.0
+    """Constante de tiempo de ese error (⚠️ 60–120 s)."""
+    white_sigma_m: float = Field(default=0.3, ge=0)
+    """σ del ruido blanco pequeño que se suma en cada eje ⚠️."""
 
     @model_validator(mode="after")
     def _check_episodes(self) -> "GpsConfig":
@@ -126,12 +138,24 @@ class GpsConfig(Config):
 class RadarConfig(Config):
     period_s: Positive
     sigma_m: float = Field(ge=0)
+    x: float = 0.0
+    y: float = 0.0
+    """Posición del radar (`simulator.radar_geometry`; en el mapa)."""
+    sigma_per_km_m: float = Field(default=2.0, ge=0)
+    """σ(distancia) = `sigma_m` + `sigma_per_km_m` · distancia en km ⚠️."""
+    max_range_m: Positive = 6000.0
+    """Alcance máximo: más lejos no hay traza (⚠️)."""
 
 
 class MeteoConfig(Config):
     period_s: Positive
     sigma_mps: float = Field(ge=0)
     sigma_deg: float = Field(ge=0)
+    factor: Positive = 0.8
+    """Estación en tierra (`simulator.ground_station`): viento medido = viento en el dron ×
+    `factor` ⚠️ (0,7–0,9)."""
+    lag_s: float = Field(default=30.0, ge=0)
+    """Retraso: media móvil del viento de los últimos `lag_s` segundos ⚠️."""
 
 
 class LinkConfig(Config):
@@ -264,6 +288,23 @@ class SimulatorConfig(Config):
     multirotor_guidance: bool = False
     """Guiado de multirrotor: control de velocidad con frenado, lazo de velocidad respecto al aire
     con límite, integral lateral, radio de aceptación con la regla de la perpendicular y modos."""
+    onboard_estimator: bool = False
+    """El dron navega con su estima (GPS con ruido filtrado con la velocidad respecto al aire y el
+    viento estimado), publica `AutopilotStatus` y, sin GPS, sigue con el último viento estimado.
+    Necesita `multirotor_guidance` y `gps_receiver`."""
+    gps_receiver: bool = False
+    """Receptor GPS realista: ruido de posición con memoria más un ruido blanco pequeño, σ ∝ `hdop`,
+    `sats` y `hdop` con variación lenta y acotada, y `GnssStatus`."""
+    radar_geometry: bool = False
+    """Radar con posición: σ que crece con la distancia y alcance máximo."""
+    ground_station: bool = False
+    """Estación en tierra: viento del dron por un factor, con retraso."""
+
+    @model_validator(mode="after")
+    def _check_dependencies(self) -> "SimulatorConfig":
+        if self.onboard_estimator and not (self.multirotor_guidance and self.gps_receiver):
+            raise ValueError("onboard_estimator needs multirotor_guidance and gps_receiver")
+        return self
 
 
 class ScenarioConfig(Config):

@@ -13,12 +13,16 @@ pérdida: así un fallo no cambia el ruido de las demás medidas.
 
 import math
 import random
+from typing import TYPE_CHECKING
 
 from poc_contracts.scenario import ScenarioConfig
 
 from ..geometry import bearing_deg
 from .controller import STEP_S, Sample
 from .disturbances import Wind, is_hijacked
+
+if TYPE_CHECKING:
+    from .receiver import GnssEpoch
 
 GPS_ALT_SIGMA_M = 0.5
 GPS_SPEED_SIGMA_MPS = 0.2
@@ -48,17 +52,21 @@ def _toward(nominal: float, target: float | None, k: float) -> float:
     return nominal if target is None else nominal + (target - nominal) * k
 
 
-def gps_quality(config: ScenarioConfig, t: float) -> tuple[int, float]:
-    """`sats` y `hdop` en `t` (sin pérdida): los nominales o los del episodio de degradación
-    activo, con su rampa. No saca números aleatorios: sin episodios, todo sale igual que antes."""
+def gps_quality(
+    config: ScenarioConfig, t: float, drift: tuple[int, float] = (0, 0.0)
+) -> tuple[int, float]:
+    """`sats` y `hdop` en `t` (sin pérdida): los nominales (más la variación lenta del receptor
+    realista, `drift`) o los del episodio de degradación activo, con su rampa. No saca números
+    aleatorios: sin episodios y sin `drift`, todo sale igual que antes."""
     g = config.sensors.gps
+    sats0, hdop0 = g.sats + drift[0], g.hdop + drift[1]
     for e in g.episodes:
         k = e.level(t)
         if k is not None:
-            sats = g.sats if e.sats is None else round(_toward(g.sats, e.sats, k))
-            hdop = g.hdop if e.hdop is None else round(_toward(g.hdop, e.hdop, k), 2)
+            sats = sats0 if e.sats is None else round(_toward(sats0, e.sats, k))
+            hdop = hdop0 if e.hdop is None else round(_toward(hdop0, e.hdop, k), 2)
             return sats, hdop
-    return g.sats, g.hdop
+    return sats0, round(hdop0, 2) if drift[1] else hdop0
 
 
 def gps_payload(
@@ -68,15 +76,26 @@ def gps_payload(
     vel: tuple[float, float],
     loss: bool,
     t: float,
+    receiver: "GnssEpoch | None" = None,
 ) -> dict:
     """`PositionUpdated`. `pos` y `vel` son lo que cree el dron: con el engaño, la posición y la
     velocidad falsas; en pérdida, la estima y su velocidad respecto al aire (sin fix). La pérdida
     manda sobre un episodio de degradación."""
     g = config.sensors.gps
-    sats, hdop = (0, GPS_LOSS_HDOP) if loss else gps_quality(config, t)
+    if receiver is None:
+        sats, hdop = (0, GPS_LOSS_HDOP) if loss else gps_quality(config, t)
+        x, y = (
+            round(pos[0] + rng.gauss(0, g.sigma_m), 1),
+            round(pos[1] + rng.gauss(0, g.sigma_m), 1),
+        )
+    else:  # receptor realista: el ruido de posición viene del modelo; el del generador único
+        rng.gauss(0, 1)  # se sigue sacando (y se descarta) para no cambiar el de lo demás
+        rng.gauss(0, 1)
+        sats, hdop = (0, GPS_LOSS_HDOP) if loss else (receiver.sats, receiver.hdop)
+        x, y = round(pos[0] + receiver.noise[0], 1), round(pos[1] + receiver.noise[1], 1)
     return {
-        "x": round(pos[0] + rng.gauss(0, g.sigma_m), 1),
-        "y": round(pos[1] + rng.gauss(0, g.sigma_m), 1),
+        "x": x,
+        "y": y,
         "alt_m": round(config.drone.altitude_m + rng.gauss(0, GPS_ALT_SIGMA_M), 1),
         "speed_mps": round(max(0.0, math.hypot(*vel) + rng.gauss(0, GPS_SPEED_SIGMA_MPS)), 1),
         "course_deg": round((bearing_deg(*vel) + rng.gauss(0, GPS_HEADING_SIGMA_DEG)) % 360, 1),
@@ -86,11 +105,28 @@ def gps_payload(
     }
 
 
-def radar_payload(config: ScenarioConfig, rng: random.Random, s: Sample) -> dict:
+def radar_range_m(config: ScenarioConfig, x: float, y: float) -> float:
+    """Distancia del dron al radar."""
     r = config.sensors.radar
+    return math.hypot(x - r.x, y - r.y)
+
+
+def radar_sigma_m(config: ScenarioConfig, x: float, y: float, geometry: bool) -> float:
+    """σ de la posición del radar: la del YAML o, con `radar_geometry`, creciente con la
+    distancia."""
+    r = config.sensors.radar
+    if not geometry:
+        return r.sigma_m
+    return r.sigma_m + r.sigma_per_km_m * radar_range_m(config, x, y) / 1000.0
+
+
+def radar_payload(
+    config: ScenarioConfig, rng: random.Random, s: Sample, geometry: bool = False
+) -> dict:
+    sigma = radar_sigma_m(config, s.x, s.y, geometry)
     payload = {
-        "x": round(s.x + rng.gauss(0, r.sigma_m), 1),
-        "y": round(s.y + rng.gauss(0, r.sigma_m), 1),
+        "x": round(s.x + rng.gauss(0, sigma), 1),
+        "y": round(s.y + rng.gauss(0, sigma), 1),
         "speed_mps": round(max(0.0, s.speed_mps + rng.gauss(0, RADAR_SPEED_SIGMA_MPS)), 1),
         "course_deg": round((s.course_deg + rng.gauss(0, RADAR_COURSE_SIGMA_DEG)) % 360, 1),
     }
