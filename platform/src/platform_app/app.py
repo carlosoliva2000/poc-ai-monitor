@@ -12,6 +12,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -124,7 +125,7 @@ class Hub:
         sample = self.player.truth_now()
         if sample is None:
             return None
-        return TruthMessage(run_id=self.player.run_id, **sample.model_dump())
+        return TruthMessage(run_id=self.player.run_id, **asdict(sample))
 
     def broadcast_truth(self, only: Client | None = None) -> None:
         """Envía la última muestra real a los clientes `web` con `truth_feed` (nunca a otros).

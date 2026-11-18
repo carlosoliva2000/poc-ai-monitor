@@ -1260,7 +1260,7 @@ async function runFase16() {
   // Comando desde el chat del instructor
   await page.getByRole('tab', { name: 'Instructor' }).click()
   const box = page.locator('#input-instructor')
-  await box.fill('Wind from the north at 12 m/s with gusts of 16 for one minute')
+  await box.fill('Wind from the north at 12 m/s for one minute')
   await box.press('Enter')
   note('pregunta al instructor')
   const card = page.locator('[data-testid=proposal-card]')

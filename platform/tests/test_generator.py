@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 
 from helpers import scenario_config
 from platform_app.generator.build import generate
@@ -244,13 +243,6 @@ def test_a_fault_that_starts_after_the_mission_is_not_written() -> None:
     run = generate(cfg)
     assert not [e for e in run.events if e.type.value.startswith("Fault")]
     assert run.labels.labels == []
-
-
-def test_radar_and_meteo_ids_must_match_the_envelope_source() -> None:
-    sensors = scenario_config("nominal").sensors.model_dump()
-    sensors["radar"]["id"] = "radar-2"
-    with pytest.raises(ValidationError, match="radar-1"):
-        scenario_config("nominal", sensors=sensors)
 
 
 def test_demo_battery_is_demo_without_the_silenced_battery_events(runs_dir: Path) -> None:

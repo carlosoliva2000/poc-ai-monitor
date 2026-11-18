@@ -25,6 +25,7 @@ class DroneConfig(Config):
     altitude_m: float
     acceptance_radius_m: Positive
     lookahead_m: Positive
+    wind_limit_mps: Positive = 12.0  # viento máximo con el que mantiene la ruta (⚠️ de partida)
 
 
 class WaypointConfig(Config):
@@ -115,13 +116,11 @@ class GpsConfig(Config):
 
 
 class RadarConfig(Config):
-    id: Literal["radar-1"]  # es el `source` del sobre de `TrackUpdated`
     period_s: Positive
     sigma_m: float = Field(ge=0)
 
 
 class MeteoConfig(Config):
-    id: Literal["meteo-1"]  # es el `source` del sobre de `WindReported`
     period_s: Positive
     sigma_mps: float = Field(ge=0)
     sigma_deg: float = Field(ge=0)
@@ -156,7 +155,6 @@ class SensorsConfig(Config):
 
 class WindBase(Config):
     speed_mps: float = Field(ge=0)
-    gust_mps: float = Field(ge=0)
     from_deg: float
 
 
@@ -237,6 +235,20 @@ class FaultConfig(Config):
         return self
 
 
+class LabelingConfig(Config):
+    """Umbrales operativos de las etiquetas por faceta (`states.jsonl`). Convención nuestra, no del
+    simulador; valores de partida ⚠️."""
+
+    wind_notable_mps: Positive = 5.0  # viento medio por encima del cual es «notable»
+    gps_sigma_bad_m: Positive = 5.0  # σ real de la posición del GPS: por encima, «degradada»
+    link_latency_bad_ms: Positive = 100.0  # latencia del enlace: por encima, «degradada»
+    link_loss_bad_pct: Positive = 20.0  # paquetes perdidos: por encima, «degradada»
+    deviated_m: Positive = 25.0  # distancia a la referencia del modo para «desviado»
+    returning_m: Positive = 15.0  # y para volver a «en ruta» (histéresis)
+    battery_low_pct: Positive = 15.0
+    battery_critical_pct: Positive = 7.0
+
+
 class ScenarioConfig(Config):
     name: str
     description: str
@@ -250,4 +262,5 @@ class ScenarioConfig(Config):
     spoofing: SpoofingConfig | None
     hijack: HijackConfig | None
     faults: list[FaultConfig]
+    labeling: LabelingConfig = Field(default_factory=LabelingConfig)
     commands: list[ScheduledCommand] = []  # opcional (v0.18): comandos del instructor programados

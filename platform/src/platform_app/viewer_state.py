@@ -142,7 +142,7 @@ class ViewerState:
         kind, p, t = ev["type"], ev["payload"], ev["sim_time"]
         if kind == "PositionUpdated":
             self.gps.append(GpsPoint(t, p["x"], p["y"], p["fix"]))
-            self.heading_deg = p["heading_deg"]
+            self.heading_deg = p["course_deg"]
             while self.gps and self.gps[0].t < t - TRAIL_S:
                 self.gps.popleft()
         elif kind == "TrackUpdated":

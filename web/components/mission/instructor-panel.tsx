@@ -76,10 +76,6 @@ export function InstructorPanel({ state, events, form, onForm, forceOpen = 0, on
               <input aria-label="Speed in m/s" type="number" min={0} max={LIMITS.speed} step={0.5} value={form.speed_mps} disabled={!enabled} onChange={(e) => set({ speed_mps: e.target.value })} className={input} />
             </label>
             <label className="flex flex-col gap-0.5">
-              <span className="text-xs text-muted-foreground">Gust (m/s)</span>
-              <input aria-label="Gust in m/s" type="number" min={0} max={LIMITS.gust} step={0.5} value={form.gust_mps} disabled={!enabled} onChange={(e) => set({ gust_mps: e.target.value })} className={input} />
-            </label>
-            <label className="flex flex-col gap-0.5">
               <span className="text-xs text-muted-foreground">Duration (s)</span>
               <input aria-label="Duration in seconds" type="number" min={1} max={LIMITS.duration} step={5} value={form.duration_s} disabled={!enabled || form.untilCancelled} onChange={(e) => set({ duration_s: e.target.value })} className={input} />
             </label>
@@ -94,7 +90,7 @@ export function InstructorPanel({ state, events, form, onForm, forceOpen = 0, on
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Speed and direction push the drone. The ramp smooths the rise and the fall. The gust does not push the drone: only the weather station measures it, and it makes the wind notable.
+            Speed and direction push the drone. The ramp smooths the rise and the fall.
           </p>
           {!parsed.ok && <p className="text-xs text-destructive" role="status">{parsed.errors.join(' · ')}</p>}
 

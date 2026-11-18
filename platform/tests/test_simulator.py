@@ -104,7 +104,7 @@ def test_gps_during_a_loss_has_no_fix_and_is_the_estimate() -> None:
 def test_loss_is_navigation_on_estimate_it_ignores_the_wind() -> None:
     """Sin viento la estima coincide con la verdad; con viento, se separa `viento · tiempo`."""
     calm = scenario_config(
-        "nominal", wind={"base": {"speed_mps": 0, "gust_mps": 0, "from_deg": 0}, "episodes": []}
+        "nominal", wind={"base": {"speed_mps": 0, "from_deg": 0}, "episodes": []}
     )
     sim = Simulator(calm)
     while sim.t < 50:

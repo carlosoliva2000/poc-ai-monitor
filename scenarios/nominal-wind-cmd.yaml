@@ -1,6 +1,6 @@
 name: nominal-wind-cmd
 description: >-
-  nominal plus an instructor command (set_wind at T+01:35: 12 m/s from the north, gusts 16 m/s,
+  nominal plus an instructor command (set_wind at T+01:35: 12 m/s from the north,
   60 s, 10 s ramp), like the wind episode of demo. Repeatable without the web or the LLM.
 seed: 42
 t0: "2026-10-20T10:00:00Z"
@@ -25,13 +25,13 @@ mission:
 
 sensors:
   gps: {period_s: 1.0, sigma_m: 1.5, sats: 14, hdop: 0.8}
-  radar: {id: radar-1, period_s: 2.0, sigma_m: 5.0}
-  meteo: {id: meteo-1, period_s: 10.0, sigma_mps: 0.5, sigma_deg: 8.0}
+  radar: {period_s: 2.0, sigma_m: 5.0}
+  meteo: {period_s: 10.0, sigma_mps: 0.5, sigma_deg: 8.0}
   link: {period_s: 5.0, controller_id: GCS-1, rssi_dbm: -62.0, latency_ms: 45.0}
   battery: {period_s: 10.0, start_pct: 100.0, drain_pct_per_min: 1.2}
 
 wind:
-  base: {speed_mps: 2.0, gust_mps: 3.5, from_deg: 300.0}
+  base: {speed_mps: 2.0, from_deg: 300.0}
   episodes: []
 
 spoofing: null
@@ -43,4 +43,4 @@ faults: []              # fallos programados, mute o loss (ver README)
 commands:               # comandos del instructor programados (v0.18)
   - at_s: 95.0
     command: set_wind
-    params: {from_deg: 0.0, speed_mps: 12.0, gust_mps: 16.0, ramp_s: 10.0, duration_s: 60.0}
+    params: {from_deg: 0.0, speed_mps: 12.0, ramp_s: 10.0, duration_s: 60.0}

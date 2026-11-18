@@ -34,15 +34,16 @@ export type Position = {
   y: number
   alt_m: number
   speed_mps: number
-  heading_deg: number
+  /** Rumbo sobre el suelo (v1.0; antes `heading_deg`). */
+  course_deg: number
   fix: 'none' | '2d' | '3d'
   sats: number
   hdop: number
 }
-export type Track = { radar_id: string; x: number; y: number; speed_mps: number; course_deg: number; quality: number }
-export type Wind = { station_id: string; speed_mps: number; gust_mps: number; from_deg: number }
+export type Track = { x: number; y: number; speed_mps: number; course_deg: number }
+export type Wind = { speed_mps: number; from_deg: number }
 export type Link = { controller_id: string; rssi_dbm: number; latency_ms: number }
-export type Battery = { battery_pct: number; voltage_v: number }
+export type Battery = { battery_pct: number }
 export type Waypoint = { id: string; x: number; y: number; eta_s: number }
 
 export type Detection = {
@@ -110,7 +111,7 @@ export type DetectionAcknowledged = {
 }
 export type ReportGenerated = { run_id: string; markdown: string; alerts_count: number }
 /** Viento del instructor en curso que la web manda con la pregunta al agente del instructor (v0.18). */
-export type ActiveWindContext = { from_deg: number; speed_mps: number; gust_mps: number; remaining_s: number | null }
+export type ActiveWindContext = { from_deg: number; speed_mps: number; remaining_s: number | null }
 export type OperatorMessage = { conversation_id: Conversation; text: string; context?: { active_wind: ActiveWindContext | null } }
 /** Propuesta del agente del instructor (v0.18): no se aplica hasta que el instructor confirma. */
 export type Proposal = { command: InstructorCommandName; params: WindParams | null; defaults_used: string[] }
@@ -137,7 +138,7 @@ export type AgentToolCall = {
   truncated: boolean
 }
 /** Viento de un comando del instructor (v0.18): m/s y grados; `from_deg` es la procedencia. */
-export type WindParams = { from_deg: number; speed_mps: number; gust_mps: number; ramp_s: number; duration_s: number | null }
+export type WindParams = { from_deg: number; speed_mps: number; ramp_s: number; duration_s: number | null }
 export type InstructorCommandName = 'set_wind' | 'cancel_wind'
 /** Payload de `InstructorCommand` y valor de `control` → `instructor`. */
 export type InstructorCommand = {
@@ -205,7 +206,7 @@ export type PlanFile = {
 export type TruthFile = {
   duration_s: number
   trajectory: { t: number; x: number; y: number; speed_mps: number; heading_deg: number; course_deg: number }[]
-  wind: { t: number; speed_mps: number; gust_mps: number; from_deg: number }[]
+  wind: { t: number; speed_mps: number; from_deg: number }[]
 }
 
 export const PLATFORM_HTTP = 'http://127.0.0.1:8100/api'

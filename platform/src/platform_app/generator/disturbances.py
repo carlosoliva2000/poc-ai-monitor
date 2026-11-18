@@ -10,10 +10,9 @@ from poc_contracts.scenario import HijackConfig, SpoofingConfig, WindConfig
 
 @dataclass(frozen=True)
 class Wind:
-    """Viento en un instante: velocidad media, racha y dirección de **procedencia**."""
+    """Viento en un instante: velocidad media y dirección de **procedencia**."""
 
     speed_mps: float
-    gust_mps: float
     from_deg: float
 
     def vector(self) -> tuple[float, float]:
@@ -26,7 +25,7 @@ class Wind:
 class CommandWind:
     """Viento puesto por el instructor: un episodio más, aplicado **después** de los del escenario.
 
-    Sustituye al viento que haya (la velocidad y la racha suben con la rampa desde el viento de ese
+    Sustituye al viento que haya (la velocidad sube con la rampa desde el viento de ese
     instante; la procedencia cambia de golpe, como en un episodio). Termina solo a los `duration_s`
     (con la rampa de bajada) o antes: `cancel` baja con su rampa desde el nivel que tenga y
     `replace_by` (otro `set_wind`) lo congela mientras sube el nuevo, para que la transición sea
@@ -64,22 +63,20 @@ def wind_at(t: float, wind: WindConfig, commands: Sequence[CommandWind] = ()) ->
     """Viento base, o el del episodio activo con rampa de subida y bajada de `ramp_s`, y por
     encima el del instructor si lo hay.
 
-    La velocidad y la racha se interpolan; la procedencia pasa a la del episodio de golpe.
+    La velocidad se interpola; la procedencia pasa a la del episodio de golpe.
     """
-    speed, gust, from_deg = wind.base.speed_mps, wind.base.gust_mps, wind.base.from_deg
+    speed, from_deg = wind.base.speed_mps, wind.base.from_deg
     for e in wind.episodes:
         if e.start_s <= t <= e.end_s:
             k = min(1.0, (t - e.start_s) / e.ramp_s, (e.end_s - t) / e.ramp_s)
             speed += (e.speed_mps - speed) * k
-            gust += (e.gust_mps - gust) * k
             from_deg = e.from_deg
     for c in commands:
         k = c.level(t)
         if k is not None:
             speed += (c.params.speed_mps - speed) * k
-            gust += (c.params.gust_mps - gust) * k
             from_deg = c.params.from_deg
-    return Wind(speed, gust, from_deg)
+    return Wind(speed, from_deg)
 
 
 def spoof_offset(t: float, spoofing: SpoofingConfig | None) -> tuple[float, float]:

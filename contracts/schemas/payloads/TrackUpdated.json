@@ -1,10 +1,6 @@
 {
   "additionalProperties": false,
   "properties": {
-    "radar_id": {
-      "title": "Radar Id",
-      "type": "string"
-    },
     "x": {
       "title": "X",
       "type": "number"
@@ -20,19 +16,13 @@
     "course_deg": {
       "title": "Course Deg",
       "type": "number"
-    },
-    "quality": {
-      "title": "Quality",
-      "type": "number"
     }
   },
   "required": [
-    "radar_id",
     "x",
     "y",
     "speed_mps",
-    "course_deg",
-    "quality"
+    "course_deg"
   ],
   "title": "TrackUpdated",
   "type": "object"

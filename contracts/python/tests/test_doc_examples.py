@@ -18,6 +18,7 @@ from poc_contracts.envelope import Envelope
 from poc_contracts.payloads import PAYLOAD_MODELS
 from poc_contracts.run_files import LabelsFile, PlanFile, RunMeta, TruthFile, UnlabeledEpisodesFile
 from poc_contracts.scenario import GpsConfig, LinkConfig, ScenarioConfig
+from poc_contracts.states import StateRow
 from poc_contracts.tools import (
     FlightSummary,
     GetEventsResult,
@@ -54,6 +55,12 @@ def _envelope_with_position_payload(example: Any) -> object:
     return Envelope.model_validate({**example, "payload": position})
 
 
+def check_state_row(example: Any) -> object:
+    row = StateRow.model_validate(example)
+    row.check()  # todas las facetas del catálogo y estados válidos
+    return row
+
+
 T = EventType
 # (principio del ejemplo con los espacios colapsados, cómo se valida) en el orden del documento.
 EXPECTED: list[tuple[str, Check | str]] = [
@@ -64,8 +71,8 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ('{ "mission_id": "MSN-DEMO", "completed"', payload_of(T.MISSION_COMPLETED)),
     ('{ "x": 512.3', payload_of(T.POSITION_UPDATED)),
     ('{ "x": 498.7', payload_of(T.POSITION_UPDATED)),
-    ('{ "radar_id"', payload_of(T.TRACK_UPDATED)),
-    ('{ "station_id"', payload_of(T.WIND_REPORTED)),
+    ('{ "x": 505.0', payload_of(T.TRACK_UPDATED)),
+    ('{ "speed_mps": 4.2', payload_of(T.WIND_REPORTED)),
     ('{ "controller_id"', payload_of(T.LINK_STATUS)),
     ('{ "battery_pct"', payload_of(T.BATTERY_STATUS)),
     ('{ "scenario": "demo", "run_id": "20261020', payload_of(T.SIMULATION_STARTED)),
@@ -124,6 +131,7 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ('{"episodes": [{"id": "U1"', model(UnlabeledEpisodesFile)),
     ('{ "labels"', model(LabelsFile)),
     ('{ "scenario": "demo", "run_id"', model(RunMeta)),
+    ('{"t": 168, "facets"', check_state_row),
 ]
 
 

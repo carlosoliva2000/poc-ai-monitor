@@ -37,7 +37,13 @@ class PlanFile(RunFile):
 
 
 class TruthSample(RunFile):
-    """Estado real cada segundo. `course_deg`: rumbo sobre el suelo; `heading_deg`: el del morro."""
+    """Estado real cada segundo (verdad ampliada, v1.0). `course_deg`: rumbo sobre el suelo;
+    `heading_deg`: el del morro. El resto es lo que hace falta para etiquetar y evaluar:
+    `leg_index` (índice del waypoint pendiente en la ruta), `ref_dist_m` (distancia real a la
+    referencia del modo: el tramo pendiente en misión), `est_x`/`est_y` (estima del dron),
+    `mode` (modo del autopiloto), `link_up` (llegan los paquetes del dron a nuestra estación),
+    `battery_soc` (carga real, %), `gps_sigma_m` (σ real de la posición del receptor), `cn0_dbhz`
+    (C/N0 real) y `emitters_active` (ids de los emisores activos)."""
 
     t: float
     x: float
@@ -45,15 +51,33 @@ class TruthSample(RunFile):
     speed_mps: float
     heading_deg: float
     course_deg: float
+    leg_index: int
+    ref_dist_m: float
+    est_x: float
+    est_y: float
+    mode: str
+    link_up: bool
+    battery_soc: float
+    gps_sigma_m: float
+    cn0_dbhz: float
+    emitters_active: list[str]
 
 
 class TruthWind(RunFile):
-    """Viento real (media y racha) cada segundo, con `from_deg` de procedencia."""
+    """Viento real medio cada segundo, con `from_deg` de procedencia."""
 
     t: float
     speed_mps: float
-    gust_mps: float
     from_deg: float
+
+
+class TruthEmitter(RunFile):
+    """Emisor o estación ajena con posición: solo en la verdad y en la vista del instructor."""
+
+    id: str
+    kind: str  # `spoofer` | `jammer` | `hijacker`
+    x: float
+    y: float
 
 
 class TruthFile(RunFile):
@@ -62,6 +86,7 @@ class TruthFile(RunFile):
     duration_s: float
     trajectory: list[TruthSample]
     wind: list[TruthWind]
+    emitters: list[TruthEmitter] = Field(default_factory=list)
 
 
 SOURCE_LABEL_TYPES = (

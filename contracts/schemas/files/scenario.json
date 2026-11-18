@@ -59,6 +59,12 @@
           "exclusiveMinimum": 0,
           "title": "Lookahead M",
           "type": "number"
+        },
+        "wind_limit_mps": {
+          "default": 12.0,
+          "exclusiveMinimum": 0,
+          "title": "Wind Limit Mps",
+          "type": "number"
         }
       },
       "required": [
@@ -251,6 +257,62 @@
       "title": "InstructorCommandName",
       "type": "string"
     },
+    "LabelingConfig": {
+      "additionalProperties": false,
+      "description": "Umbrales operativos de las etiquetas por faceta (`states.jsonl`). Convención nuestra, no del\nsimulador; valores de partida ⚠️.",
+      "properties": {
+        "wind_notable_mps": {
+          "default": 5.0,
+          "exclusiveMinimum": 0,
+          "title": "Wind Notable Mps",
+          "type": "number"
+        },
+        "gps_sigma_bad_m": {
+          "default": 5.0,
+          "exclusiveMinimum": 0,
+          "title": "Gps Sigma Bad M",
+          "type": "number"
+        },
+        "link_latency_bad_ms": {
+          "default": 100.0,
+          "exclusiveMinimum": 0,
+          "title": "Link Latency Bad Ms",
+          "type": "number"
+        },
+        "link_loss_bad_pct": {
+          "default": 20.0,
+          "exclusiveMinimum": 0,
+          "title": "Link Loss Bad Pct",
+          "type": "number"
+        },
+        "deviated_m": {
+          "default": 25.0,
+          "exclusiveMinimum": 0,
+          "title": "Deviated M",
+          "type": "number"
+        },
+        "returning_m": {
+          "default": 15.0,
+          "exclusiveMinimum": 0,
+          "title": "Returning M",
+          "type": "number"
+        },
+        "battery_low_pct": {
+          "default": 15.0,
+          "exclusiveMinimum": 0,
+          "title": "Battery Low Pct",
+          "type": "number"
+        },
+        "battery_critical_pct": {
+          "default": 7.0,
+          "exclusiveMinimum": 0,
+          "title": "Battery Critical Pct",
+          "type": "number"
+        }
+      },
+      "title": "LabelingConfig",
+      "type": "object"
+    },
     "LinkConfig": {
       "additionalProperties": false,
       "properties": {
@@ -372,11 +434,6 @@
     "MeteoConfig": {
       "additionalProperties": false,
       "properties": {
-        "id": {
-          "const": "meteo-1",
-          "title": "Id",
-          "type": "string"
-        },
         "period_s": {
           "exclusiveMinimum": 0,
           "title": "Period S",
@@ -394,7 +451,6 @@
         }
       },
       "required": [
-        "id",
         "period_s",
         "sigma_mps",
         "sigma_deg"
@@ -453,11 +509,6 @@
     "RadarConfig": {
       "additionalProperties": false,
       "properties": {
-        "id": {
-          "const": "radar-1",
-          "title": "Id",
-          "type": "string"
-        },
         "period_s": {
           "exclusiveMinimum": 0,
           "title": "Period S",
@@ -470,7 +521,6 @@
         }
       },
       "required": [
-        "id",
         "period_s",
         "sigma_m"
       ],
@@ -613,11 +663,6 @@
           "title": "Speed Mps",
           "type": "number"
         },
-        "gust_mps": {
-          "minimum": 0,
-          "title": "Gust Mps",
-          "type": "number"
-        },
         "from_deg": {
           "title": "From Deg",
           "type": "number"
@@ -625,7 +670,6 @@
       },
       "required": [
         "speed_mps",
-        "gust_mps",
         "from_deg"
       ],
       "title": "WindBase",
@@ -633,7 +677,7 @@
     },
     "WindCommandParams": {
       "additionalProperties": false,
-      "description": "Los mismos parámetros que un episodio de viento del escenario, más la duración.\n\n`from_deg` y `speed_mps` empujan al dron; `ramp_s` suaviza la subida y la bajada; `gust_mps`\nno empuja: solo la mide la estación (y cuenta para que el viento sea «notable»).\n`duration_s: null` = hasta nuevo aviso.",
+      "description": "Los mismos parámetros que un episodio de viento del escenario, más la duración.\n\n`from_deg` y `speed_mps` empujan al dron; `ramp_s` suaviza la subida y la bajada.\n`duration_s: null` = hasta nuevo aviso. Sin racha desde el contrato v1.0.",
       "properties": {
         "from_deg": {
           "maximum": 360,
@@ -645,12 +689,6 @@
           "maximum": 40.0,
           "minimum": 0,
           "title": "Speed Mps",
-          "type": "number"
-        },
-        "gust_mps": {
-          "maximum": 60.0,
-          "minimum": 0,
-          "title": "Gust Mps",
           "type": "number"
         },
         "ramp_s": {
@@ -676,7 +714,6 @@
       "required": [
         "from_deg",
         "speed_mps",
-        "gust_mps",
         "ramp_s",
         "duration_s"
       ],
@@ -713,11 +750,6 @@
           "title": "Speed Mps",
           "type": "number"
         },
-        "gust_mps": {
-          "minimum": 0,
-          "title": "Gust Mps",
-          "type": "number"
-        },
         "from_deg": {
           "title": "From Deg",
           "type": "number"
@@ -739,7 +771,6 @@
       },
       "required": [
         "speed_mps",
-        "gust_mps",
         "from_deg",
         "start_s",
         "end_s",
@@ -811,6 +842,9 @@
       },
       "title": "Faults",
       "type": "array"
+    },
+    "labeling": {
+      "$ref": "#/$defs/LabelingConfig"
     },
     "commands": {
       "default": [],

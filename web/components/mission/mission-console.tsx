@@ -55,7 +55,7 @@ export function MissionConsole() {
   const sendInstructorAware = (conversation: Conversation, text: string) => {
     if (conversation !== 'instructor') return sendOperatorMessage(conversation, text)
     const a = activeWind(events, state?.sim_time ?? 0)
-    const active_wind = a ? { from_deg: a.params.from_deg, speed_mps: a.params.speed_mps, gust_mps: a.params.gust_mps, remaining_s: remaining(a, state?.sim_time ?? 0) } : null
+    const active_wind = a ? { from_deg: a.params.from_deg, speed_mps: a.params.speed_mps, remaining_s: remaining(a, state?.sim_time ?? 0) } : null
     return sendOperatorMessage(conversation, text, { active_wind })
   }
   // Solo al confirmar se publica el comando (el mismo que el del panel, con `issued_by: llm`).

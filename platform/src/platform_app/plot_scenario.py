@@ -5,8 +5,9 @@
   y las zonas de anomalía.
 - `scenario_time.png`: en el tiempo, desviación respecto al plan, distancia GPS–radar y viento,
   con las ventanas de `labels.json` sombreadas.
+- `scenario_states.png`: el estado de cada faceta por segundo (`states.jsonl`), en bandas.
 
-Uso: `uv run python -m platform_app.plot_scenario [--all | nombre …] [--only plan|xy|time]`.
+Uso: `uv run python -m platform_app.plot_scenario [--all | nombre …] [--only plan|xy|time|states]`.
 Lee `truth.json` y `labels.json` (es una herramienta de comprobación; el agente no la usa).
 """
 
@@ -24,6 +25,7 @@ from matplotlib.ticker import FuncFormatter, MultipleLocator
 
 from poc_contracts.enums import LabelType
 from poc_contracts.run_files import Label, PlanFile
+from poc_contracts.states import FACETS, NOT_APPLICABLE, NOT_OBSERVABLE, StateRow
 
 from .generator.scenario_io import load_scenario
 from .geometry import Point
@@ -410,11 +412,8 @@ def plot_time(name: str, out_dir: Path) -> Path:
     met = run.of_type("WindReported")
     wind_ax.scatter([e["sim_time"] for e in met], [e["payload"]["speed_mps"] for e in met],
                     s=14, color=METEO, zorder=4, label="weather station: speed")  # fmt: skip
-    wind_ax.scatter([e["sim_time"] for e in met], [e["payload"]["gust_mps"] for e in met],
-                    s=18, facecolor="none", edgecolor=METEO, linewidth=1.0, zorder=4,
-                    label="weather station: gust")  # fmt: skip
     wind_ax.set_ylabel("wind (m/s)")
-    wind_top = max([w.gust_mps for w in wind] + [e["payload"]["gust_mps"] for e in met])
+    wind_top = max([w.speed_mps for w in wind] + [e["payload"]["speed_mps"] for e in met])
     wind_ax.set_ylim(0, wind_top * 1.3)
     wind_ax.legend(loc="upper right", fontsize=8.5, ncol=3)
 
@@ -437,7 +436,80 @@ def plot_time(name: str, out_dir: Path) -> Path:
     return path
 
 
-PLOTS = {"plan": plot_plan, "xy": plot_xy, "time": plot_time}
+# --- scenario_states.png --------------------------------------------------------------------
+
+STATE_NEUTRAL = {
+    "normal", "good", "reliable", "connected", "calm", "sufficient", "mission", "on_route",
+}  # fmt: skip
+STATE_COLORS = {  # estados anómalos: tonos distintos por familia de causa
+    "no_data": "#8a8985", "no_fix": "#6250d6", "out_of_range": "#8a8985",
+    "degraded": "#d9a21b", "spoofed": GPS, "lost": "#b4322b", "low": "#d9a21b",
+    "critical": "#b4322b", "cannot_reach_home": "#b4322b", "notable": "#d9a21b",
+    "beyond_limit": "#b4322b", "failsafe_return": "#d9a21b", "failsafe_hold": "#d9a21b",
+    "failsafe_land": "#b4322b", "foreign_control": "#b4322b", "deviated": "#b4322b",
+    "returning": "#d9a21b", "spoofed_position": GPS, "dead_reckoning": "#6250d6",
+    "wind": TRUTH, "unexplained": "#0b0b0b",
+}  # fmt: skip
+
+
+def plot_states(name: str, out_dir: Path) -> Path:
+    """Una banda por faceta con el estado de cada segundo: neutro (normal), de color (anómalo),
+    gris punteado (`n/a`) y rayado (`?`)."""
+    rows = [
+        StateRow.model_validate_json(line)
+        for line in (out_dir / "states.jsonl").read_text("utf-8").splitlines()
+    ]
+    facets = list(FACETS)
+    fig, ax = plt.subplots(figsize=(14, 0.42 * len(facets) + 1.8))
+    for i, facet in enumerate(facets):
+        y = len(facets) - 1 - i
+        for a, b, value in _runs([(r.t, r.facets[facet]) for r in rows]):
+            color = (
+                PLAN_LIGHT if value == NOT_APPLICABLE
+                else "#ffffff" if value == NOT_OBSERVABLE
+                else GRID if value in STATE_NEUTRAL
+                else STATE_COLORS.get(value, DISCREPANCY)
+            )  # fmt: skip
+            hatch = "////" if value == NOT_OBSERVABLE else None
+            edge = INK_SOFT if hatch else color
+            ax.barh(y, b - a + 1, left=a, height=0.78, color=color, edgecolor=edge,
+                    hatch=hatch, linewidth=0.4)  # fmt: skip
+            if value not in STATE_NEUTRAL and b - a >= 25:
+                ink = INK if value in (NOT_OBSERVABLE, NOT_APPLICABLE) else "white"
+                ax.text(a + (b - a + 1) / 2, y, value, ha="center", va="center", fontsize=7.5,
+                        color=ink)  # fmt: skip
+    ax.set_yticks(range(len(facets)))
+    ax.set_yticklabels(reversed(facets), fontsize=9)
+    ax.set_xlim(0, rows[-1].t + 1)
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: _clock(v)))
+    ax.xaxis.set_major_locator(MultipleLocator(60))
+    ax.grid(axis="x", color=GRID, linewidth=0.6)
+    ax.set_axisbelow(True)
+    for spine in ("top", "right", "left"):
+        ax.spines[spine].set_visible(False)
+    _titles(
+        fig,
+        f"{name}: state of each facet per second",
+        "grey = n/a · hatched = ? (not observable) · colour = abnormal state",
+    )
+    path = out_dir / "scenario_states.png"
+    fig.savefig(path, dpi=FIG_DPI)
+    plt.close(fig)
+    return path
+
+
+def _runs(series: list[tuple[float, str]]) -> list[tuple[float, float, str]]:
+    """Tramos (desde, hasta, valor) de una serie `(t, valor)` por segundo."""
+    out: list[list] = []
+    for t, v in series:
+        if out and out[-1][2] == v:
+            out[-1][1] = t
+        else:
+            out.append([t, t, v])
+    return [(a, b, v) for a, b, v in out]
+
+
+PLOTS = {"plan": plot_plan, "xy": plot_xy, "time": plot_time, "states": plot_states}
 
 
 def plot_scenario(name: str, only: str | None = None, runs_dir: Path = RUNS_DIR) -> list[Path]:
@@ -449,7 +521,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("names", nargs="*", help="scenarios with output in runs/")
     parser.add_argument("--all", action="store_true", help="all of those in runs/")
-    parser.add_argument("--only", choices=["plan", "xy", "time"], help="a single figure")
+    parser.add_argument("--only", choices=["plan", "xy", "time", "states"], help="a single figure")
     args = parser.parse_args()
     names = (
         sorted(p.name for p in RUNS_DIR.iterdir() if (p / "plan.json").exists())

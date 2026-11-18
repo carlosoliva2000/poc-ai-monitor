@@ -24,6 +24,7 @@ import logging
 import time
 from collections import deque
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -37,7 +38,7 @@ from poc_contracts.enums import (
     SensorSource,
 )
 from poc_contracts.envelope import Envelope, EventDraft
-from poc_contracts.run_files import PlanFile, RunMeta, TruthFile, TruthSample
+from poc_contracts.run_files import PlanFile, RunMeta, TruthFile
 from poc_contracts.scenario import ScenarioConfig
 from poc_contracts.ws import SPEEDS, ActiveFault, PlayerState
 
@@ -59,6 +60,18 @@ MONITOR_SOURCE = "ai-monitor"
 INTERACTIVE_OFF_MESSAGE = "interactive mode is off: turn it on to inject faults"
 INTERACTIVE_OFF_MESSAGE_COMMANDS = "interactive mode is off: turn it on to send instructor commands"
 META_KEYS = ("speed", "wait_agent", "interactive")
+
+
+@dataclass(frozen=True)
+class LiveTruth:
+    """Última muestra real (0,1 s) para el icono de la web en directo; no es la verdad ampliada."""
+
+    t: float
+    x: float
+    y: float
+    speed_mps: float
+    heading_deg: float
+    course_deg: float
 
 
 class PlayerError(Exception):
@@ -149,14 +162,14 @@ class Player:
             wind=[w for w in full.wind if w.t <= limit],
         )
 
-    def truth_now(self) -> TruthSample | None:
+    def truth_now(self) -> LiveTruth | None:
         """Última muestra real con `t` ≤ instante actual (para el icono de la web en directo)."""
         if self.sim is None:
             return None
         limit = self.sim_time + 1e-9
         for s in reversed(self.sim.samples):
             if s.t <= limit:
-                return TruthSample(
+                return LiveTruth(
                     t=s.t,
                     x=round(s.x, 2),
                     y=round(s.y, 2),

@@ -24,7 +24,7 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 const MONITOR_SUGGESTIONS = ['What is happening right now?', 'Why do you think that is the cause?', 'Which alerts are open?']
-const INSTRUCTOR_SUGGESTIONS = ['Wind from the north-east at 8 m/s', 'Put a 12 m/s wind from the north with gusts of 16 for one minute', 'Remove the wind']
+const INSTRUCTOR_SUGGESTIONS = ['Wind from the north-east at 8 m/s', 'Put a 12 m/s wind from the north for one minute', 'Remove the wind']
 const REPORT_SUGGESTIONS = ['What happened during the flight?', 'Which was the most serious anomaly?', 'What do you recommend?']
 
 type Props = {

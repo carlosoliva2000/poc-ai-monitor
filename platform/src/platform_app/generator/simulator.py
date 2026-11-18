@@ -39,7 +39,7 @@ from poc_contracts.envelope import EventDraft
 from poc_contracts.run_files import TruthFile, TruthSample, TruthWind
 from poc_contracts.scenario import ScenarioConfig
 
-from ..geometry import Point, angle_diff_deg, bearing_deg
+from ..geometry import Point, angle_diff_deg, bearing_deg, project_on_segment
 from . import sensors
 from .controller import STEP_S, Sample, aim_point, build_route
 from .disturbances import CommandWind, Wind, is_hijacked, spoof_offset, spoof_offset_rate, wind_at
@@ -57,6 +57,37 @@ class Flight:
     @property
     def end_n(self) -> int:
         return self.samples[-1].n
+
+
+@dataclass(frozen=True)
+class Aux:
+    """Verdad ampliada de un instante (cada segundo y el último): lo que no cabe en `Sample` y hace
+    falta para `truth.json` y para las etiquetas por faceta (`states.py`)."""
+
+    n: int
+    leg_index: int  # índice del waypoint pendiente en la ruta
+    ref_dist_m: float  # distancia real al tramo pendiente (la referencia del modo en misión)
+    est: Point  # lo que cree el dron: su GPS sin ruido (o la estima, sin GPS)
+    mode: str
+    link_up: bool
+    battery_soc: float
+    gps_sigma_m: float
+    cn0_dbhz: float
+    emitters_active: tuple[str, ...]
+    wind_speed_mps: float
+    wind_from_deg: float
+    gps_mute: bool
+    gps_loss: bool
+    radar_mute: bool
+    meteo_mute: bool
+    link_mute: bool
+    battery_mute: bool
+    spoofing: bool
+    hijack: bool
+    link_latency_ms: float
+    link_loss_pct: float
+    radar_in_range: bool
+    can_reach_home: bool
 
 
 @dataclass(frozen=True)
@@ -129,6 +160,7 @@ class Simulator:
         self.finished = False
         self._faults: dict[tuple[SensorSource, FaultMode], ActiveFault] = {}
         self._queued: list[tuple[SensorSource, ActiveFault, bool]] = []
+        self.aux: dict[int, Aux] = {}  # verdad ampliada por paso (cada segundo y el último)
 
     # --- Estado -------------------------------------------------------------------------------
 
@@ -319,6 +351,7 @@ class Simulator:
             "cruise_speed_mps": d.cruise_speed_mps,
             "altitude_m": d.altitude_m,
             "acceptance_radius_m": d.acceptance_radius_m,
+            "mission_controller_id": self.config.sensors.link.controller_id,
             "waypoints": waypoints,
         }
         return [
@@ -356,6 +389,7 @@ class Simulator:
         if timeout or self._i >= len(self.route):
             self.finished = True
             self.completed = self._i >= len(self.route)
+            self._record_aux()
             if self._events:
                 reason = "returned_to_base" if self.completed else "timeout"
                 payload = {
@@ -369,6 +403,8 @@ class Simulator:
                 faults.append(self._fault_event(source, self._faults[(source, mode)], False))
                 self._end_fault(source, mode)
 
+        if not self.finished and self.n % round(1 / STEP_S) == 0:
+            self._record_aux()
         readings = self._readings() if self._events else []
         if not self.finished:
             self._advance()
@@ -454,13 +490,49 @@ class Simulator:
 
     # --- Verdad -------------------------------------------------------------------------------
 
+    def _record_aux(self) -> None:
+        """Anota la verdad ampliada del instante actual (tras aplicar fallos y comandos)."""
+        n, t, cfg = self.n, self.t, self.config
+        s = self.samples[n]
+        leg = min(self._i, len(self.route) - 1)
+        _, ref = project_on_segment((s.x, s.y), self.route[leg - 1], self.route[leg])
+        hijack = is_hijacked(t, self._hijack)
+        g, b = cfg.sensors.gps, cfg.sensors.battery
+        _, hdop = sensors.gps_quality(cfg, t)
+        w = self._wind(t)
+        down = {src: (src, FaultMode.MUTE) in self._faults for src in SensorSource}
+        self.aux[n] = Aux(
+            n=n,
+            leg_index=leg,
+            ref_dist_m=ref,
+            est=self._believed(),
+            mode="foreign_control" if hijack else "mission",
+            link_up=not (hijack or down[SensorSource.LINK]),
+            battery_soc=max(0.0, min(100.0, b.start_pct - b.drain_pct_per_min * t / 60)),
+            gps_sigma_m=g.sigma_m * hdop / g.hdop,
+            cn0_dbhz=sensors.GNSS_CN0_NOMINAL_DBHZ,
+            emitters_active=(),
+            wind_speed_mps=w.speed_mps,
+            wind_from_deg=w.from_deg,
+            gps_mute=down[SensorSource.GPS],
+            gps_loss=(SensorSource.GPS, FaultMode.LOSS) in self._faults,
+            radar_mute=down[SensorSource.RADAR],
+            meteo_mute=down[SensorSource.METEO],
+            link_mute=down[SensorSource.LINK],
+            battery_mute=down[SensorSource.BATTERY],
+            spoofing=self._spoofing is not None
+            and self._spoofing.start_s <= t < self._spoofing.end_s,
+            hijack=hijack,
+            link_latency_ms=sensors.link_quality(cfg, t)[1],
+            link_loss_pct=0.0,
+            radar_in_range=True,
+            can_reach_home=True,
+        )
+
     def truth(self) -> TruthFile:
         """Trayectoria real y viento real hasta el instante actual (una muestra por segundo más
         la última). Solo para las gráficas, la evaluación y la web: el agente no lo ve."""
-        per_second = round(1 / STEP_S)
-        chosen = [s for s in self.samples if s.n % per_second == 0]
-        if chosen[-1].n != self.samples[-1].n:
-            chosen.append(self.samples[-1])
+        chosen = [s for s in self.samples if s.n in self.aux]  # cada segundo y el último
         return TruthFile(
             duration_s=self.samples[-1].t,
             trajectory=[
@@ -471,15 +543,24 @@ class Simulator:
                     speed_mps=round(s.speed_mps, 2),
                     heading_deg=round(s.heading_deg, 2),
                     course_deg=round(s.course_deg, 2),
+                    leg_index=(a := self.aux[s.n]).leg_index,
+                    ref_dist_m=round(a.ref_dist_m, 2),
+                    est_x=round(a.est[0], 2),
+                    est_y=round(a.est[1], 2),
+                    mode=a.mode,
+                    link_up=a.link_up,
+                    battery_soc=round(a.battery_soc, 2),
+                    gps_sigma_m=round(a.gps_sigma_m, 2),
+                    cn0_dbhz=round(a.cn0_dbhz, 1),
+                    emitters_active=list(a.emitters_active),
                 )
                 for s in chosen
             ],
             wind=[
                 TruthWind(
                     t=s.t,
-                    speed_mps=round((w := self._wind(s.t)).speed_mps, 2),
-                    gust_mps=round(w.gust_mps, 2),
-                    from_deg=round(w.from_deg, 2),
+                    speed_mps=round(self.aux[s.n].wind_speed_mps, 2),
+                    from_deg=round(self.aux[s.n].wind_from_deg, 2),
                 )
                 for s in chosen
             ],

@@ -12,10 +12,6 @@
           "title": "Speed Mps",
           "type": "number"
         },
-        "gust_mps": {
-          "title": "Gust Mps",
-          "type": "number"
-        },
         "remaining_s": {
           "anyOf": [
             {
@@ -31,7 +27,6 @@
       "required": [
         "from_deg",
         "speed_mps",
-        "gust_mps",
         "remaining_s"
       ],
       "title": "ActiveWind",

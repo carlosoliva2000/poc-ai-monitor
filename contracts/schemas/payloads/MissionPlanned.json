@@ -48,6 +48,10 @@
       "title": "Acceptance Radius M",
       "type": "number"
     },
+    "mission_controller_id": {
+      "title": "Mission Controller Id",
+      "type": "string"
+    },
     "waypoints": {
       "items": {
         "$ref": "#/$defs/Waypoint"
@@ -61,6 +65,7 @@
     "cruise_speed_mps",
     "altitude_m",
     "acceptance_radius_m",
+    "mission_controller_id",
     "waypoints"
   ],
   "title": "MissionPlanned",

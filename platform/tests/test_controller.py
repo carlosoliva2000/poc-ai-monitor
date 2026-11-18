@@ -11,7 +11,7 @@ from platform_app.generator.simulator import Flight, fly
 from platform_app.geometry import angle_diff_deg, distance_to_route
 from poc_contracts.scenario import ScenarioConfig
 
-NO_WIND = {"base": {"speed_mps": 0.0, "gust_mps": 0.0, "from_deg": 0.0}, "episodes": []}
+NO_WIND = {"base": {"speed_mps": 0.0, "from_deg": 0.0}, "episodes": []}
 
 
 def straight_leg_config(wind: dict | None = None) -> ScenarioConfig:
@@ -58,7 +58,7 @@ def test_acceleration_and_turn_rate_limits() -> None:
 @pytest.mark.parametrize("wind_mps", [4.0, 6.0])
 def test_crosswind_steady_state_error_matches_lookahead_formula(wind_mps: float) -> None:
     """Con viento lateral `w` el error estacionario es `lookahead · tan(asin(w / v))`."""
-    wind = {"base": {"speed_mps": wind_mps, "gust_mps": wind_mps, "from_deg": 0.0}, "episodes": []}
+    wind = {"base": {"speed_mps": wind_mps, "from_deg": 0.0}, "episodes": []}
     cfg = straight_leg_config(wind)  # tramo hacia el este, viento del norte: empuja al sur
     flight = fly(cfg, perturbed=True)
     expected = cfg.drone.lookahead_m * math.tan(math.asin(wind_mps / cfg.drone.cruise_speed_mps))

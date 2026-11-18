@@ -2,8 +2,8 @@
 // rangos que `poc_contracts.commands`), texto de una propuesta y viento activo según los eventos.
 import type { Envelope, InstructorCommand, WindParams } from './contracts'
 
-export const LIMITS = { speed: 40, gust: 60, ramp: 120, duration: 1800 } as const
-export const DEFAULTS = { ramp_s: 10, duration_s: 60, gust_factor: 1.3 } as const
+export const LIMITS = { speed: 40, ramp: 120, duration: 1800 } as const
+export const DEFAULTS = { ramp_s: 10, duration_s: 60 } as const
 
 /** Los 16 rumbos de la rosa, cada 22,5°. El viento se nombra por **de dónde viene**. */
 export const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'] as const
@@ -35,21 +35,20 @@ export function describeDuration(duration_s: number | null): string {
   return duration_s === null ? 'until cancelled' : `${num(duration_s)} s`
 }
 
-/** «Wind from NE (45°), 8 m/s, gusts 10.4 m/s, 60 s, ramp 10 s». */
+/** «Wind from NE (45°), 8 m/s, 60 s, ramp 10 s». */
 export function describeWind(p: WindParams): string {
-  return `Wind from ${describeFrom(p.from_deg)}, ${num(p.speed_mps)} m/s, gusts ${num(p.gust_mps)} m/s, ${describeDuration(p.duration_s)}, ramp ${num(p.ramp_s)} s`
+  return `Wind from ${describeFrom(p.from_deg)}, ${num(p.speed_mps)} m/s, ${describeDuration(p.duration_s)}, ramp ${num(p.ramp_s)} s`
 }
 
 /** Campos del formulario (texto, para poder escribir con comodidad). */
-export type WindForm = { from_deg: string; speed_mps: string; gust_mps: string; ramp_s: string; duration_s: string; untilCancelled: boolean }
+export type WindForm = { from_deg: string; speed_mps: string; ramp_s: string; duration_s: string; untilCancelled: boolean }
 
-export const EMPTY_FORM: WindForm = { from_deg: '0', speed_mps: '8', gust_mps: '10.4', ramp_s: String(DEFAULTS.ramp_s), duration_s: String(DEFAULTS.duration_s), untilCancelled: false }
+export const EMPTY_FORM: WindForm = { from_deg: '0', speed_mps: '8', ramp_s: String(DEFAULTS.ramp_s), duration_s: String(DEFAULTS.duration_s), untilCancelled: false }
 
 export function formFromParams(p: WindParams): WindForm {
   return {
     from_deg: num(p.from_deg),
     speed_mps: num(p.speed_mps),
-    gust_mps: num(p.gust_mps),
     ramp_s: num(p.ramp_s),
     duration_s: p.duration_s === null ? EMPTY_FORM.duration_s : num(p.duration_s),
     untilCancelled: p.duration_s === null,
@@ -71,12 +70,10 @@ export function parseForm(f: WindForm): ParsedForm {
   const errors: string[] = []
   const from = field('Direction', f.from_deg, 0, 360, errors)
   const speed = field('Speed', f.speed_mps, 0, LIMITS.speed, errors)
-  const gust = field('Gust', f.gust_mps, 0, LIMITS.gust, errors)
   const ramp = field('Ramp', f.ramp_s, 0, LIMITS.ramp, errors, true)
   const duration = f.untilCancelled ? null : field('Duration', f.duration_s, 0, LIMITS.duration, errors, true)
-  if (errors.length === 0 && gust < speed) errors.push('Gust: must be at least the speed')
   if (errors.length > 0) return { ok: false, errors }
-  return { ok: true, params: { from_deg: from % 360, speed_mps: speed, gust_mps: gust, ramp_s: ramp, duration_s: duration } }
+  return { ok: true, params: { from_deg: from % 360, speed_mps: speed, ramp_s: ramp, duration_s: duration } }
 }
 
 export type ActiveWind = { params: WindParams; since: number; endsAt: number | null; issuedBy: InstructorCommand['issued_by'] }

@@ -1,8 +1,38 @@
 {
   "$defs": {
+    "TruthEmitter": {
+      "additionalProperties": false,
+      "description": "Emisor o estación ajena con posición: solo en la verdad y en la vista del instructor.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "x",
+        "y"
+      ],
+      "title": "TruthEmitter",
+      "type": "object"
+    },
     "TruthSample": {
       "additionalProperties": false,
-      "description": "Estado real cada segundo. `course_deg`: rumbo sobre el suelo; `heading_deg`: el del morro.",
+      "description": "Estado real cada segundo (verdad ampliada, v1.0). `course_deg`: rumbo sobre el suelo;\n`heading_deg`: el del morro. El resto es lo que hace falta para etiquetar y evaluar:\n`leg_index` (índice del waypoint pendiente en la ruta), `ref_dist_m` (distancia real a la\nreferencia del modo: el tramo pendiente en misión), `est_x`/`est_y` (estima del dron),\n`mode` (modo del autopiloto), `link_up` (llegan los paquetes del dron a nuestra estación),\n`battery_soc` (carga real, %), `gps_sigma_m` (σ real de la posición del receptor), `cn0_dbhz`\n(C/N0 real) y `emitters_active` (ids de los emisores activos).",
       "properties": {
         "t": {
           "title": "T",
@@ -27,6 +57,49 @@
         "course_deg": {
           "title": "Course Deg",
           "type": "number"
+        },
+        "leg_index": {
+          "title": "Leg Index",
+          "type": "integer"
+        },
+        "ref_dist_m": {
+          "title": "Ref Dist M",
+          "type": "number"
+        },
+        "est_x": {
+          "title": "Est X",
+          "type": "number"
+        },
+        "est_y": {
+          "title": "Est Y",
+          "type": "number"
+        },
+        "mode": {
+          "title": "Mode",
+          "type": "string"
+        },
+        "link_up": {
+          "title": "Link Up",
+          "type": "boolean"
+        },
+        "battery_soc": {
+          "title": "Battery Soc",
+          "type": "number"
+        },
+        "gps_sigma_m": {
+          "title": "Gps Sigma M",
+          "type": "number"
+        },
+        "cn0_dbhz": {
+          "title": "Cn0 Dbhz",
+          "type": "number"
+        },
+        "emitters_active": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Emitters Active",
+          "type": "array"
         }
       },
       "required": [
@@ -35,14 +108,24 @@
         "y",
         "speed_mps",
         "heading_deg",
-        "course_deg"
+        "course_deg",
+        "leg_index",
+        "ref_dist_m",
+        "est_x",
+        "est_y",
+        "mode",
+        "link_up",
+        "battery_soc",
+        "gps_sigma_m",
+        "cn0_dbhz",
+        "emitters_active"
       ],
       "title": "TruthSample",
       "type": "object"
     },
     "TruthWind": {
       "additionalProperties": false,
-      "description": "Viento real (media y racha) cada segundo, con `from_deg` de procedencia.",
+      "description": "Viento real medio cada segundo, con `from_deg` de procedencia.",
       "properties": {
         "t": {
           "title": "T",
@@ -50,10 +133,6 @@
         },
         "speed_mps": {
           "title": "Speed Mps",
-          "type": "number"
-        },
-        "gust_mps": {
-          "title": "Gust Mps",
           "type": "number"
         },
         "from_deg": {
@@ -64,7 +143,6 @@
       "required": [
         "t",
         "speed_mps",
-        "gust_mps",
         "from_deg"
       ],
       "title": "TruthWind",
@@ -90,6 +168,13 @@
         "$ref": "#/$defs/TruthWind"
       },
       "title": "Wind",
+      "type": "array"
+    },
+    "emitters": {
+      "items": {
+        "$ref": "#/$defs/TruthEmitter"
+      },
+      "title": "Emitters",
       "type": "array"
     }
   },

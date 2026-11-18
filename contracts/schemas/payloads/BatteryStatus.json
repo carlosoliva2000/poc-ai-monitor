@@ -4,15 +4,10 @@
     "battery_pct": {
       "title": "Battery Pct",
       "type": "number"
-    },
-    "voltage_v": {
-      "title": "Voltage V",
-      "type": "number"
     }
   },
   "required": [
-    "battery_pct",
-    "voltage_v"
+    "battery_pct"
   ],
   "title": "BatteryStatus",
   "type": "object"

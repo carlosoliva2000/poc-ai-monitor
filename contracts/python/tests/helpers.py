@@ -7,7 +7,7 @@ from poc_contracts.topics import EVENT_SPECS, asset_for, source_for, topic_for
 
 POSITION = {
     "x": 512.3, "y": 140.8, "alt_m": 60.2, "speed_mps": 15.1,
-    "heading_deg": 81.0, "fix": "3d", "sats": 14, "hdop": 0.8,
+    "course_deg": 81.0, "fix": "3d", "sats": 14, "hdop": 0.8,
 }  # fmt: skip
 
 

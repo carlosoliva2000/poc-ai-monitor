@@ -134,15 +134,15 @@ export function payloadSummary(e: Envelope): string {
   const p = e.payload as Record<string, unknown>
   switch (e.type) {
     case 'PositionUpdated':
-      return `x=${n(p.x, 0)} y=${n(p.y, 0)} v=${n(p.speed_mps)} heading=${n(p.heading_deg, 0)}° fix=${p.fix} sats=${p.sats} hdop=${n(p.hdop)}`
+      return `x=${n(p.x, 0)} y=${n(p.y, 0)} v=${n(p.speed_mps)} course=${n(p.course_deg, 0)}° fix=${p.fix} sats=${p.sats} hdop=${n(p.hdop)}`
     case 'TrackUpdated':
-      return `x=${n(p.x, 0)} y=${n(p.y, 0)} v=${n(p.speed_mps)} quality=${n(p.quality, 2)}`
+      return `x=${n(p.x, 0)} y=${n(p.y, 0)} v=${n(p.speed_mps)}`
     case 'WindReported':
-      return `${n(p.speed_mps)} m/s (gust ${n(p.gust_mps)}) from ${n(p.from_deg, 0)}°`
+      return `${n(p.speed_mps)} m/s from ${n(p.from_deg, 0)}°`
     case 'LinkStatus':
       return `${p.controller_id} rssi=${n(p.rssi_dbm, 0)} dBm lat=${n(p.latency_ms, 0)} ms`
     case 'BatteryStatus':
-      return `${n(p.battery_pct, 0)} % · ${n(p.voltage_v)} V`
+      return `${n(p.battery_pct, 0)} %`
     case 'WaypointReached':
       return `${p.waypoint_id}`
     case 'DetectionRaised':

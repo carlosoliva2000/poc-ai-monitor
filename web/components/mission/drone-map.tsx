@@ -549,7 +549,7 @@ export const DroneMap = memo(function DroneMap({ plan, data, truth, live, layers
               <>
                 <span className="text-foreground">{wind.speed_mps.toFixed(1)} m/s</span>
                 <span className="text-muted-foreground">
-                  gust {wind.gust_mps.toFixed(1)} · from {wind.from_deg.toFixed(0)}°
+                  from {wind.from_deg.toFixed(0)}°
                 </span>
               </>
             ) : (

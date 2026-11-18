@@ -7,7 +7,7 @@ import pytest
 from helpers import scenario_config
 from platform_app.generator.build import generate, write_run
 
-FILES = ["plan.json", "truth.json", "labels.json", "events.jsonl"]
+FILES = ["plan.json", "truth.json", "labels.json", "events.jsonl", "states.jsonl"]
 
 
 @pytest.mark.parametrize("name", ["demo", "faults"])

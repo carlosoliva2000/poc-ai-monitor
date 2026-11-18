@@ -10,18 +10,6 @@
       "title": "Speed Mps",
       "type": "number"
     },
-    "gust_mps": {
-      "anyOf": [
-        {
-          "type": "number"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Gust Mps"
-    },
     "duration_s": {
       "anyOf": [
         {

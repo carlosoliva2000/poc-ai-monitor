@@ -37,7 +37,7 @@ export function TelemetryStrip({ data, plan, faults }: Props) {
       value: wind ? wind.speed_mps.toFixed(1) : '—',
       unit: wind ? 'm/s' : undefined,
       suffix: wind ? ` · ${wind.from_deg.toFixed(0)}°` : undefined,
-      title: wind ? `Wind: ${wind.speed_mps.toFixed(1)} m/s from ${wind.from_deg.toFixed(0)}° (gust ${wind.gust_mps.toFixed(1)} m/s)` : 'Wind: no data',
+      title: wind ? `Wind: ${wind.speed_mps.toFixed(1)} m/s from ${wind.from_deg.toFixed(0)}°` : 'Wind: no data',
       dim: muted('meteo'),
     },
     { label: 'LINK', value: link ? link.controller_id : '—', title: link ? `Link: controlled by ${link.controller_id}` : 'Link: no data', dim: muted('link') },

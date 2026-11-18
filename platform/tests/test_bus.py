@@ -21,7 +21,7 @@ def gps(number: int, sim_time: float = 1.0) -> EventDraft:
         "y": 2.0,
         "alt_m": 60.0,
         "speed_mps": 15.0,
-        "heading_deg": 10.0,
+        "course_deg": 10.0,
         "fix": "3d",
         "sats": 14,
         "hdop": 0.8,
@@ -30,7 +30,7 @@ def gps(number: int, sim_time: float = 1.0) -> EventDraft:
 
 
 def wind(number: int, sim_time: float = 10.0) -> EventDraft:
-    payload = {"station_id": "meteo-1", "speed_mps": 2.0, "gust_mps": 3.0, "from_deg": 300.0}
+    payload = {"speed_mps": 2.0, "from_deg": 300.0}
     return make_event(CONFIG, EventType.WIND_REPORTED, sim_time, number, payload)
 
 

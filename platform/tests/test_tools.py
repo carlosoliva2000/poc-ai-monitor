@@ -103,9 +103,7 @@ def test_get_events_compact_format_and_limits(runs_dir: Path) -> None:
         "type",
         "sim_time",
         "t",
-        "station_id",
         "speed_mps",
-        "gust_mps",
         "from_deg",
     }
     assert len(call_tool(ctx, "get_events", {"source": "gps", "last_n": 500})["events"]) == 50
@@ -295,7 +293,7 @@ def test_track_metrics_wind_of_the_same_window(runs_dir: Path) -> None:
     )
     wind = metrics.wind
     assert wind is not None and wind.samples == 3  # un WindReported cada 10 s
-    assert wind.mean_speed_mps >= 5 and wind.max_gust_mps >= 8  # el episodio es viento notable
+    assert wind.mean_speed_mps >= 5  # el episodio es viento notable
     assert wind.wind_to_deg == pytest.approx((wind.from_deg + 180) % 360, abs=0.2)
     assert metrics.drift_direction_deg is not None
     expected = abs(metrics.drift_direction_deg - wind.wind_to_deg) % 360
@@ -313,7 +311,7 @@ def test_track_metrics_wind_is_weak_and_not_aligned_in_the_hijack(runs_dir: Path
         call_tool(ctx, "get_track_metrics", {"since": 310, "until": 340})
     )
     assert metrics.wind is not None
-    assert metrics.wind.mean_speed_mps < 5 and metrics.wind.max_gust_mps < 8
+    assert metrics.wind.mean_speed_mps < 5
 
 
 def test_track_metrics_wind_is_null_without_meteo_in_the_window(runs_dir: Path) -> None:
@@ -332,7 +330,7 @@ def test_wind_helpers() -> None:
 
 
 def test_computed_facts_wind(runs_dir: Path) -> None:
-    """`notable` (media ≥ 5 o racha ≥ 8) y `with_drift` (≤ 45°) los calcula la plataforma."""
+    """`notable` (media ≥ 5 m/s, sin racha) y `with_drift` (≤ 45°) los calcula la plataforma."""
     _, ctx = at(runs_dir, "wind", 150.0)
     windy = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 120, "until": 150})
@@ -347,7 +345,9 @@ def test_computed_facts_wind(runs_dir: Path) -> None:
     rising = TrackMetrics.model_validate(
         call_tool(ctx, "get_track_metrics", {"since": 76, "until": 106})
     )
-    assert rising.wind.notable and rising.wind.mean_speed_mps < 5  # notable por la racha (9,7)
+    assert (
+        not rising.wind.notable and rising.wind.mean_speed_mps < 5
+    )  # sin racha, la subida aún no lo es
 
 
 def test_computed_facts_gps_radar_and_max_step(runs_dir: Path) -> None:
@@ -406,7 +406,6 @@ def test_now_block_is_the_last_sample_not_the_window_aggregate(runs_dir: Path) -
     assert now.gps_deviation_from_plan_m is not None and now.gps_deviation_from_plan_m > 10
     wind = call_tool(ctx, "get_events", {"source": "meteo", "last_n": 1})["events"][0]
     assert now.wind_speed_mps == pytest.approx(wind["speed_mps"], abs=0.05)
-    assert now.wind_gust_mps == pytest.approx(wind["gust_mps"], abs=0.05)
     assert now.wind_from_deg == pytest.approx(wind["from_deg"], abs=0.05)
     assert now.wind is not None and now.wind.startswith("from ") and ", pushing " in now.wind
 

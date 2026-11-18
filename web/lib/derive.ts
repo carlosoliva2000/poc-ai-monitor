@@ -90,7 +90,7 @@ export function derive(events: Envelope[]): Derived {
     switch (e.type) {
       case 'PositionUpdated': {
         const p = e.payload as unknown as Position
-        gps.push({ t: e.sim_time, x: p.x, y: p.y, heading: p.heading_deg, speed: p.speed_mps, alt: p.alt_m, fix: p.fix, sats: p.sats, hdop: p.hdop })
+        gps.push({ t: e.sim_time, x: p.x, y: p.y, heading: p.course_deg, speed: p.speed_mps, alt: p.alt_m, fix: p.fix, sats: p.sats, hdop: p.hdop })
         break
       }
       case 'TrackUpdated': {

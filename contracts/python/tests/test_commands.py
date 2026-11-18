@@ -12,7 +12,7 @@ from poc_contracts.scenario import ScenarioConfig
 from poc_contracts.topics import client_can_publish, topic_for
 from poc_contracts.ws import ClientMessage
 
-PARAMS = {"from_deg": 45.0, "speed_mps": 8.0, "gust_mps": 10.4, "ramp_s": 10.0, "duration_s": 60.0}
+PARAMS = {"from_deg": 45.0, "speed_mps": 8.0, "ramp_s": 10.0, "duration_s": 60.0}
 EVENT = {"command": "set_wind", "params": PARAMS, "issued_by": "panel", "text": None}
 
 
@@ -28,8 +28,8 @@ def test_instructor_command_event_is_a_sim_event_of_the_platform() -> None:
 
 
 def test_wind_command_ranges() -> None:
-    assert WindCommandParams.model_validate({**PARAMS, "speed_mps": 40.0, "gust_mps": 60.0})
-    for bad in ({"speed_mps": 40.1}, {"gust_mps": 7.9}, {"ramp_s": 0}, {"duration_s": 1801}):
+    assert WindCommandParams.model_validate({**PARAMS, "speed_mps": 40.0})
+    for bad in ({"speed_mps": 40.1}, {"ramp_s": 0}, {"duration_s": 1801}):
         with pytest.raises(ValidationError):
             WindCommandParams.model_validate({**PARAMS, **bad})
     with pytest.raises(ValidationError):  # todos los campos son obligatorios

@@ -22,7 +22,6 @@ def params(**kw: float | None) -> WindCommandParams:
     base = {
         "from_deg": 0.0,
         "speed_mps": 12.0,
-        "gust_mps": 16.0,
         "ramp_s": 10.0,
         "duration_s": 60.0,
     }
@@ -60,10 +59,8 @@ def live() -> Simulator:
 @pytest.mark.parametrize(
     "bad",
     [
-        {"speed_mps": 41.0, "gust_mps": 45.0},  # por encima de 40 m/s
+        {"speed_mps": 41.0},  # por encima de 40 m/s
         {"speed_mps": -1.0},
-        {"speed_mps": 10.0, "gust_mps": 9.0},  # racha menor que la velocidad
-        {"gust_mps": 61.0},
         {"from_deg": 361.0},
         {"ramp_s": 0.0},
         {"ramp_s": 121.0},
@@ -77,7 +74,7 @@ def test_wind_params_are_validated(bad: dict) -> None:
 
 
 def test_wind_params_accept_the_limits_and_normalize_360() -> None:
-    p = params(from_deg=360.0, speed_mps=40.0, gust_mps=40.0, duration_s=None)
+    p = params(from_deg=360.0, speed_mps=40.0, duration_s=None)
     assert p.from_deg == 0.0 and p.duration_s is None
 
 
@@ -96,14 +93,13 @@ def test_command_needs_params_only_when_it_sets_wind() -> None:
 
 
 def test_command_wind_ramps_holds_and_returns_to_the_scenario_wind() -> None:
-    base = scenario_config("nominal").wind  # 2 m/s, racha 3,5, del 300°
-    c = CommandWind(100.0, params())  # 12 m/s, racha 16, del N, 60 s, rampa 10 s
+    base = scenario_config("nominal").wind  # 2 m/s, del 300°
+    c = CommandWind(100.0, params())  # 12 m/s, del N, 60 s, rampa 10 s
     assert wind_at(99.0, base, [c]) == wind_at(99.0, base)
     assert wind_at(100.0, base, [c]).speed_mps == pytest.approx(2.0)  # arranca en el viento base
     assert wind_at(105.0, base, [c]).speed_mps == pytest.approx(7.0)
-    assert wind_at(105.0, base, [c]).gust_mps == pytest.approx(9.75)
     full = wind_at(130.0, base, [c])
-    assert (full.speed_mps, full.gust_mps, full.from_deg) == (12.0, 16.0, 0.0)
+    assert (full.speed_mps, full.from_deg) == (12.0, 0.0)
     assert wind_at(155.0, base, [c]).speed_mps == pytest.approx(7.0)  # baja con la misma rampa
     assert wind_at(160.5, base, [c]) == wind_at(160.5, base)  # acabó: el del escenario
 
@@ -116,9 +112,9 @@ def test_command_wind_without_duration_lasts_until_cancelled() -> None:
 
 def test_command_wind_replaces_the_scenario_episode() -> None:
     wind = scenario_config("wind").wind  # episodio de 12 m/s del 350° entre 95 y 150 s
-    c = CommandWind(100.0, params(from_deg=90.0, speed_mps=5.0, gust_mps=6.0, ramp_s=5.0))
+    c = CommandWind(100.0, params(from_deg=90.0, speed_mps=5.0, ramp_s=5.0))
     w = wind_at(120.0, wind, [c])
-    assert (w.speed_mps, w.gust_mps, w.from_deg) == (5.0, 6.0, 90.0)  # no se suma al episodio
+    assert (w.speed_mps, w.from_deg) == (5.0, 90.0)  # no se suma al episodio
 
 
 # --- Simulador en directo -----------------------------------------------------------------------
@@ -143,7 +139,7 @@ def test_live_command_publishes_its_event_and_the_station_measures_it() -> None:
         if e.type == EventType.WIND_REPORTED and 60.0 <= e.sim_time <= 80.0
     ]
     assert len(full) == 3  # T+60, T+70 y T+80
-    assert all(10.0 < w["speed_mps"] < 14.0 and w["gust_mps"] > 13.0 for w in full)
+    assert all(10.0 < w["speed_mps"] < 14.0 for w in full)
     assert all(min(w["from_deg"], 360.0 - w["from_deg"]) < 30.0 for w in full)  # del norte
     truth = sim.truth().wind
     assert next(w for w in truth if w.t == 60.0).speed_mps == 12.0
@@ -153,7 +149,7 @@ def test_live_command_publishes_its_event_and_the_station_measures_it() -> None:
 def test_live_command_pushes_the_drone() -> None:
     plain, windy = live(), live()
     fly(plain, 100.0)
-    body = set_wind(speed_mps=16.0, gust_mps=20.0, from_deg=270.0)
+    body = set_wind(speed_mps=16.0, from_deg=270.0)
     fly(windy, 40.0)
     windy.apply_command(body, body.issued_by, body.text)
     fly(windy, 60.0)
@@ -196,7 +192,7 @@ def test_a_new_set_wind_replaces_the_previous_one_without_a_jump() -> None:
     sim.apply_command(set_wind(duration_s=None), CommandIssuer.PANEL)  # 12 m/s sin fin
     fly(sim, 40.0)
     sim.apply_command(
-        set_wind(from_deg=90.0, speed_mps=6.0, gust_mps=8.0, ramp_s=10.0, duration_s=30.0),
+        set_wind(from_deg=90.0, speed_mps=6.0, ramp_s=10.0, duration_s=30.0),
         CommandIssuer.PANEL,
     )
     fly(sim, 60.0)

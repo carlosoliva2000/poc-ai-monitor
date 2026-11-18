@@ -1,16 +1,8 @@
 {
   "additionalProperties": false,
   "properties": {
-    "station_id": {
-      "title": "Station Id",
-      "type": "string"
-    },
     "speed_mps": {
       "title": "Speed Mps",
-      "type": "number"
-    },
-    "gust_mps": {
-      "title": "Gust Mps",
       "type": "number"
     },
     "from_deg": {
@@ -19,9 +11,7 @@
     }
   },
   "required": [
-    "station_id",
     "speed_mps",
-    "gust_mps",
     "from_deg"
   ],
   "title": "WindReported",

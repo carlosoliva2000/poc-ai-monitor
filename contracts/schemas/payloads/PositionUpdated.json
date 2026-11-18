@@ -28,8 +28,8 @@
       "title": "Speed Mps",
       "type": "number"
     },
-    "heading_deg": {
-      "title": "Heading Deg",
+    "course_deg": {
+      "title": "Course Deg",
       "type": "number"
     },
     "fix": {
@@ -49,7 +49,7 @@
     "y",
     "alt_m",
     "speed_mps",
-    "heading_deg",
+    "course_deg",
     "fix",
     "sats",
     "hdop"

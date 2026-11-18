@@ -20,7 +20,7 @@ def ev(kind: str, payload: dict, t: float = 1.0) -> dict:
 
 
 def gps(t: float, x: float, y: float, fix: str = "3d") -> dict:
-    p = {"x": x, "y": y, "alt_m": 60.0, "speed_mps": 15.0, "heading_deg": 90.0, "fix": fix,
+    p = {"x": x, "y": y, "alt_m": 60.0, "speed_mps": 15.0, "course_deg": 90.0, "fix": fix,
          "sats": 14, "hdop": 0.8}  # fmt: skip
     return ev("PositionUpdated", p, t)
 
@@ -80,7 +80,7 @@ def test_radar_points_wind_and_bounds() -> None:
     for k in range(60):
         s.apply_message(ev("TrackUpdated", {"x": float(k), "y": 0.0}, k))
     assert len(s.radar) == 45
-    s.apply_message(ev("WindReported", {"speed_mps": 12.0, "gust_mps": 15, "from_deg": 0.0}, 10))
+    s.apply_message(ev("WindReported", {"speed_mps": 12.0, "from_deg": 0.0}, 10))
     assert s.wind_text().startswith("wind 12.0 m/s from 0°")
     wx, wy = s.wind_vector()
     assert (round(wx, 6), round(wy, 6)) == (0.0, -1.0)  # viento del norte: sopla hacia el sur

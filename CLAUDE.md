@@ -70,3 +70,5 @@ Las fases 0 y 1 van en secuencia, en la sesión principal. Con los contratos con
 - Algo exige `sudo`, arrancar vLLM fuera de `serve.sh` o de los perfiles, o salir de las carpetas permitidas.
 - Hace falta cambiar un contrato, o un escenario no puede producir lo que pide la tabla 4.4 de la definición.
 - El modelo no consigue diagnosticar una anomalía tras ajustar prompts y skills de forma razonable (documenta qué probaste; **no** cambies de modelo fuera de los perfiles de `model-profiles/`).
+
+- **E7a · simulador v2** (contrato v1.0, en curso; especificación del núcleo v2): el simulador se rehace (multirrotor, estimador a bordo, receptor GNSS, radar y estación con geometría, enlace con física y failsafe, batería con consumo) y el generador escribe la verdad ampliada y `states.jsonl` (estado de cada faceta por segundo). **El módulo de IA está congelado hasta la E7c**: no se adapta; sus tests pendientes están listados en `ai-module-py/tests/conftest.py`. La plataforma y la web funcionan sin él (`python -m platform_app.run --scenario demo --no-ai`). Detalle y estado en `docs/fases/e7a.md`.

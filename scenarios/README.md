@@ -19,7 +19,9 @@ Cada YAML describe una misión completa y es **determinista** con su `seed`. Tod
 - `drone`: velocidad de crucero, aceleración máxima, velocidad de giro máxima, altitud, radio de aceptación de waypoint y `lookahead_m` (distancia del punto de mira: el dron apunta a un punto situado `lookahead_m` por delante de su posición proyectada sobre el tramo pendiente).
 - `mission`: `id`, `waypoints` (la base `BASE` está en (0, 0) y se añade al principio y, con `return_to_base: true`, al final).
 - `sensors`: periodo y ruido de cada fuente (ver `contracts/eventos.md`).
-- `wind.base` (constante) y `wind.episodes` (con rampa de subida y bajada de `ramp_s`). `from_deg` es la **procedencia**.
+- `wind.base` (constante) y `wind.episodes` (con rampa de subida y bajada de `ramp_s`). `from_deg` es la **procedencia**. Sin racha desde el contrato v1.0.
+- `drone.wind_limit_mps` (opcional, v1.0; por defecto 12 ⚠️): viento máximo con el que el dron mantiene la ruta; por encima, `environment.wind` vale `beyond_limit`.
+- `labeling` (opcional, v1.0): umbrales operativos de las etiquetas por faceta (`states.jsonl`): viento notable, σ del GPS y latencia o pérdida del enlace para «degradada», 25/15 m de la situación del dron y niveles de la batería. Valores de partida ⚠️ en `contracts/eventos.md` §8.7.
 - `commands` (lista, opcional; v0.18): comandos del instructor programados, `{at_s, command, params}` con `command` = `set_wind` | `cancel_wind` y `params` = `{from_deg, speed_mps, gust_mps, ramp_s, duration_s}` (`null` en `cancel_wind`). Un `set_wind` es un episodio de viento que **sustituye** al que haya (con su rampa); `duration_s: null` dura hasta un `cancel_wind` (que baja con la rampa) o el fin del vuelo. Publica `InstructorCommand` con `issued_by: scenario` y genera su etiqueta de viento (ventana: del comando a su fin).
 - `spoofing` (o `null`): desde `start_s` hasta `end_s`, el GPS reportado = real + desfase que crece a `drift_rate_mps` en la dirección `direction_deg`. En `end_s` el desfase vuelve a cero de golpe.
 - `faults` (lista, puede estar vacía): `{source, mode, start_s, end_s}` con `source` = `gps` | `radar` | `meteo` | `link` | `battery` y `mode` = `mute` | `loss`. Con `mute` la fuente deja de publicarse en la ventana (el dron vuela igual). `loss` solo existe para el GPS: el dron navega a estima (integra su velocidad respecto al aire, sin conocer el viento), el GPS publica la posición estimada con `fix: none`, `sats: 0` y `hdop` alto, y la trayectoria real se va desviando; al terminar, la posición salta a la real. Cada fallo publica `FaultInjected`/`FaultCleared` (`origin: scenario`). Los fallos manuales (modo interactivo) hacen lo mismo, pero los activa el usuario en directo.
@@ -58,7 +60,8 @@ Escenario completo de ejemplo: `platform/tests/data/degradations-example.yaml` (
 
 ## Salida del generador (`runs/<escenario>/`)
 - `plan.json`: waypoints y trayectoria planificada (vuelo sin perturbaciones; `t, x, y, speed_mps, heading_deg` cada segundo).
-- `truth.json`: trayectoria real (`t, x, y, speed_mps, heading_deg, course_deg` cada segundo) y viento real. **El agente no la ve.**
+- `truth.json`: trayectoria real (`t, x, y, speed_mps, heading_deg, course_deg` cada segundo) con la **verdad ampliada** de la v1.0 (tramo pendiente, distancia a la referencia del modo, estima, modo, enlace, carga, σ real del GPS, C/N0 y emisores) y el viento real. **El agente no la ve.**
+- `states.jsonl` (v1.0): el estado de cada faceta por segundo (`gps.availability`… `drone.cause`), con `n/a` y `?` explícitos; `scenario_states.png` lo dibuja. Solo para el generador, la evaluación y la vista del instructor.
 - `events.jsonl`: eventos a publicar, ordenados por `sim_time` (sin `seq` ni `ingestion_time`).
 - `labels.json`: una entrada por anomalía, generada a partir del YAML:
 ```json
@@ -68,7 +71,7 @@ Escenario completo de ejemplo: `platform/tests/data/degradations-example.yaml` (
 ```
 `eval_window` = de `start_s` a `end_s + 60`: una alerta con la causa esperada dentro de esa ventana cuenta como acierto. Para el spoofing también vale la alerta de recuperación (`GPS_SPOOFING`) tras `end_s`. Para cada fallo programado (`F1`, `F2`… por orden de inicio; la ventana es `[start_s, end_s)`): `{"id": "F1", "type": "source_silent", "source": "radar", "start_s": 120.0, "end_s": 180.0, "expected_rules": ["SOURCE_SILENT"], "expected_cause": "SENSOR_FAULT", "also_accepted_causes": [], "eval_window": [120.0, 240.0]}`. Una pérdida de GPS (`type: gps_loss`) espera `["GPS_DEGRADED", "SOURCE_DISCREPANCY", "ROUTE_DEVIATION"]` y la causa `GPS_JAMMING` (también vale `SENSOR_FAULT`, en `also_accepted_causes`); el `ROUTE_DEVIATION` es el de la recuperación, cuando el GPS salta a la posición real.
 - `unlabeled_episodes.json`: solo si el escenario tiene episodios de degradación con `labeled: false` (ver arriba). Como `labels.json`, solo lo usa la evaluación.
-- `plan_xy.png`, `scenario_xy.png`, `scenario_time.png` (con `plot_scenario.py`).
+- `plan_xy.png`, `scenario_xy.png`, `scenario_time.png` y `scenario_states.png` (con `plot_scenario.py`).
 
 ## Criterios de aceptación del generador
 Entre paréntesis, los valores de referencia de una simulación de la misma física sin sensores ni ruido.

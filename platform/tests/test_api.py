@@ -518,7 +518,6 @@ WIND_COMMAND = {
     "params": {
         "from_deg": 0.0,
         "speed_mps": 12.0,
-        "gust_mps": 16.0,
         "ramp_s": 10.0,
         "duration_s": 60.0,
     },
@@ -567,7 +566,7 @@ def test_instructor_command_over_the_websocket(client: TestClient) -> None:
 
         bad = {
             **WIND_COMMAND,
-            "params": {**WIND_COMMAND["params"], "speed_mps": 50.0, "gust_mps": 51.0},
+            "params": {**WIND_COMMAND["params"], "speed_mps": 50.0},
         }
         assert control(ws, "instructor", bad)[0]["message"].startswith("invalid message")
         scenario = {**WIND_COMMAND, "issued_by": "scenario"}

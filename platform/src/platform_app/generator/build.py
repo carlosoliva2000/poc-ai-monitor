@@ -5,7 +5,7 @@ intervenciones: el reproductor en directo produce exactamente los mismos.
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from poc_contracts.enums import (
@@ -27,10 +27,12 @@ from poc_contracts.run_files import (
     UnlabeledEpisodesFile,
 )
 from poc_contracts.scenario import FaultConfig, GpsEpisode, LinkEpisode, ScenarioConfig
+from poc_contracts.states import StateRow
 
 from ..paths import RUNS_DIR
 from .controller import STEP_S
 from .simulator import Flight, Simulator, fly, plan_etas
+from .states import compute_states
 
 EVAL_MARGIN_S = 60.0  # la ventana de evaluación acaba 60 s después de la anomalía
 UNLABELED_FILE = "unlabeled_episodes.json"
@@ -47,6 +49,8 @@ class Run:
     labels: LabelsFile
     unlabeled: UnlabeledEpisodesFile | None = None
     """Episodios de degradación con `labeled: false` (`None` si no hay ninguno)."""
+    states: list[StateRow] = field(default_factory=list)
+    """Estado de cada faceta por segundo (`states.jsonl`, v1.0)."""
 
 
 def _wind_command_windows(config: ScenarioConfig, end_s: float) -> list[tuple[float, float]]:
@@ -274,9 +278,9 @@ def _plan_file(config: ScenarioConfig, plan: Flight, etas: list[float]) -> PlanF
 def plan_for(config: ScenarioConfig) -> tuple[PlanFile, list[float]]:
     """`plan.json` del escenario (vuelo sin perturbaciones) y los `eta_s` de la ruta."""
     plan = fly(config, perturbed=False)
-    if not plan.completed:
-        raise ValueError("the plan is not completed within max_duration_s")
-    etas = plan_etas(plan)
+    etas = plan_etas(plan)  # un plan que no cabe termina por tiempo (no es un error): los puntos
+    # sin alcanzar llevan como `eta_s` la duración del plan
+    etas = [e if e > 0.0 or i == 0 else plan.samples[-1].t for i, e in enumerate(etas)]
     return _plan_file(config, plan, etas), etas
 
 
@@ -288,14 +292,21 @@ def generate(config: ScenarioConfig) -> Run:
     while not sim.finished:
         events += sim.step()
     end_s = sim.samples[-1].t
+    times = {n: sim.samples[n].t for n in sim.aux}
     return Run(
-        config.name, plan, sim.truth(), events, _labels(config, end_s), _unlabeled(config, end_s)
+        config.name,
+        plan,
+        sim.truth(),
+        events,
+        _labels(config, end_s),
+        _unlabeled(config, end_s),
+        compute_states(config, sim.aux, times),
     )
 
 
 def write_run(run: Run, out_dir: Path | None = None) -> Path:
-    """Escribe `plan.json`, `truth.json`, `events.jsonl`, `labels.json` y, si hay episodios sin
-    etiqueta, `unlabeled_episodes.json` (si no los hay, no queda ninguno de antes)."""
+    """Escribe `plan.json`, `truth.json`, `events.jsonl`, `states.jsonl`, `labels.json` y, si hay
+    episodios sin etiqueta, `unlabeled_episodes.json` (si no los hay, no queda ninguno de antes)."""
     out = out_dir if out_dir is not None else RUNS_DIR / run.name
     out.mkdir(parents=True, exist_ok=True)
     (out / "plan.json").write_text(run.plan.model_dump_json() + "\n", encoding="utf-8")
@@ -303,6 +314,8 @@ def write_run(run: Run, out_dir: Path | None = None) -> Path:
     (out / "labels.json").write_text(run.labels.model_dump_json(indent=2) + "\n", encoding="utf-8")
     lines = "".join(e.model_dump_json() + "\n" for e in run.events)
     (out / "events.jsonl").write_text(lines, encoding="utf-8")
+    rows = "".join(r.model_dump_json() + "\n" for r in run.states)
+    (out / "states.jsonl").write_text(rows, encoding="utf-8")
     unlabeled = out / UNLABELED_FILE
     if run.unlabeled is not None:
         unlabeled.write_text(run.unlabeled.model_dump_json(indent=2) + "\n", encoding="utf-8")

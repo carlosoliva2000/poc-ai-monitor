@@ -52,6 +52,7 @@ class MissionPlanned(Payload):
     cruise_speed_mps: float
     altitude_m: float
     acceptance_radius_m: float
+    mission_controller_id: str
     waypoints: list[Waypoint]
 
 
@@ -75,25 +76,21 @@ class PositionUpdated(Payload):
     y: float
     alt_m: float
     speed_mps: float
-    heading_deg: float
+    course_deg: float
     fix: GpsFix
     sats: int
     hdop: float
 
 
 class TrackUpdated(Payload):
-    radar_id: str
     x: float
     y: float
     speed_mps: float
     course_deg: float
-    quality: float
 
 
 class WindReported(Payload):
-    station_id: str
     speed_mps: float
-    gust_mps: float
     from_deg: float
 
 
@@ -105,7 +102,6 @@ class LinkStatus(Payload):
 
 class BatteryStatus(Payload):
     battery_pct: float
-    voltage_v: float
 
 
 # --- Del reproductor -------------------------------------------------------------------------
@@ -342,7 +338,6 @@ class ActiveWind(Payload):
 
     from_deg: float
     speed_mps: float
-    gust_mps: float
     remaining_s: float | None
 
 

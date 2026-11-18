@@ -132,17 +132,6 @@
           ],
           "title": "Wind Speed Mps"
         },
-        "wind_gust_mps": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Wind Gust Mps"
-        },
         "wind_from_deg": {
           "anyOf": [
             {
@@ -213,7 +202,6 @@
         "gps_deviation_from_plan_m",
         "radar_deviation_from_plan_m",
         "wind_speed_mps",
-        "wind_gust_mps",
         "wind_from_deg",
         "wind"
       ],
@@ -300,10 +288,6 @@
           "title": "Mean Speed Mps",
           "type": "number"
         },
-        "max_gust_mps": {
-          "title": "Max Gust Mps",
-          "type": "number"
-        },
         "from_deg": {
           "title": "From Deg",
           "type": "number"
@@ -342,7 +326,6 @@
       },
       "required": [
         "mean_speed_mps",
-        "max_gust_mps",
         "from_deg",
         "wind_to_deg",
         "drift_vs_wind_deg",

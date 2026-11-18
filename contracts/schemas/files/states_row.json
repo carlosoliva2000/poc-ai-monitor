@@ -1,0 +1,31 @@
+{
+  "additionalProperties": false,
+  "description": "Una fila de `states.jsonl`: `facets` es lo que se entrena y evalúa; `hidden` guarda, para\nlas facetas con `?`, el estado que habría tenido (para la vista del instructor).",
+  "properties": {
+    "t": {
+      "title": "T",
+      "type": "number"
+    },
+    "facets": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Facets",
+      "type": "object"
+    },
+    "hidden": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "title": "Hidden",
+      "type": "object"
+    }
+  },
+  "required": [
+    "t",
+    "facets"
+  ],
+  "title": "StateRow",
+  "type": "object"
+}

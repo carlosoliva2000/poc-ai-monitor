@@ -55,8 +55,7 @@ TREND_MIN_DELTA_M = 2.0  # y cambio absoluto mínimo, para no ver tendencias en 
 MAX_INTERP_GAP_S = 3.0
 MIN_TREND_SAMPLES = 3
 MIN_COURSE_DISTANCE_M = 0.5
-WIND_NOTABLE_SPEED_MPS = 5.0  # viento notable: velocidad media ≥ 5 m/s o racha máxima ≥ 8 m/s
-WIND_NOTABLE_GUST_MPS = 8.0
+WIND_NOTABLE_SPEED_MPS = 5.0  # viento notable: velocidad media ≥ 5 m/s (sin racha desde la v1.0)
 WIND_WITH_DRIFT_DEG = 45.0  # la deriva va a favor del viento si difiere como mucho esto
 DISAGREED_M = 25.0  # GPS y radar discrepan si la distancia máxima de la ventana llega a esto
 NOW_WINDOW_S = 10.0  # tramo de los hechos de «ahora»: la última muestra de los últimos 10 s
@@ -148,15 +147,13 @@ def _wind(events: Sequence[Envelope], drift: float | None) -> WindStat | None:
         return None
     wind_to = bearing_deg(vx, vy)
     mean_speed = round(sum(speeds) / len(speeds), 1)
-    max_gust = round(max(float(e.payload["gust_mps"]) for e in events), 1)
     drift_vs_wind = None if drift is None else round(_angle_diff(drift, wind_to), 1)
     return WindStat(
         mean_speed_mps=mean_speed,
-        max_gust_mps=max_gust,
         from_deg=round((wind_to + 180.0) % 360.0, 1),
         wind_to_deg=round(wind_to, 1),
         drift_vs_wind_deg=drift_vs_wind,
-        notable=mean_speed >= WIND_NOTABLE_SPEED_MPS or max_gust >= WIND_NOTABLE_GUST_MPS,
+        notable=mean_speed >= WIND_NOTABLE_SPEED_MPS,
         with_drift=drift_vs_wind is not None and drift_vs_wind <= WIND_WITH_DRIFT_DEG,
         samples=len(events),
         last_event_id=events[-1].event_id,
@@ -274,11 +271,11 @@ def _now_facts(ctx: ToolContext, route: list[Point], until: float) -> NowFacts:
         until=until,
         limit=1,
     )
-    speed = gust = from_deg = None
+    speed = from_deg = None
     text: str | None = None
     if wind_last:
         payload = wind_last[0].payload
-        speed, gust = round(float(payload["speed_mps"]), 1), round(float(payload["gust_mps"]), 1)
+        speed = round(float(payload["speed_mps"]), 1)
         from_deg = round(float(payload["from_deg"]), 1)
         text = _wind_text(from_deg, speed)
     return NowFacts(
@@ -290,7 +287,6 @@ def _now_facts(ctx: ToolContext, route: list[Point], until: float) -> NowFacts:
         gps_deviation_from_plan_m=deviation(gps_last) if has_fix else None,
         radar_deviation_from_plan_m=deviation(radar_last),
         wind_speed_mps=speed,
-        wind_gust_mps=gust,
         wind_from_deg=from_deg,
         wind=text,
         route_trend=trend,

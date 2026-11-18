@@ -140,7 +140,6 @@ class ProposeWindArgs(_Model):
     from_direction: str
     """De dónde viene el viento: un rumbo (`NE`, `north-east`) o grados (`225`)."""
     speed_mps: float
-    gust_mps: float | None = None
     duration_s: float | None = None
     until_cancelled: bool | None = None
     ramp_s: float | None = None
@@ -203,13 +202,12 @@ class WindStat(_Model):
     (0 a 180) entre `drift_direction_deg` y `wind_to_deg` (`None` si no hay deriva)."""
 
     mean_speed_mps: float
-    max_gust_mps: float
     from_deg: float
     wind_to_deg: float
     """Hacia dónde empuja el viento: `from_deg` + 180 (mod 360)."""
     drift_vs_wind_deg: float | None
     notable: bool
-    """Viento notable: velocidad media ≥ 5 m/s o racha máxima ≥ 8 m/s."""
+    """Viento notable: velocidad media ≥ 5 m/s."""
     with_drift: bool
     """La deriva va a favor del viento: `drift_vs_wind_deg` ≤ 45 (falso si no hay deriva)."""
     samples: int
@@ -245,8 +243,7 @@ class NowFacts(_Model):
     """Desviación respecto al plan de la última posición del GPS (`None` si no tiene fix)."""
     radar_deviation_from_plan_m: float | None
     wind_speed_mps: float | None
-    """Velocidad y racha del último `WindReported`."""
-    wind_gust_mps: float | None
+    """Velocidad del último `WindReported`."""
     wind_from_deg: float | None
     wind: str | None
     """El viento ya interpretado, p. ej. «from NW (326°), pushing SE» (o «calm»)."""

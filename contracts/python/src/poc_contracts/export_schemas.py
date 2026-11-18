@@ -16,6 +16,7 @@ from .envelope import Envelope, EventDraft
 from .payloads import PAYLOAD_MODELS
 from .run_files import LabelsFile, PlanFile, RunMeta, TruthFile, UnlabeledEpisodesFile
 from .scenario import ScenarioConfig
+from .states import StateRow
 from .tools import TOOL_MODELS, PublishAlertResult
 from .ws import ClientMessage, ServerMessage, StateMessage
 
@@ -41,6 +42,7 @@ def build_schemas() -> dict[str, dict[str, Any]]:
         "files/labels.json": LabelsFile.model_json_schema(),
         "files/unlabeled_episodes.json": UnlabeledEpisodesFile.model_json_schema(),
         "files/run_meta.json": RunMeta.model_json_schema(),
+        "files/states_row.json": StateRow.model_json_schema(),
     }
     for event_type, model in PAYLOAD_MODELS.items():
         schemas[f"payloads/{event_type.value}.json"] = model.model_json_schema()
