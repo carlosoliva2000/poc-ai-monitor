@@ -65,6 +65,18 @@
           "exclusiveMinimum": 0,
           "title": "Wind Limit Mps",
           "type": "number"
+        },
+        "max_airspeed_mps": {
+          "default": 17.0,
+          "exclusiveMinimum": 0,
+          "title": "Max Airspeed Mps",
+          "type": "number"
+        },
+        "lateral_ki_per_s": {
+          "default": 0.05,
+          "minimum": 0,
+          "title": "Lateral Ki Per S",
+          "type": "number"
         }
       },
       "required": [
@@ -599,6 +611,19 @@
       "title": "SensorsConfig",
       "type": "object"
     },
+    "SimulatorConfig": {
+      "additionalProperties": false,
+      "description": "Interruptores del simulador v2 (E7a): apagados, el comportamiento es el anterior, byte a\nbyte. Se eliminan al cerrar la E7a (paso 7b).",
+      "properties": {
+        "multirotor_guidance": {
+          "default": false,
+          "title": "Multirotor Guidance",
+          "type": "boolean"
+        }
+      },
+      "title": "SimulatorConfig",
+      "type": "object"
+    },
     "SpoofingConfig": {
       "additionalProperties": false,
       "description": "GPS reportado = real + desfase que crece a `drift_rate_mps` hacia `direction_deg`.",
@@ -845,6 +870,9 @@
     },
     "labeling": {
       "$ref": "#/$defs/LabelingConfig"
+    },
+    "simulator": {
+      "$ref": "#/$defs/SimulatorConfig"
     },
     "commands": {
       "default": [],

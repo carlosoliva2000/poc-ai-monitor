@@ -41,9 +41,22 @@ from poc_contracts.scenario import ScenarioConfig
 
 from ..geometry import Point, angle_diff_deg, bearing_deg, project_on_segment
 from . import sensors
-from .controller import STEP_S, Sample, aim_point, build_route
+from .controller import (
+    STEP_S,
+    Sample,
+    aim_point,
+    build_route,
+    corner_speed,
+    limit_air_velocity,
+    speed_profile,
+    unit,
+)
 from .disturbances import CommandWind, Wind, is_hijacked, spoof_offset, spoof_offset_rate, wind_at
 from .events import make_event
+
+HOLD_MAX_SPEED_MPS = 3.0  # lazo P del punto de espera: tope de la velocidad sobre el suelo
+LATERAL_INT_WINDOW_M = 15.0  # la integral solo acumula con un error lateral menor que esto
+LATERAL_CORR_MAX_MPS = 3.0  # tope de la corrección integral (anti-windup)
 
 
 @dataclass(frozen=True)
@@ -154,6 +167,14 @@ class Simulator:
         self._x = self._y = self._speed = 0.0
         self._heading = bearing_deg(self.route[1][0], self.route[1][1])
         self._est: Point | None = None  # estima del dron mientras no tiene GPS
+        # Guiado de multirrotor (`simulator.multirotor_guidance`): velocidad respecto al aire como
+        # vector, integral del error lateral y modo del autopiloto.
+        self._multirotor = config.simulator.multirotor_guidance
+        self._va: Point = (0.0, 0.0)
+        self._int = 0.0
+        self._mode = "mission"  # `mission` | `failsafe_hold` | `failsafe_return`
+        self._hold: Point | None = None  # punto de espera en `failsafe_hold`
+        self._leg_start: Point | None = None  # origen del tramo a casa en `failsafe_return`
         self.samples = [Sample(0, 0.0, 0.0, 0.0, 0.0, self._heading, (0.0, 0.0))]
         self.reached: list[tuple[int, int]] = []
         self.completed = False
@@ -191,6 +212,39 @@ class Simulator:
     def _distance_to_waypoint(self) -> float:
         b, (gx, gy) = self.route[self._i], self._believed()
         return math.hypot(b[0] - gx, b[1] - gy)
+
+    def _leg(self) -> tuple[Point, Point]:
+        """Tramo de referencia: el pendiente de la ruta o, al volver por failsafe, el que va del
+        punto donde se activó a casa."""
+        last = len(self.route) - 1
+        i = min(self._i, last)
+        a = self._leg_start if self._leg_start is not None else self.route[max(i - 1, 0)]
+        return a, self.route[i]
+
+    def _waypoint_reached(self) -> bool:
+        """Punto pendiente alcanzado. Multirrotor: entra en el radio de aceptación o cruza la
+        perpendicular del final del tramo (regla de PX4 y ArduPilot para no volver atrás)."""
+        if self._distance_to_waypoint() < self.config.drone.acceptance_radius_m:
+            return True
+        if not self._multirotor:
+            return False
+        a, b = self._leg()
+        u = unit(b[0] - a[0], b[1] - a[1])
+        p = self._believed()
+        return (p[0] - a[0]) * u[0] + (p[1] - a[1]) * u[1] >= math.hypot(b[0] - a[0], b[1] - a[1])
+
+    def set_mode(self, mode: str) -> None:
+        """Cambia el modo del autopiloto (`mission`, `failsafe_hold`, `failsafe_return`); solo con
+        el guiado de multirrotor. `failsafe_hold` mantiene la posición donde cree estar;
+        `failsafe_return` va en línea recta a casa desde ahí."""
+        if not self._multirotor:
+            raise ValueError("the autopilot modes need simulator.multirotor_guidance")
+        p = self._believed()
+        self._hold = p if mode == "failsafe_hold" else None
+        self._leg_start = p if mode == "failsafe_return" else None
+        if mode == "failsafe_return":
+            self._i = len(self.route) - 1
+        self._mode, self._int = mode, 0.0
 
     # --- Fallos -------------------------------------------------------------------------------
 
@@ -363,7 +417,6 @@ class Simulator:
         """Eventos del instante actual (en el orden del contrato) y avance de 0,1 s."""
         if self.finished:
             raise RuntimeError("the simulation has finished")
-        d = self.config.drone
         t = self.t
 
         faults = [self._fault_event(s, f, inj) for s, f, inj in self._queued]
@@ -379,7 +432,7 @@ class Simulator:
             while (
                 self._i < len(self.route)
                 and not is_hijacked(t, self._hijack)
-                and self._distance_to_waypoint() < d.acceptance_radius_m
+                and self._waypoint_reached()
             ):
                 self.reached.append((self.n, self._i))
                 if self._events:
@@ -426,6 +479,8 @@ class Simulator:
             if self._est is not None:
                 rad = math.radians(s.heading_deg)
                 vel = (self._speed * math.sin(rad), self._speed * math.cos(rad))
+                if self._multirotor:
+                    vel = self._va  # a estima solo conoce su velocidad respecto al aire
                 payload = sensors.gps_payload(cfg, rng, self._est, vel, loss=True, t=t)
             else:
                 dvx, dvy = spoof_offset_rate(t, self._spoofing)
@@ -463,8 +518,93 @@ class Simulator:
             )
         return out
 
+    def _ground_command(self, p: Point, hijacked: bool) -> Point:
+        """Velocidad sobre el suelo que pide el guiado de multirrotor: hacia el punto de mira, con
+        el perfil de velocidad (frena antes del punto según el giro y se puede parar) y la
+        corrección integral del error lateral. En espera, un lazo P hacia el punto de espera."""
+        d = self.config.drone
+        if hijacked:  # lleva el dron al punto del secuestrador y se queda allí
+            self._int = 0.0
+            aim = end = self._target
+            assert aim is not None
+            v_pass, corr = 0.0, (0.0, 0.0)
+        elif self._mode == "failsafe_hold":
+            assert self._hold is not None
+            gx, gy = 0.5 * (self._hold[0] - p[0]), 0.5 * (self._hold[1] - p[1])
+            m = math.hypot(gx, gy)
+            return (
+                (gx, gy)
+                if m <= HOLD_MAX_SPEED_MPS
+                else (gx * HOLD_MAX_SPEED_MPS / m, gy * HOLD_MAX_SPEED_MPS / m)
+            )
+        else:
+            a, b = self._leg()
+            aim, end = aim_point(a, b, p, d.lookahead_m), b
+            v_pass = (
+                0.0
+                if self._leg_start is not None
+                else corner_speed(self.route, self._i, d.cruise_speed_mps, d.max_accel_mps2)
+            )
+            corr = self._lateral_correction(a, b, p)
+        speed = speed_profile(
+            math.hypot(end[0] - p[0], end[1] - p[1]),
+            v_pass,
+            d.cruise_speed_mps,
+            d.max_accel_mps2,
+            d.acceptance_radius_m,
+        )
+        ux, uy = unit(aim[0] - p[0], aim[1] - p[1])
+        return speed * ux + corr[0], speed * uy + corr[1]
+
+    def _lateral_correction(self, a: Point, b: Point, p: Point) -> Point:
+        """Velocidad lateral que corrige el error acumulado respecto al tramo (integral)."""
+        ki = self.config.drone.lateral_ki_per_s
+        ux, uy = unit(b[0] - a[0], b[1] - a[1])
+        nx, ny = -uy, ux  # normal a la izquierda
+        err = (p[0] - a[0]) * nx + (p[1] - a[1]) * ny
+        if ki == 0.0:
+            return 0.0, 0.0
+        if abs(err) < LATERAL_INT_WINDOW_M:
+            cap = LATERAL_CORR_MAX_MPS / ki
+            self._int = max(-cap, min(cap, self._int + err * STEP_S))
+        return -ki * self._int * nx, -ki * self._int * ny
+
+    def _advance_multirotor(self) -> None:
+        """Lazo de velocidad de un multirrotor: de `t` a `t + 0,1 s`. La velocidad respecto al aire
+        sigue a la que pide el guiado con la aceleración limitada; el viento se suma al suelo. Con
+        la estima (sin GPS) no conoce el viento y deriva con él."""
+        d, t = self.config.drone, self.t
+        p = self._believed()
+        hijacked = is_hijacked(t, self._hijack)
+        wind = self._wind(t).vector() if self.perturbed else (0.0, 0.0)
+        known = (0.0, 0.0) if self._est is not None else wind
+        cmd = limit_air_velocity(self._ground_command(p, hijacked), known, d.max_airspeed_mps)
+        dvx, dvy = cmd[0] - self._va[0], cmd[1] - self._va[1]
+        m, step_a = math.hypot(dvx, dvy), d.max_accel_mps2 * STEP_S
+        if m > step_a:
+            dvx, dvy = dvx * step_a / m, dvy * step_a / m
+        self._va = (self._va[0] + dvx, self._va[1] + dvy)
+        vx, vy = self._va[0] + wind[0], self._va[1] + wind[1]
+        # el morro mira al siguiente punto (en espera se queda como está)
+        target = self._target if hijacked else self.route[min(self._i, len(self.route) - 1)]
+        if target is not None and (hijacked or self._mode != "failsafe_hold"):
+            dx, dy = target[0] - p[0], target[1] - p[1]
+            if math.hypot(dx, dy) > 1.0:
+                err = angle_diff_deg(bearing_deg(dx, dy), self._heading)
+                step = d.max_turn_rate_dps * STEP_S
+                self._heading = (self._heading + max(-step, min(step, err))) % 360.0
+        self._x += vx * STEP_S
+        self._y += vy * STEP_S
+        if self._est is not None:
+            self._est = (self._est[0] + self._va[0] * STEP_S, self._est[1] + self._va[1] * STEP_S)
+        self.n += 1
+        offset = spoof_offset(self.t, self._spoofing)
+        self.samples.append(Sample(self.n, self._x, self._y, vx, vy, self._heading, offset))
+
     def _advance(self) -> None:
         """Guiado, giro, aceleración, viento e integración: de `t` a `t + 0,1 s`."""
+        if self._multirotor:
+            return self._advance_multirotor()
         d, t = self.config.drone, self.t
         believed = self._believed()
         if is_hijacked(t, self._hijack):
@@ -495,8 +635,9 @@ class Simulator:
         n, t, cfg = self.n, self.t, self.config
         s = self.samples[n]
         leg = min(self._i, len(self.route) - 1)
-        _, ref = project_on_segment((s.x, s.y), self.route[leg - 1], self.route[leg])
         hijack = is_hijacked(t, self._hijack)
+        a, b = (self._hold, self._hold) if self._hold and not hijack else self._leg()
+        _, ref = project_on_segment((s.x, s.y), a, b)
         g, b = cfg.sensors.gps, cfg.sensors.battery
         _, hdop = sensors.gps_quality(cfg, t)
         w = self._wind(t)
@@ -506,7 +647,7 @@ class Simulator:
             leg_index=leg,
             ref_dist_m=ref,
             est=self._believed(),
-            mode="foreign_control" if hijack else "mission",
+            mode="foreign_control" if hijack else self._mode,
             link_up=not (hijack or down[SensorSource.LINK]),
             battery_soc=max(0.0, min(100.0, b.start_pct - b.drain_pct_per_min * t / 60)),
             gps_sigma_m=g.sigma_m * hdop / g.hdop,

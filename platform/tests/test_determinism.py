@@ -38,3 +38,19 @@ def test_another_seed_changes_the_noise_but_not_the_trajectory(tmp_path: Path) -
     assert (tmp_path / "a" / "plan.json").read_bytes() == (
         tmp_path / "b" / "plan.json"
     ).read_bytes()
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["nominal", "wind", "spoofing", "hijack", "faults", "demo", "demo-battery", "demo-meteo",
+     "nominal-wind-cmd"],
+)  # fmt: skip
+def test_the_committed_runs_are_what_the_scenarios_generate(tmp_path: Path, name: str) -> None:
+    """`runs/<escenario>/` versionado = lo que genera el escenario tal cual (con los interruptores
+    del simulador v2 como estén en su YAML): ningún cambio se cuela sin regenerar `runs/`."""
+    from platform_app.generator.scenario_io import load_scenario
+    from platform_app.paths import RUNS_DIR
+
+    write_run(generate(load_scenario(name)), tmp_path)
+    for f in FILES:
+        assert (tmp_path / f).read_bytes() == (RUNS_DIR / name / f).read_bytes(), f

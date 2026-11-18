@@ -72,3 +72,58 @@ def aim_point(a: Point, b: Point, believed: Point, lookahead_m: float) -> Point:
     u = ((b[0] - a[0]) / length, (b[1] - a[1]) / length)
     s = min(length, (believed[0] - a[0]) * u[0] + (believed[1] - a[1]) * u[1] + lookahead_m)
     return a[0] + u[0] * s, a[1] + u[1] * s
+
+
+# --- Guiado de multirrotor (E7a, paso 2) -------------------------------------------------------
+# Funciones puras: el estado (velocidad respecto al aire, integral, modo) vive en el simulador.
+
+
+def unit(dx: float, dy: float) -> Point:
+    n = math.hypot(dx, dy)
+    return (dx / n, dy / n) if n > 1e-9 else (0.0, 0.0)
+
+
+CORNER_OPENING_M = 6.0  # ⚠️ cuánto se puede abrir el dron en una esquina (fija la velocidad de paso)
+
+
+def corner_speed(route: list[Point], i: int, cruise: float, accel: float) -> float:
+    """Velocidad con la que se pasa por el punto `route[i]`: la de crucero en línea recta, 0 con un
+    giro de 90° o más (o en el último punto) y, entre medias, la menor de `cruise · cos(giro)` y la
+    que deja que el cambio de velocidad con la aceleración limitada no abra la esquina más de
+    `CORNER_OPENING_M` (`v² = a · d / sin(giro / 2)`)."""
+    if i + 1 >= len(route):
+        return 0.0
+    u1 = unit(route[i][0] - route[i - 1][0], route[i][1] - route[i - 1][1])
+    u2 = unit(route[i + 1][0] - route[i][0], route[i + 1][1] - route[i][1])
+    cos_turn = u1[0] * u2[0] + u1[1] * u2[1]
+    if cos_turn <= 0.0:
+        return 0.0
+    half_sin = math.sqrt(max(0.0, (1.0 - cos_turn) / 2.0))  # sin(giro / 2)
+    limit = math.sqrt(accel * CORNER_OPENING_M / half_sin) if half_sin > 1e-6 else cruise
+    return min(cruise * cos_turn, limit)
+
+
+def speed_profile(dist: float, v_pass: float, cruise: float, accel: float, radius: float) -> float:
+    """Velocidad sobre el suelo hacia un punto a `dist`: la de crucero, frenando para llegar con
+    `v_pass` al borde del radio de aceptación (`v² = v_pass² + 2·a·d`; se frena hasta medio radio
+    para que siga habiendo velocidad al entrar en el radio)."""
+    return min(cruise, math.sqrt(v_pass**2 + 2.0 * accel * max(0.0, dist - 0.5 * radius)))
+
+
+def limit_air_velocity(g: Point, wind: Point, v_max: float) -> Point:
+    """Velocidad respecto al aire que da la velocidad sobre el suelo `g` con ese viento
+    (`g − viento`), sin pasar de `v_max`. Si no cabe, se reduce `g` (se frena a lo largo del
+    tramo antes que dejar de compensar el viento); si el viento supera `v_max`, se compensa lo que
+    se puede y el dron deriva a sotavento."""
+    va = (g[0] - wind[0], g[1] - wind[1])
+    if math.hypot(*va) <= v_max:
+        return va
+    g2 = g[0] ** 2 + g[1] ** 2
+    if g2 > 1e-12:
+        gw = g[0] * wind[0] + g[1] * wind[1]
+        disc = gw * gw - g2 * (wind[0] ** 2 + wind[1] ** 2 - v_max**2)
+        k = (gw + math.sqrt(disc)) / g2 if disc >= 0 else gw / g2
+        k = max(0.0, min(1.0, k))
+        va = (k * g[0] - wind[0], k * g[1] - wind[1])
+    m = math.hypot(*va)
+    return (va[0] * v_max / m, va[1] * v_max / m) if m > v_max else va

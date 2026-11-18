@@ -25,7 +25,15 @@ class DroneConfig(Config):
     altitude_m: float
     acceptance_radius_m: Positive
     lookahead_m: Positive
-    wind_limit_mps: Positive = 12.0  # viento máximo con el que mantiene la ruta (⚠️ de partida)
+    wind_limit_mps: Positive = 12.0
+    """Viento máximo con el que mantiene la ruta (resistencia al viento de la ficha del DJI Matrice
+    300 RTK: 12 m/s)."""
+    max_airspeed_mps: Positive = 17.0
+    """Velocidad máxima respecto al aire en vuelo con posicionamiento (modo P del Matrice 300 RTK:
+    17 m/s). Separada de la de crucero: si el viento la supera, el dron deriva. Solo con
+    `simulator.multirotor_guidance`."""
+    lateral_ki_per_s: float = Field(default=0.05, ge=0)
+    """Ganancia integral del error lateral (1/s) del guiado de multirrotor ⚠️."""
 
 
 class WaypointConfig(Config):
@@ -249,6 +257,15 @@ class LabelingConfig(Config):
     battery_critical_pct: Positive = 7.0
 
 
+class SimulatorConfig(Config):
+    """Interruptores del simulador v2 (E7a): apagados, el comportamiento es el anterior, byte a
+    byte. Se eliminan al cerrar la E7a (paso 7b)."""
+
+    multirotor_guidance: bool = False
+    """Guiado de multirrotor: control de velocidad con frenado, lazo de velocidad respecto al aire
+    con límite, integral lateral, radio de aceptación con la regla de la perpendicular y modos."""
+
+
 class ScenarioConfig(Config):
     name: str
     description: str
@@ -263,4 +280,5 @@ class ScenarioConfig(Config):
     hijack: HijackConfig | None
     faults: list[FaultConfig]
     labeling: LabelingConfig = Field(default_factory=LabelingConfig)
+    simulator: SimulatorConfig = Field(default_factory=SimulatorConfig)
     commands: list[ScheduledCommand] = []  # opcional (v0.18): comandos del instructor programados
