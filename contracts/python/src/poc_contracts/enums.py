@@ -81,6 +81,8 @@ class EventType(StrEnum):
     ANOMALY_DETECTED = "AnomalyDetected"
     ALERT_CLOSED = "AlertClosed"
     ALERT_ENRICHED = "AlertEnriched"
+    INCIDENT_UPDATED = "IncidentUpdated"
+    INCIDENT_ENRICHED = "IncidentEnriched"
     REPORT_GENERATED = "ReportGenerated"
     OPERATOR_MESSAGE = "OperatorMessage"
     AGENT_REPLY = "AgentReply"
@@ -135,6 +137,55 @@ class AlertStatus(StrEnum):
     OPEN = "open"
     CLOSED = "closed"
     SUPERSEDED = "superseded"
+
+
+class IncidentKind(StrEnum):
+    """Tipo de incidente del monitor de situación (v1.1). Coincide con las causas de
+    `states.jsonl`, más `LINK_LOSS`, `GPS_DEGRADED` y `BATTERY` (sin causa de desviación) y
+    `UNDETERMINED` (salida del sistema con confianza baja, no una etiqueta de la verdad)."""
+
+    WIND = "WIND"
+    GPS_SPOOFING = "GPS_SPOOFING"
+    HIJACK = "HIJACK"
+    LINK_LOSS = "LINK_LOSS"
+    GPS_DEGRADED = "GPS_DEGRADED"
+    DEAD_RECKONING = "DEAD_RECKONING"
+    BATTERY = "BATTERY"
+    UNDETERMINED = "UNDETERMINED"
+
+
+class IncidentState(StrEnum):
+    """Estado de un incidente (v1.1): un incidente cambia de estado, no se sustituye."""
+
+    OPEN = "open"
+    RECOVERING = "recovering"
+    CLOSED = "closed"
+
+
+class IncidentChange(StrEnum):
+    """Qué cambió en esta revisión del incidente (v1.1)."""
+
+    OPENED = "opened"
+    STATE = "state"
+    RENAMED = "renamed"
+    SEVERITY = "severity"
+    EVIDENCE = "evidence"
+    CLOSED = "closed"
+
+
+class ConfidenceLevel(StrEnum):
+    """Confianza en niveles (v1.1): confirmado (≥ 0,9), probable (0,6–0,9), posible (< 0,6)."""
+
+    CONFIRMED = "confirmed"
+    PROBABLE = "probable"
+    POSSIBLE = "possible"
+
+
+class EnrichRole(StrEnum):
+    """Papel del texto del asistente sobre un incidente (v1.1)."""
+
+    EXPLAIN = "explain"
+    HYPOTHESIS = "hypothesis"
 
 
 class Trend(StrEnum):

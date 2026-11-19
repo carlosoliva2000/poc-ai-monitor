@@ -14,12 +14,17 @@ from .enums import (
     Cause,
     CommandIssuer,
     CompletionReason,
+    ConfidenceLevel,
     ConversationId,
     DecidedBy,
+    EnrichRole,
     EventType,
     FaultMode,
     FaultOrigin,
     GpsFix,
+    IncidentChange,
+    IncidentKind,
+    IncidentState,
     InstructorCommandName,
     PauseReason,
     Rule,
@@ -353,6 +358,106 @@ class AlertEnriched(Payload):
         return self
 
 
+class EvidenceCondition(Payload):
+    """Una condición de la fila que encajó, con su valor en ese instante (v1.1)."""
+
+    feature: str = Field(min_length=1)
+    op: str = Field(pattern=r"^(>=|<=|>|<|==|!=)$")
+    threshold: float | str | bool | None
+    value: float | str | bool | None
+
+
+class EvidenceItem(Payload):
+    """Un paso del camino de la tabla (v1.1): faceta, estado, fila y condiciones."""
+
+    facet: str = Field(min_length=1)
+    state: str = Field(min_length=1)
+    rule_id: str = Field(min_length=1)
+    conditions: list[EvidenceCondition]
+
+
+class ContextItem(Payload):
+    """Algo que no decide pero ayuda a leer el incidente (v1.1; p. ej. viento fuerte sin
+    desviación)."""
+
+    feature: str = Field(min_length=1)
+    value: float | str | bool | None
+
+
+class IncidentUpdated(Payload):
+    """Estado de un incidente del monitor de situación (v1.1): un evento por transición. La web
+    se queda con el último por `incident_id`; `revision` crece por incidente. El nombre (`kind`)
+    puede cambiar a uno más grave sin cerrar el incidente (`change: renamed`)."""
+
+    incident_id: str = Field(min_length=1)
+    revision: int = Field(ge=1)
+    kind: IncidentKind
+    name: str = Field(min_length=1, max_length=60)
+    state: IncidentState
+    severity: Severity
+    confidence: ConfidenceLevel
+    opened_at: float = Field(ge=0)
+    as_of_sim_time: float = Field(ge=0)
+    change: IncidentChange
+    evidence: list[EvidenceItem]
+    context: list[ContextItem]
+    checks: list[str]
+    evidence_event_ids: list[str]
+    decided_by: DecidedBy
+    table: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check_consistency(self) -> "IncidentUpdated":
+        if self.decided_by != DecidedBy.TABLE:
+            raise ValueError("an incident is decided by the table")
+        if self.as_of_sim_time < self.opened_at:
+            raise ValueError("as_of_sim_time is before opened_at")
+        if (self.change == IncidentChange.OPENED) != (self.revision == 1):
+            raise ValueError("revision 1 is the opening and only the opening")
+        if (self.change == IncidentChange.CLOSED) != (self.state == IncidentState.CLOSED):
+            raise ValueError("change closed goes with state closed")
+        return self
+
+
+class IncidentHypothesis(Payload):
+    """Hipótesis del asistente sobre un incidente `UNDETERMINED` (v1.1): **no es un
+    diagnóstico**. Tipo de la lista (nunca `UNDETERMINED`), confianza `possible`."""
+
+    kind: IncidentKind
+    confidence: ConfidenceLevel
+    evidence_event_ids: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check_kind(self) -> "IncidentHypothesis":
+        if self.kind == IncidentKind.UNDETERMINED:
+            raise ValueError("a hypothesis names a kind other than UNDETERMINED")
+        if self.confidence != ConfidenceLevel.POSSIBLE:
+            raise ValueError("a hypothesis is only possible")
+        return self
+
+
+class IncidentEnriched(Payload):
+    """Texto del asistente sobre una revisión de un incidente (v1.1). No cambia el incidente.
+    El `causation_id` del sobre es el `event_id` del `IncidentUpdated` que interpreta."""
+
+    incident_id: str = Field(min_length=1)
+    revision: int = Field(ge=1)
+    state: IncidentState
+    text: str = Field(min_length=1)
+    hypothesis: IncidentHypothesis | None
+    role: EnrichRole
+    decided_by: DecidedBy
+    as_of_sim_time: float = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _check_role(self) -> "IncidentEnriched":
+        if self.decided_by != DecidedBy.LLM:
+            raise ValueError("an enrichment is written by the llm")
+        if (self.role == EnrichRole.HYPOTHESIS) != (self.hypothesis is not None):
+            raise ValueError("role hypothesis goes with a hypothesis")
+        return self
+
+
 class DetectionAcknowledged(Payload):
     """Respuesta del monitor a una detección que no genera una alerta nueva: `alert_id` es la
     alerta abierta a la que pertenece, o `None` si no hace falta alerta. `fallback: true` si lo
@@ -471,6 +576,8 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.ANOMALY_DETECTED: AnomalyDetected,
     EventType.ALERT_CLOSED: AlertClosed,
     EventType.ALERT_ENRICHED: AlertEnriched,
+    EventType.INCIDENT_UPDATED: IncidentUpdated,
+    EventType.INCIDENT_ENRICHED: IncidentEnriched,
     EventType.REPORT_GENERATED: ReportGenerated,
     EventType.OPERATOR_MESSAGE: OperatorMessage,
     EventType.AGENT_REPLY: AgentReply,

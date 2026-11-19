@@ -116,6 +116,12 @@ export function eventTone(e: Envelope): Tone {
       return 'warning'
     case 'AnomalyDetected':
       return 'danger'
+    case 'IncidentUpdated': {
+      // el riesgo ahora: alta = rojo, media = ámbar; un incidente cerrado ya no alarma
+      const p = e.payload as { severity?: string; state?: string }
+      if (p.state === 'closed') return 'primary'
+      return p.severity === 'high' ? 'danger' : p.severity === 'medium' ? 'warning' : 'primary'
+    }
     case 'PositionUpdated':
     case 'TrackUpdated':
     case 'WindReported':
@@ -164,6 +170,10 @@ export function payloadSummary(e: Envelope): string {
       return `${p.alert_id} ${stripFieldValues(String(p.reason))}`
     case 'AlertEnriched':
       return `${p.alert_id} interpretation (LLM): ${p.text}`
+    case 'IncidentUpdated':
+      return `${p.incident_id} ${p.name} · ${p.change === 'opened' ? 'opened' : p.change === 'renamed' ? 'renamed' : p.change === 'closed' ? 'closed' : p.change === 'evidence' ? 'evidence updated' : `now ${p.state}`} (${p.state}, ${p.severity}, ${p.confidence})`
+    case 'IncidentEnriched':
+      return `${p.incident_id} interpretation (LLM, ${p.state}): ${p.text}`
     case 'DetectionAcknowledged':
       return `${p.detection_id} → ${p.alert_id ?? 'no alert'}`
     case 'FaultInjected':

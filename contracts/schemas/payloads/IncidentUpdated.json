@@ -1,0 +1,299 @@
+{
+  "$defs": {
+    "ConfidenceLevel": {
+      "description": "Confianza en niveles (v1.1): confirmado (≥ 0,9), probable (0,6–0,9), posible (< 0,6).",
+      "enum": [
+        "confirmed",
+        "probable",
+        "possible"
+      ],
+      "title": "ConfidenceLevel",
+      "type": "string"
+    },
+    "ContextItem": {
+      "additionalProperties": false,
+      "description": "Algo que no decide pero ayuda a leer el incidente (v1.1; p. ej. viento fuerte sin\ndesviación).",
+      "properties": {
+        "feature": {
+          "minLength": 1,
+          "title": "Feature",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "feature",
+        "value"
+      ],
+      "title": "ContextItem",
+      "type": "object"
+    },
+    "DecidedBy": {
+      "description": "Quién decidió una alerta (v0.19): la tabla de decisión del módulo o el LLM del monitor.",
+      "enum": [
+        "table",
+        "llm"
+      ],
+      "title": "DecidedBy",
+      "type": "string"
+    },
+    "EvidenceCondition": {
+      "additionalProperties": false,
+      "description": "Una condición de la fila que encajó, con su valor en ese instante (v1.1).",
+      "properties": {
+        "feature": {
+          "minLength": 1,
+          "title": "Feature",
+          "type": "string"
+        },
+        "op": {
+          "pattern": "^(>=|<=|>|<|==|!=)$",
+          "title": "Op",
+          "type": "string"
+        },
+        "threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Threshold"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "feature",
+        "op",
+        "threshold",
+        "value"
+      ],
+      "title": "EvidenceCondition",
+      "type": "object"
+    },
+    "EvidenceItem": {
+      "additionalProperties": false,
+      "description": "Un paso del camino de la tabla (v1.1): faceta, estado, fila y condiciones.",
+      "properties": {
+        "facet": {
+          "minLength": 1,
+          "title": "Facet",
+          "type": "string"
+        },
+        "state": {
+          "minLength": 1,
+          "title": "State",
+          "type": "string"
+        },
+        "rule_id": {
+          "minLength": 1,
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/EvidenceCondition"
+          },
+          "title": "Conditions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "facet",
+        "state",
+        "rule_id",
+        "conditions"
+      ],
+      "title": "EvidenceItem",
+      "type": "object"
+    },
+    "IncidentChange": {
+      "description": "Qué cambió en esta revisión del incidente (v1.1).",
+      "enum": [
+        "opened",
+        "state",
+        "renamed",
+        "severity",
+        "evidence",
+        "closed"
+      ],
+      "title": "IncidentChange",
+      "type": "string"
+    },
+    "IncidentKind": {
+      "description": "Tipo de incidente del monitor de situación (v1.1). Coincide con las causas de\n`states.jsonl`, más `LINK_LOSS`, `GPS_DEGRADED` y `BATTERY` (sin causa de desviación) y\n`UNDETERMINED` (salida del sistema con confianza baja, no una etiqueta de la verdad).",
+      "enum": [
+        "WIND",
+        "GPS_SPOOFING",
+        "HIJACK",
+        "LINK_LOSS",
+        "GPS_DEGRADED",
+        "DEAD_RECKONING",
+        "BATTERY",
+        "UNDETERMINED"
+      ],
+      "title": "IncidentKind",
+      "type": "string"
+    },
+    "IncidentState": {
+      "description": "Estado de un incidente (v1.1): un incidente cambia de estado, no se sustituye.",
+      "enum": [
+        "open",
+        "recovering",
+        "closed"
+      ],
+      "title": "IncidentState",
+      "type": "string"
+    },
+    "Severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Severity",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Estado de un incidente del monitor de situación (v1.1): un evento por transición. La web\nse queda con el último por `incident_id`; `revision` crece por incidente. El nombre (`kind`)\npuede cambiar a uno más grave sin cerrar el incidente (`change: renamed`).",
+  "properties": {
+    "incident_id": {
+      "minLength": 1,
+      "title": "Incident Id",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "kind": {
+      "$ref": "#/$defs/IncidentKind"
+    },
+    "name": {
+      "maxLength": 60,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "state": {
+      "$ref": "#/$defs/IncidentState"
+    },
+    "severity": {
+      "$ref": "#/$defs/Severity"
+    },
+    "confidence": {
+      "$ref": "#/$defs/ConfidenceLevel"
+    },
+    "opened_at": {
+      "minimum": 0,
+      "title": "Opened At",
+      "type": "number"
+    },
+    "as_of_sim_time": {
+      "minimum": 0,
+      "title": "As Of Sim Time",
+      "type": "number"
+    },
+    "change": {
+      "$ref": "#/$defs/IncidentChange"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/EvidenceItem"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "context": {
+      "items": {
+        "$ref": "#/$defs/ContextItem"
+      },
+      "title": "Context",
+      "type": "array"
+    },
+    "checks": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Checks",
+      "type": "array"
+    },
+    "evidence_event_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Event Ids",
+      "type": "array"
+    },
+    "decided_by": {
+      "$ref": "#/$defs/DecidedBy"
+    },
+    "table": {
+      "minLength": 1,
+      "title": "Table",
+      "type": "string"
+    }
+  },
+  "required": [
+    "incident_id",
+    "revision",
+    "kind",
+    "name",
+    "state",
+    "severity",
+    "confidence",
+    "opened_at",
+    "as_of_sim_time",
+    "change",
+    "evidence",
+    "context",
+    "checks",
+    "evidence_event_ids",
+    "decided_by",
+    "table"
+  ],
+  "title": "IncidentUpdated",
+  "type": "object"
+}

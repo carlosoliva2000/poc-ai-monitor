@@ -1,0 +1,123 @@
+# Tablas del monitor de situación, una por faceta, más la del tipo de incidente.
+#
+# PROVISIONALES: escritas a mano para el vídeo del 19/11/2026, con los umbrales medidos sobre
+# runs/ (demo, nominal) y nominal con órdenes del instructor. Se sustituyen por las tablas
+# aprendidas de la E7b (árboles por faceta convertidos en reglas).
+#
+# Forma de DMN, política FIRST (gana la primera fila que encaja), celdas en el subconjunto de
+# FEEL de `decision/table.py`. Las entradas las calcula `situation/monitor.py` con
+# `situation/features.py`; las filas que encajan son las evidencias del incidente.
+
+version: 1
+tables:
+  gps_integrity:
+    description: "GPS integrity from C/N0 and AGC against their reference (a spoofer raises C/N0 and lowers AGC)."
+    hit_policy: FIRST
+    inputs: [telemetry, cn0_rise_db, agc_drop_db]
+    outputs: [state]
+    rules:
+      - id: GI-01
+        note: "without telemetry from the drone there is nothing to judge"
+        when: {telemetry: 'false'}
+        then: {state: "?"}
+      - id: GI-02
+        note: "outside a spoofing episode C/N0 stays under +2.0 dB and AGC above −0.9 dB; inside, above +6.4 dB and under −3.5 dB"
+        when: {cn0_rise_db: '>= 4', agc_drop_db: '<= -2'}
+        then: {state: spoofed}
+      - id: GI-03
+        when: {cn0_rise_db: 'null'}
+        then: {state: "?"}
+      - id: GI-04
+        when: {}
+        then: {state: reliable}
+
+  link_availability:
+    description: "Our command link with the drone, from the telemetry gap and the packet loss our station measures."
+    hit_policy: FIRST
+    inputs: [tele_gap_s, link_loss_pct]
+    outputs: [state]
+    rules:
+      - id: LA-01
+        when: {tele_gap_s: '>= 3'}
+        then: {state: lost}
+      - id: LA-02
+        when: {link_loss_pct: '>= 90'}
+        then: {state: lost}
+      - id: LA-03
+        when: {}
+        then: {state: connected}
+
+  environment_wind:
+    description: "Wind estimated on board; beyond the drone's limit above 12 m/s for 5 s in a row."
+    hit_policy: FIRST
+    inputs: [wind_est_mps, wind_high_s]
+    outputs: [state]
+    rules:
+      - id: EW-01
+        when: {wind_est_mps: 'null'}
+        then: {state: "?"}
+      - id: EW-02
+        note: "the 5 s matter: when a spoofing ends the GPS jumps back and the estimator briefly takes it for wind"
+        when: {wind_high_s: '>= 5'}
+        then: {state: beyond_limit}
+      - id: EW-03
+        when: {wind_est_mps: '>= 5'}
+        then: {state: notable}
+      - id: EW-04
+        when: {}
+        then: {state: calm}
+
+  drone_situation:
+    description: "Situation against the route (measured with the GPS if it is reliable, otherwise with the radar average); deviated above 25 m, on route below 15 m."
+    hit_policy: FIRST
+    inputs: [route_dev_m, previous]
+    outputs: [state]
+    rules:
+      - id: DS-01
+        note: "with no measurable deviation the previous situation is kept"
+        when: {route_dev_m: 'null', previous: '"deviated"'}
+        then: {state: deviated}
+      - id: DS-02
+        when: {route_dev_m: 'null', previous: '"returning"'}
+        then: {state: returning}
+      - id: DS-03
+        when: {route_dev_m: 'null'}
+        then: {state: on_route}
+      - id: DS-04
+        when: {route_dev_m: '> 25'}
+        then: {state: deviated}
+      - id: DS-05
+        when: {route_dev_m: '< 15'}
+        then: {state: on_route}
+      - id: DS-06
+        when: {previous: '"deviated","returning"'}
+        then: {state: returning}
+      - id: DS-07
+        when: {}
+        then: {state: on_route}
+
+  incident_kind:
+    description: "Candidate incident kind, by priority (hijack > link > spoofing > wind > undetermined). Fixed confidence per row."
+    hit_policy: FIRST
+    inputs: [link, radar_route_dev_m, gps_integrity, situation, wind]
+    outputs: [kind, confidence]
+    rules:
+      - id: IK-01
+        note: "no link and the radar sees the drone away from the route"
+        when: {link: '"lost"', radar_route_dev_m: '> 50'}
+        then: {kind: HIJACK, confidence: probable}
+      - id: IK-02
+        when: {link: '"lost"'}
+        then: {kind: LINK_LOSS, confidence: confirmed}
+      - id: IK-03
+        when: {gps_integrity: '"spoofed"'}
+        then: {kind: GPS_SPOOFING, confidence: confirmed}
+      - id: IK-04
+        when: {situation: '"deviated"', wind: '"beyond_limit"'}
+        then: {kind: WIND, confidence: probable}
+      - id: IK-05
+        when: {situation: '"deviated"'}
+        then: {kind: UNDETERMINED, confidence: possible}
+      - id: IK-06
+        when: {}
+        then: {kind: none, confidence: none}

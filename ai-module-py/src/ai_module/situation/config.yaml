@@ -1,0 +1,10 @@
+# Monitor de situación (versión rápida de la E7c).
+#
+# PROVISIONAL para el vídeo del 19/11/2026: las tablas (tables.yaml) están escritas a mano y los
+# textos del asistente (scripted_texts.yaml) están preparados. El contrato v1.1 (IncidentUpdated,
+# IncidentEnriched) y la web de incidentes sí son definitivos.
+#
+# Asistente: "scripted" = textos preparados de scripted_texts.yaml (solo para el vídeo);
+# "off" = sin interpretación, sin chats y sin informe. El modo "llm" llegará en la E7d.
+# Se puede pisar con `--assistant off`.
+assistant: scripted

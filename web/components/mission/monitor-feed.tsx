@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 import { TypingDots } from './chat-panel'
 import { ToolCallList } from './tool-calls'
 
-const SEVERITY_CLASS = {
+export const SEVERITY_CLASS = {
   low: 'bg-primary/10 text-primary',
   medium: 'bg-warning/20 text-foreground',
   high: 'bg-destructive text-destructive-foreground',
