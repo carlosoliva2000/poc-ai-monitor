@@ -523,12 +523,12 @@
           "type": "number"
         },
         "loss_rssi50_dbm": {
-          "default": -85.0,
+          "default": -90.0,
           "title": "Loss Rssi50 Dbm",
           "type": "number"
         },
         "loss_slope_db": {
-          "default": 3.0,
+          "default": 2.5,
           "exclusiveMinimum": 0,
           "title": "Loss Slope Db",
           "type": "number"

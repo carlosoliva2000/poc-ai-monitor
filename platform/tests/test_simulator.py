@@ -63,7 +63,11 @@ def test_a_muted_source_does_not_change_the_noise_of_the_others() -> None:
 
 
 def test_a_mute_does_not_change_the_flight_but_a_loss_does() -> None:
-    cfg = scenario_config("nominal")
+    """Sin GPS la estima sigue con el último viento estimado: solo se desvía si el viento cambia
+    durante la pérdida."""
+    gust = {"start_s": 250.0, "end_s": 300.0, "ramp_s": 5.0, "speed_mps": 12.0, "from_deg": 0.0}
+    wind = {"base": scenario_config("nominal").wind.base.model_dump(), "episodes": [gust]}
+    cfg = scenario_config("nominal", wind=wind)
     base = Simulator(cfg, events=False).run_physics()
     muted = Simulator(cfg)
     muted.set_fault(GPS, FaultMode.MUTE, True, MANUAL)

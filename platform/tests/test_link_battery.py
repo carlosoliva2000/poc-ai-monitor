@@ -122,20 +122,40 @@ def test_the_power_curve_is_u_shaped_and_the_battery_drains_faster_against_the_w
     assert per_km_back > 1.4 * per_km_out  # contra el viento cada km cuesta mucho más
 
 
-def test_endurance_turns_back_before_the_battery_runs_out_and_lands_at_five_percent() -> None:
-    """«No llega a casa» con el viento: vuelve por su cuenta; luego 15 % bajo, 7 % crítico (vuelve)
-    y 5 % aterriza (PX4)."""
+def test_endurance_turns_back_in_time_and_arrives_home_with_the_reserve() -> None:
+    """«No llega a casa» con el viento: vuelve por su cuenta, a tiempo para llegar a casa con la
+    reserva (sobre lo que cuesta volver y por encima del 5 % al que aterrizaría)."""
     run = generate(load_scenario("endurance"))
-    assert modes(run) == ["mission", "failsafe_return", "failsafe_land"]
-    assert max(s.x for s in run.truth.trajectory) < 5000.0  # no llega al punto de giro (6 km)
+    assert modes(run) == ["mission", "failsafe_return"]
+    assert max(s.x for s in run.truth.trajectory) < 4500.0  # no llega al punto de giro (6 km)
+    done = of_type(run, "MissionCompleted")[0].payload
+    assert done["reason"] == "returned_to_base" and done["completed"]
+    end = run.truth.trajectory[-1]
+    assert end.battery_soc > 10.0  # llega con carga de sobra (con el 7 % habría vuelto igual)
     first = {}
     for r in run.states:
-        for facet in ("battery.endurance", "battery.level"):
-            first.setdefault((facet, r.facets[facet]), r.t)
-    assert first[("battery.endurance", "cannot_reach_home")] < first[("battery.level", "low")]
-    assert first[("battery.level", "low")] < first[("battery.level", "critical")]
-    done = of_type(run, "MissionCompleted")[0].payload
-    assert done == {"mission_id": "MSN-ENDURANCE", "completed": False, "reason": "landed"}
+        first.setdefault(("battery.endurance", r.facets["battery.endurance"]), r.t)
+    assert first[("battery.endurance", "cannot_reach_home")] < 300.0
+
+
+def test_the_battery_levels_make_it_return_below_seven_percent_and_land_below_five() -> None:
+    """Niveles de PX4 sin la regla de «no llega»: 15 % solo aviso, < 7 % vuelve, < 5 % aterriza (y
+    termina el vuelo con `landed`)."""
+    battery = scenario_config().sensors.battery.model_dump() | {
+        "start_pct": 12.0,
+        "capacity_wh": 60.0,
+        "endurance_action": "none",
+    }
+    sensors = {**scenario_config().sensors.model_dump(), "battery": battery}
+    run = generate(full(sensors=sensors))
+    assert modes(run) == ["mission", "failsafe_return", "failsafe_land"]
+    soc = {r.t: r.facets["battery.level"] for r in run.states}
+    assert soc[0.0] == "low"  # por debajo del 15 % desde el principio: solo aviso
+    switch = next(s for s in run.truth.trajectory if s.mode == "failsafe_return")
+    assert 6.5 < switch.battery_soc <= 7.0
+    land = next(s for s in run.truth.trajectory if s.mode == "failsafe_land")
+    assert 4.5 < land.battery_soc <= 5.0
+    assert of_type(run, "MissionCompleted")[0].payload["reason"] == "landed"
 
 
 def test_the_emitters_change_the_receivers_cn0_and_agc_with_their_distance() -> None:

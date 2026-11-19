@@ -38,15 +38,17 @@ def test_every_row_has_every_facet_with_a_state_of_the_catalogue(demo, faults) -
 
 
 def test_the_situation_and_the_cause_follow_the_demo_injections(demo) -> None:
-    """Viento (T+105), engaño (el dron se desvía unos 14 s después de
-    empezar) y secuestro: la causa es la de mayor prioridad y pega mientras el dron vuelve."""
+    """Viento por encima de la velocidad máxima del dron (T+95), engaño (el dron se desvía unos 30 s
+    después de empezar) y secuestro: la causa es la de mayor prioridad y pega mientras vuelve."""
     causes = {s: (a, b) for s, a, b in segments(demo, "drone.cause")}
-    assert segments(demo, "drone.situation")[0] == ("on_route", 0.0, 104.0)
+    assert segments(demo, "drone.situation")[0][:2] == ("on_route", 0.0)
     assert [c for c, _, _ in segments(demo, "drone.cause")] == [
         "n/a", "wind", "n/a", "spoofed_position", "n/a", "foreign_control", "n/a"
     ]  # fmt: skip
-    assert causes["wind"][0] == 105.0 and causes["spoofed_position"][0] == 182.0
-    assert causes["foreign_control"] == (338.0, 435.0)  # la causa dura hasta que vuelve a la ruta
+    assert 100.0 <= causes["wind"][0] <= 115.0  # el viento supera al dron hacia T+100
+    assert 168.0 < causes["spoofed_position"][0] < 215.0  # desde que el desfase pasa de 25 m
+    start, end = causes["foreign_control"]
+    assert 336.0 <= start <= 360.0 and 385.0 < end < 440.0  # dura hasta que vuelve a la ruta
     assert "unexplained" not in causes
 
 

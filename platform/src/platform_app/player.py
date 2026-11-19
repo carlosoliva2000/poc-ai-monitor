@@ -160,6 +160,7 @@ class Player:
             duration_s=min(full.duration_s, self.sim_time),
             trajectory=[s for s in full.trajectory if s.t <= limit],
             wind=[w for w in full.wind if w.t <= limit],
+            emitters=full.emitters,  # emisores y estación del secuestrador (vista del instructor)
         )
 
     def truth_now(self) -> LiveTruth | None:

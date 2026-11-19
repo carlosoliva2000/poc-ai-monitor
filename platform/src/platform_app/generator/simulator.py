@@ -24,6 +24,7 @@ Una fuente solo tiene un fallo a la vez, salvo el GPS, que puede tener `loss` y 
 
 import math
 import random
+from collections import deque
 from dataclasses import dataclass
 
 from poc_contracts.commands import CommandBody, ScheduledCommand
@@ -59,7 +60,10 @@ from .receiver import Estimator, GnssEpoch, GnssModel, stable_rng
 HOLD_MAX_SPEED_MPS = 3.0  # lazo P del punto de espera: tope de la velocidad sobre el suelo
 LATERAL_INT_WINDOW_M = 15.0  # la integral solo acumula con un error lateral menor que esto
 LATERAL_CORR_MAX_MPS = 3.0  # tope de la corrección integral (anti-windup)
+LINK_LOSS_WINDOW_S = 10.0  # ventana con la que `LinkStatus` mide los paquetes perdidos
 ENDURANCE_HOLD_S = 5.0  # segundos seguidos sin llegar a casa para que salte el failsafe ⚠️
+ENDURANCE_WIND_MARGIN_MPS = 1.0  # margen sobre el viento al calcular la energía (el estimado a
+# bordo y el real en la verdad: parte de la definición de «no llega») ⚠️
 
 
 @dataclass(frozen=True)
@@ -193,7 +197,7 @@ class Simulator:
         self._link_phys = sim.link_physics
         self._emitters_on = sim.emitters
         self._link_rng = stable_rng(config.seed, "link_loss")
-        self._pkt_total = self._pkt_lost = 0  # paquetes de telemetría desde el último `LinkStatus`
+        self._pkt_history: deque[tuple[float, bool]] = deque()  # (instante, perdido) por paquete
         self._link_down_s = 0.0  # segundos seguidos sin enlace con nuestra estación (en el dron)
         self._battery = Battery(config.sensors.battery) if sim.battery_model else None
         self._emitter_state: tuple[float, float, tuple[str, ...]] = (0.0, 0.0, ())
@@ -532,8 +536,7 @@ class Simulator:
         lost = (not up) or u < radio.loss_probability(
             self.config, radio.rssi_dbm(self.config, s.x, s.y, self.t)
         )
-        self._pkt_total += 1
-        self._pkt_lost += lost
+        self._pkt_history.append((self.t, lost))
         return not lost
 
     def _link_down_physical(self, x: float, y: float) -> bool:
@@ -578,20 +581,28 @@ class Simulator:
             # «No llega a casa»: la estimación depende mucho del viento estimado (al acercarse a la
             # velocidad máxima respecto al aire), así que tiene que mantenerse unos segundos.
             wind = self._filter.wind if self._filter else None
-            if self._can_reach_home(self._believed(), wind):
+            if self._filter is not None:  # lo que cree: su velocidad estimada y un margen de viento
+                velocity = (self._va[0] + wind[0], self._va[1] + wind[1])
+            else:
+                velocity = (s.vx, s.vy)
+            if self._can_reach_home(self._believed(), wind, velocity, ENDURANCE_WIND_MARGIN_MPS):
                 self._cannot_reach_s = 0.0
             else:
                 self._cannot_reach_s += STEP_S
                 if self._cannot_reach_s >= ENDURANCE_HOLD_S:
                     self.set_mode("failsafe_return")
 
-    def _can_reach_home(self, pos: Point, wind: Point | None) -> bool:
+    def _can_reach_home(
+        self, pos: Point, wind: Point | None, velocity: Point, margin_mps: float = 0.0
+    ) -> bool:
         """Con la energía que queda, ¿llega a casa con ese viento (el estimado a bordo o, sin
-        estimador, el real)?"""
+        estimador, el real) y con la reserva?"""
         assert self._battery is not None
         d = self.config.drone
         w = wind if wind is not None else self._wind(self.t).vector()
-        return self._battery.can_reach_home(pos, w, d.cruise_speed_mps, d.max_airspeed_mps)
+        return self._battery.can_reach_home(
+            pos, w, d.cruise_speed_mps, d.max_airspeed_mps, velocity, d.max_accel_mps2, margin_mps
+        )
 
     def _loss_pct(self, x: float, y: float) -> float:
         """Paquetes que se pierden de verdad (modelo, sin azar); 100 con el enlace caído."""
@@ -607,7 +618,7 @@ class Simulator:
         """Verdad: con la energía que queda, la posición real y el viento real, ¿llega a casa?"""
         if self._battery is None:
             return True
-        return self._can_reach_home((s.x, s.y), None)
+        return self._can_reach_home((s.x, s.y), None, (s.vx, s.vy), ENDURANCE_WIND_MARGIN_MPS)
 
     def _station_wind(self, t: float) -> Wind:
         """Lo que mide la estación en tierra: el viento del dron por un factor, con retraso (media
@@ -626,11 +637,17 @@ class Simulator:
 
     def _link_payload(self, rng: random.Random) -> dict:
         """`LinkStatus` que mide nuestra estación (nunca se silencia: el enlace caído se ve como
-        100 % de paquetes perdidos). Los paquetes se cuentan desde el último estado."""
+        100 % de paquetes perdidos). Los paquetes perdidos se miden en los últimos 10 s."""
         s = self.samples[self.n]
         up = self._ours_link_up(s.x, s.y)
-        lost = 100.0 * self._pkt_lost / self._pkt_total if self._pkt_total else 0.0
-        self._pkt_total = self._pkt_lost = 0
+        while self._pkt_history and self._pkt_history[0][0] < self.t - LINK_LOSS_WINDOW_S:
+            self._pkt_history.popleft()
+        total = len(self._pkt_history)
+        lost = (
+            100.0 * sum(1 for _, was_lost in self._pkt_history if was_lost) / total
+            if total
+            else 0.0
+        )
         rssi = radio.rssi_dbm(self.config, s.x, s.y, self.t)
         latency = sensors.link_quality(self.config, self.t)[1]
         return sensors.link_payload_physics(self.config, rng, rssi, latency, up, lost)

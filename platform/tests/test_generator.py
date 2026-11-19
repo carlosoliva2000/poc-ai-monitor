@@ -135,18 +135,23 @@ def test_gps_reports_the_spoofed_position_and_radar_the_real_one(runs_dir: Path)
     assert ((radar["x"] - s.x) ** 2 + (radar["y"] - s.y) ** 2) ** 0.5 < 25.0
 
 
-def test_link_changes_controller_only_during_the_hijack(runs_dir: Path) -> None:
+def test_the_link_does_not_publish_the_controller_and_a_hijack_is_a_lost_link(
+    runs_dir: Path,
+) -> None:
+    """Desde tierra el controlador ajeno no se ve: `LinkStatus` no lo lleva y, durante el secuestro,
+    nuestra estación no recibe nada del dron (100 % de pérdida)."""
     run = load_run("hijack", runs_dir)
     for e in run.of_type("LinkStatus"):
-        hijacked = 335.0 <= e["sim_time"] < 380.0
-        assert (e["payload"]["controller_id"] == "UNK-4F2A") == hijacked
+        assert "controller_id" not in e["payload"]
+        if 336.0 <= e["sim_time"] < 380.0:
+            assert e["payload"]["packet_loss_pct"] == 100.0 and e["payload"]["rssi_dbm"] is None
 
 
 def test_battery_drains_and_gps_fix_is_3d(runs_dir: Path) -> None:
     run = load_run("nominal", runs_dir)
     pct = [e["payload"]["battery_pct"] for e in run.of_type("BatteryStatus")]
     assert pct[0] > pct[-1]
-    assert pct[-1] == pytest.approx(100 - 1.2 * run.truth.duration_s / 60, abs=0.6)
+    assert 85.0 < pct[-1] < 93.0  # el consumo depende del vuelo (~11 % en 460 s)
     assert {e["payload"]["fix"] for e in run.of_type("PositionUpdated")} == {"3d"}
 
 
@@ -166,6 +171,9 @@ def test_labels_of_the_demo(runs_dir: Path) -> None:
 
 def test_labels_of_the_scheduled_faults(runs_dir: Path) -> None:
     labels = load_run("faults", runs_dir).labels
+    wind = labels[0]  # el cambio de viento durante la pérdida del GPS
+    assert (wind.id, wind.type.value, wind.start_s, wind.end_s) == ("A1", "wind", 250.0, 300.0)
+    labels = [lb for lb in labels if lb.id.startswith("F")]
     assert [lb.model_dump(mode="json") for lb in labels] == [
         {
             "id": "F1",

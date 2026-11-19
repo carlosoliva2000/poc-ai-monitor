@@ -201,11 +201,11 @@ def test_flight_summary_after_the_flight(runs_dir: Path) -> None:
     summary = FlightSummary.model_validate(call_tool(ctx, "get_flight_summary", {}))
     assert summary.mission_id == "MSN-DEMO"
     assert summary.mission_completed and summary.completion_reason == "returned_to_base"
-    assert summary.duration_s == pytest.approx(556.3, abs=1.0)
+    assert summary.duration_s == pytest.approx(524.9, abs=1.0)
     assert summary.waypoints_planned == ["WP1", "WP2", "WP3", "WP4"]
     assert [w.waypoint_id for w in summary.waypoints_reached] == ["WP1", "WP2", "WP3", "WP4"]
     assert summary.distance_m.gps and summary.distance_m.radar
-    assert 0.9 < summary.distance_m.gps / summary.distance_m.radar < 1.1
+    assert 0.8 < summary.distance_m.gps / summary.distance_m.radar < 1.1  # radar con más ruido
     assert summary.detections_by_rule.model_dump() == {
         "ROUTE_DEVIATION": 0,
         "SOURCE_DISCREPANCY": 0,
@@ -368,11 +368,12 @@ def test_computed_facts_gps_radar_and_max_step(runs_dir: Path) -> None:
         call_tool(ctx, "get_track_metrics", {"since": 76, "until": 106})
     )
     assert not wind.gps_radar.disagreed and wind.gps_max_step_m < 30
-    _, ctx = at(runs_dir, "faults", 290.5)  # fin de la pérdida de GPS
+    _, ctx = at(runs_dir, "faults", 289.5)  # al final de la pérdida de GPS
     loss = TrackMetrics.model_validate(
-        call_tool(ctx, "get_track_metrics", {"since": 260, "until": 290})
+        call_tool(ctx, "get_track_metrics", {"since": 260, "until": 289.5})
     )
-    assert loss.gps_radar.disagreed and loss.gps_max_step_m >= 30
+    # sin fix el receptor no da posición: la ventana de la pérdida no tiene posiciones del GPS
+    assert not loss.gps_available and loss.gps_radar is None
 
 
 def test_computed_facts_are_null_without_data(runs_dir: Path) -> None:
@@ -481,9 +482,9 @@ def test_now_without_a_gps_fix_does_not_compare_an_estimated_position(runs_dir: 
     assert now.gps_deviation_from_plan_m is None
     assert now.radar_deviation_from_plan_m is not None  # la del radar se queda
     assert now.wind is not None  # el resto de `now` no cambia
-    # la ventana sigue usando todas las posiciones del GPS, con o sin fix
-    assert metrics.gps_radar is not None and metrics.gps_radar.disagreed is False
-    assert metrics.gps_max_step_m is not None and metrics.gps_available is True
+    # la ventana usa las posiciones del GPS que hay (las de antes de la pérdida)
+    assert metrics.gps_radar is not None and metrics.gps_available is True
+    assert metrics.gps_max_step_m is not None
 
 
 def test_now_returns_to_the_comparison_once_the_fix_is_back(runs_dir: Path) -> None:
@@ -494,13 +495,13 @@ def test_now_returns_to_the_comparison_once_the_fix_is_back(runs_dir: Path) -> N
     assert now.gps_deviation_from_plan_m is not None and now.gps_deviation_from_plan_m > 60
 
 
-def test_the_window_aggregates_of_the_gps_loss_do_not_depend_on_the_fix(runs_dir: Path) -> None:
-    """El criterio de la fase y del guardrail (`disagreed`, salto de 90 m) sale de la ventana, con
-    las posiciones sin fix incluidas: v0.15 no lo cambia."""
-    _, ctx = at(runs_dir, "faults", 290.9)
-    metrics, _ = now_of(ctx, 260, 290.9)
-    assert metrics.gps_radar is not None and metrics.gps_radar.disagreed is True
-    assert metrics.gps_max_step_m is not None and metrics.gps_max_step_m > 80
+def test_the_window_of_the_gps_loss_has_no_positions_to_compare(runs_dir: Path) -> None:
+    """Con el simulador v2 un GPS sin fix no da posición (`null`): la ventana de la pérdida no tiene
+    posiciones del GPS y solo las del radar."""
+    _, ctx = at(runs_dir, "faults", 289.9)
+    metrics, _ = now_of(ctx, 260, 289.9)
+    assert metrics.gps_available is False and metrics.gps_radar is None
+    assert metrics.radar_available is True and metrics.mean_speed_mps.gps is None
 
 
 def test_now_with_the_gps_silent_has_no_fix_to_report(runs_dir: Path) -> None:
@@ -521,19 +522,21 @@ def route_trend(runs_dir: Path, scenario: str, seconds: float) -> dict:
 
 
 def test_route_trend_follows_the_hijack_turnaround(runs_dir: Path) -> None:
-    """El secuestro se aleja hasta ~T+06:23 y luego el dron vuelve hacia la ruta, aunque el `trend`
-    de la ventana de 30 s siga diciendo `increasing`."""
-    away = route_trend(runs_dir, "hijack", 380.0)
-    assert (away["route_trend"], away["route_trend_source"]) == ("moving_away", "gps")
+    """El secuestro se aleja hasta ~T+06:30 (el dron tarda unos 8 s en frenar y dar la vuelta al
+    recuperar el mando) y luego vuelve hacia la ruta, aunque el `trend` de la ventana de 30 s siga
+    diciendo `increasing`."""
+    away = route_trend(runs_dir, "hijack", 380.0)  # sin telemetría del dron: solo el radar
+    assert (away["route_trend"], away["route_trend_source"]) == ("moving_away", "radar")
     assert away["route_change_m"] > 50
-    back = route_trend(runs_dir, "hijack", 385.0)  # T+06:25, cuando vuelve el enlace
+    back = route_trend(runs_dir, "hijack", 396.0)  # ya de vuelta hacia la ruta
     assert back["route_trend"] == "approaching" and back["route_change_m"] < -20
-    later = route_trend(runs_dir, "hijack", 388.0)
+    later = route_trend(runs_dir, "hijack", 402.0)
     assert later["route_trend"] == "approaching"
     window = call_tool(
-        at(runs_dir, "hijack", 388.0)[1], "get_track_metrics", {"since": 358.0, "until": 388.0}
+        at(runs_dir, "hijack", 396.0)[1], "get_track_metrics", {"since": 366.0, "until": 396.0}
     )
-    assert window["gps_deviation_from_plan_m"]["trend"] == "increasing"  # la ventana se queda atrás
+    # la ventana de 30 s se queda atrás (con el radar: sin telemetría del GPS en el secuestro)
+    assert window["radar_deviation_from_plan_m"]["trend"] == "increasing"
 
 
 def test_route_trend_is_steady_in_a_nominal_flight(runs_dir: Path) -> None:

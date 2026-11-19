@@ -3,6 +3,7 @@ import type {
   Anomaly,
   AlertClosed,
   AlertEnriched,
+  AutopilotStatus,
   Battery,
   Detection,
   DetectionAcknowledged,
@@ -18,6 +19,21 @@ import type {
 export type Sample = { t: number; x: number; y: number }
 export type GpsSample = Sample & { heading: number; speed: number; alt: number; fix: Position['fix']; sats: number; hdop: number }
 export type RadarSample = Sample & { speed: number }
+
+/** Estado del enlace según el último `LinkStatus` (nuestra estación): caído, degradado o bueno. */
+export type LinkState = 'good' | 'degraded' | 'lost'
+export const LINK_LOSS_BAD_PCT = 20
+export const LINK_LATENCY_BAD_MS = 100
+
+export function linkState(link: Link | null): LinkState | null {
+  if (!link) return null
+  if (link.rssi_dbm === null || link.latency_ms === null || (link.packet_loss_pct ?? 0) >= 100) return 'lost'
+  if ((link.packet_loss_pct ?? 0) > LINK_LOSS_BAD_PCT || link.latency_ms > LINK_LATENCY_BAD_MS) return 'degraded'
+  return 'good'
+}
+
+/** Telemetría del dron: llega por el enlace, así que con el enlace caído deja de llegar. */
+const TELEMETRY_EVENTS = new Set(['PositionUpdated', 'GnssStatus', 'AutopilotStatus', 'BatteryStatus'])
 
 export type DetectionView = {
   detection_id: string
@@ -47,6 +63,12 @@ export type Derived = {
   wind: Envelope<Wind> | null
   link: Envelope<Link> | null
   battery: Envelope<Battery> | null
+  /** Último `PositionUpdated` (con o sin posición): el fix y los satélites. */
+  gpsStatus: { t: number; fix: Position['fix']; sats: number } | null
+  autopilot: Envelope<AutopilotStatus> | null
+  linkState: LinkState | null
+  /** `sim_time` del último mensaje de telemetría del dron (GPS, receptor, autopiloto, batería). */
+  lastTelemetry: number | null
   lastWaypoint: string
   reached: Set<string>
   missionDone: boolean
@@ -78,6 +100,9 @@ export function derive(events: Envelope[]): Derived {
   let wind: Envelope<Wind> | null = null
   let link: Envelope<Link> | null = null
   let battery: Envelope<Battery> | null = null
+  let gpsStatus: Derived['gpsStatus'] = null
+  let autopilot: Envelope<AutopilotStatus> | null = null
+  let lastTelemetry: number | null = null
   let lastWaypoint = 'BASE'
   let missionDone = false
   let report: Derived['report'] = null
@@ -87,10 +112,13 @@ export function derive(events: Envelope[]): Derived {
 
   for (const e of events) {
     if (t0Ms === null) t0Ms = Date.parse(e.event_time) - e.sim_time * 1000
+    if (TELEMETRY_EVENTS.has(e.type)) lastTelemetry = e.sim_time
     switch (e.type) {
       case 'PositionUpdated': {
         const p = e.payload as unknown as Position
-        gps.push({ t: e.sim_time, x: p.x, y: p.y, heading: p.course_deg, speed: p.speed_mps, alt: p.alt_m, fix: p.fix, sats: p.sats, hdop: p.hdop })
+        gpsStatus = { t: e.sim_time, fix: p.fix, sats: p.sats }
+        if (p.x === null || p.y === null) break // sin fix no hay posición que pintar
+        gps.push({ t: e.sim_time, x: p.x, y: p.y, heading: p.course_deg ?? 0, speed: p.speed_mps ?? 0, alt: p.alt_m ?? 0, fix: p.fix, sats: p.sats, hdop: p.hdop })
         break
       }
       case 'TrackUpdated': {
@@ -106,6 +134,9 @@ export function derive(events: Envelope[]): Derived {
         break
       case 'BatteryStatus':
         battery = e as Envelope<Battery>
+        break
+      case 'AutopilotStatus':
+        autopilot = e as Envelope<AutopilotStatus>
         break
       case 'WaypointReached': {
         const id = String((e.payload as { waypoint_id: string }).waypoint_id)
@@ -192,6 +223,10 @@ export function derive(events: Envelope[]): Derived {
     wind,
     link,
     battery,
+    gpsStatus,
+    autopilot,
+    linkState: linkState(link?.payload ?? null),
+    lastTelemetry,
     lastWaypoint,
     reached,
     missionDone,

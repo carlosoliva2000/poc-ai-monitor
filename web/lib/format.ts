@@ -121,6 +121,8 @@ export function eventTone(e: Envelope): Tone {
     case 'WindReported':
     case 'LinkStatus':
     case 'BatteryStatus':
+    case 'GnssStatus':
+    case 'AutopilotStatus':
       return 'neutral'
     default:
       return 'primary'
@@ -134,15 +136,21 @@ export function payloadSummary(e: Envelope): string {
   const p = e.payload as Record<string, unknown>
   switch (e.type) {
     case 'PositionUpdated':
+      if (p.x === null) return `no position (fix=${p.fix} sats=${p.sats} hdop=${n(p.hdop)})`
       return `x=${n(p.x, 0)} y=${n(p.y, 0)} v=${n(p.speed_mps)} course=${n(p.course_deg, 0)}° fix=${p.fix} sats=${p.sats} hdop=${n(p.hdop)}`
     case 'TrackUpdated':
       return `x=${n(p.x, 0)} y=${n(p.y, 0)} v=${n(p.speed_mps)}`
     case 'WindReported':
       return `${n(p.speed_mps)} m/s from ${n(p.from_deg, 0)}°`
     case 'LinkStatus':
-      return `${p.controller_id} rssi=${n(p.rssi_dbm, 0)} dBm lat=${n(p.latency_ms, 0)} ms`
+      if (p.rssi_dbm === null) return `link lost (${n(p.packet_loss_pct, 0)} % packets lost)`
+      return `${p.controller_id ? `${p.controller_id} ` : ''}rssi=${n(p.rssi_dbm, 0)} dBm lat=${n(p.latency_ms, 0)} ms${p.packet_loss_pct != null ? ` loss=${n(p.packet_loss_pct, 0)} %` : ''}`
     case 'BatteryStatus':
-      return `${n(p.battery_pct, 0)} %`
+      return `${n(p.battery_pct, 0)} %${p.power_w != null ? ` · ${n(p.power_w, 0)} W · ${n(Number(p.time_remaining_s) / 60, 0)} min left` : ''}`
+    case 'GnssStatus':
+      return `h_acc=${n(p.h_acc_m)} m C/N0=${n(p.cn0_dbhz)} dB-Hz AGC=${n(p.agc_db)} dB`
+    case 'AutopilotStatus':
+      return `${p.mode} nose=${n(p.heading_deg, 0)}° air=${n(p.airspeed_mps)} m/s wind est=${n(p.wind_est_speed_mps)} m/s from ${n(p.wind_est_from_deg, 0)}° innov=${p.innovation_m === null ? '—' : n(p.innovation_m)} m`
     case 'WaypointReached':
       return `${p.waypoint_id}`
     case 'DetectionRaised':

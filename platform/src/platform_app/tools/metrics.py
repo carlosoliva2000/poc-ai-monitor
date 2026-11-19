@@ -125,9 +125,10 @@ def _course(samples: list[Sample]) -> float | None:
 
 
 def _mean(events: Sequence[Envelope], key: str) -> float | None:
-    if not events:
+    values = [float(e.payload[key]) for e in events if e.payload[key] is not None]
+    if not values:  # sin fix el receptor no da velocidad (simulador v2)
         return None
-    return round(sum(float(e.payload[key]) for e in events) / len(events), 1)
+    return round(sum(values) / len(values), 1)
 
 
 def _angle_diff(a: float, b: float) -> float:

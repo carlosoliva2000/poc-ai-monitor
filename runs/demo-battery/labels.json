@@ -55,7 +55,7 @@
       "type": "source_silent",
       "source": "battery",
       "start_s": 25.0,
-      "end_s": 556.3,
+      "end_s": 524.9,
       "expected_rules": [
         "SOURCE_SILENT"
       ],
@@ -63,7 +63,7 @@
       "also_accepted_causes": [],
       "eval_window": [
         25.0,
-        616.3
+        584.9
       ]
     }
   ]

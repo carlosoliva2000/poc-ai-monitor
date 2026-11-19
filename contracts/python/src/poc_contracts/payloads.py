@@ -101,10 +101,10 @@ class WindReported(Payload):
 
 class LinkStatus(Payload):
     """Enlace de mando medido por **nuestra estación** (v1.0). Con `simulator.link_physics`:
-    `rssi_dbm` y `latency_ms` (`null` si no llega nada) y `packet_loss_pct` (paquetes perdidos desde
-    el último estado; 100 con el enlace caído). `controller_id` es de antes de la v1.0: se retira al
-    cerrar la E7a (paso 7b) y no lo publica el enlace con física (desde tierra el controlador
-    ajeno no se ve: queda solo en la verdad)."""
+    `rssi_dbm` y `latency_ms` (`null` si no llega nada) y `packet_loss_pct` (paquetes de telemetría
+    perdidos en los últimos 10 s; 100 con el enlace caído). `controller_id` es de antes de la
+    v1.0: se retira al cerrar la E7a (paso 7b) y no lo publica el enlace con física (desde tierra
+    el controlador ajeno no se ve: queda solo en la verdad)."""
 
     controller_id: str | None = None
     rssi_dbm: float | None

@@ -17,13 +17,13 @@ def test_base_wind_outside_episodes() -> None:
 
 
 def test_episode_ramps_up_holds_and_ramps_down() -> None:
-    wind = scenario_config("wind").wind  # 95–150 s, rampa 10 s, 12 m/s, del 350°
+    wind = scenario_config("wind").wind  # 95–150 s, rampa 10 s, 18 m/s, del 350°
     assert wind_at(95.0, wind).speed_mps == pytest.approx(2.0)  # arranca en la velocidad base
-    assert wind_at(100.0, wind).speed_mps == pytest.approx(7.0)  # a media rampa
+    assert wind_at(100.0, wind).speed_mps == pytest.approx(10.0)  # a media rampa
     assert wind_at(120.0, wind) == wind_at(120.0, wind)
     full = wind_at(120.0, wind)
-    assert (full.speed_mps, full.from_deg) == (12.0, 350.0)
-    assert wind_at(145.0, wind).speed_mps == pytest.approx(7.0)
+    assert (full.speed_mps, full.from_deg) == (18.0, 350.0)
+    assert wind_at(145.0, wind).speed_mps == pytest.approx(10.0)
     assert wind_at(150.5, wind).speed_mps == pytest.approx(2.0)
     assert wind_at(150.5, wind).from_deg == 300.0
 

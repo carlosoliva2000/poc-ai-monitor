@@ -30,20 +30,35 @@ export type Envelope<P = Record<string, unknown>> = {
 export type EventDraft = Omit<Envelope, 'seq' | 'ingestion_time'>
 
 export type Position = {
-  x: number
-  y: number
-  alt_m: number
-  speed_mps: number
+  /** Sin fix (`fix: none`) el receptor no da posición, altitud, velocidad ni rumbo: `null` (v1.0). */
+  x: number | null
+  y: number | null
+  alt_m: number | null
+  speed_mps: number | null
   /** Rumbo sobre el suelo (v1.0; antes `heading_deg`). */
-  course_deg: number
+  course_deg: number | null
   fix: 'none' | '2d' | '3d'
   sats: number
   hdop: number
 }
 export type Track = { x: number; y: number; speed_mps: number; course_deg: number }
 export type Wind = { speed_mps: number; from_deg: number }
-export type Link = { controller_id: string; rssi_dbm: number; latency_ms: number }
-export type Battery = { battery_pct: number }
+/** Enlace medido por nuestra estación (v1.0): con el enlace caído, `rssi_dbm` y `latency_ms` son `null`. */
+export type Link = { controller_id?: string | null; rssi_dbm: number | null; latency_ms: number | null; packet_loss_pct?: number | null }
+export type Battery = { battery_pct: number; power_w?: number | null; time_remaining_s?: number | null }
+export type GnssStatus = { h_acc_m: number; cn0_dbhz: number; agc_db: number }
+export type AutopilotStatus = {
+  mode: 'mission' | 'failsafe_return' | 'failsafe_hold' | 'failsafe_land'
+  heading_deg: number
+  airspeed_mps: number
+  wind_est_speed_mps: number
+  wind_est_from_deg: number
+  innovation_m: number | null
+  est_x: number
+  est_y: number
+  ground_speed_mps: number
+  course_deg: number
+}
 export type Waypoint = { id: string; x: number; y: number; eta_s: number }
 
 export type Detection = {
@@ -202,10 +217,15 @@ export type PlanFile = {
   duration_s: number
   waypoints: Waypoint[]
   trajectory: { t: number; x: number; y: number; speed_mps: number; heading_deg: number }[]
+  /** Posición y alcance del radar (solo con `simulator.radar_geometry`). */
+  radar?: { x: number; y: number; max_range_m: number }
 }
+/** Emisor o estación ajena con posición (solo en la verdad y en la vista del instructor). */
+export type TruthEmitter = { id: string; kind: 'spoofer' | 'jammer' | 'hijacker'; x: number; y: number }
 export type TruthFile = {
   duration_s: number
-  trajectory: { t: number; x: number; y: number; speed_mps: number; heading_deg: number; course_deg: number }[]
+  trajectory: { t: number; x: number; y: number; speed_mps: number; heading_deg: number; course_deg: number; mode?: string; link_up?: boolean; emitters_active?: string[] }[]
+  emitters?: TruthEmitter[]
   wind: { t: number; speed_mps: number; from_deg: number }[]
 }
 

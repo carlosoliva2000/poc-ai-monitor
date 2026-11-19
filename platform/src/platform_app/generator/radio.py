@@ -70,8 +70,9 @@ def emitter_effects(
     if sp is not None and sp.start_s <= t < sp.end_s:
         em = sp.emitter or EmitterPosition(x=0.0, y=0.0)
         gain = _db_sum(em.power_db - 20.0 * math.log10(distance_km(x, y, em.x, em.y)))
-        d_cn0 += min(MAX_SPOOF_CN0_GAIN_DB, gain)
-        d_agc -= 0.5 * gain
+        applied = min(MAX_SPOOF_CN0_GAIN_DB, gain)  # lo que sube el C/N0…
+        d_cn0 += applied
+        d_agc -= 0.5 * applied  # …y el AGC baja la mitad de eso
         active.append(SPOOFER_ID)
     if is_hijacked(t, config.hijack):
         active.append(HIJACKER_ID)

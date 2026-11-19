@@ -103,8 +103,8 @@ export function usePlatform() {
       seen.current.add(event.event_id)
       eventsRef.current.push(event)
       if (!fromBackfill && event.type === 'PositionUpdated') {
-        const p = event.payload as { x: number; y: number; course_deg: number }
-        live.gps.push({ t: event.sim_time, x: p.x, y: p.y, heading: p.course_deg })
+        const p = event.payload as { x: number | null; y: number | null; course_deg: number | null }
+        if (p.x !== null && p.y !== null) live.gps.push({ t: event.sim_time, x: p.x, y: p.y, heading: p.course_deg ?? 0 })
       }
       if (event.type === 'AgentReply') {
         const reply = event.payload as { reply_to: string }

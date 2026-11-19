@@ -23,12 +23,13 @@ from .paths import RUNS_DIR
 Series = list[tuple[float, float]]
 
 DEVIATION_LIMIT_M = 15.0  # desviación admitida en vuelo normal (esquinas incluidas)
-DISCREPANCY_LIMIT_M = 20.0  # distancia GPS–radar (media móvil de 3) admitida sin anomalía
+DISCREPANCY_LIMIT_M = 30.0  # distancia GPS–radar (media móvil de 3) admitida sin anomalía (el radar
+# pierde precisión con la distancia: σ ≈ 10 m a 2,5 km)
 MEAN_MEMORY_S = 6.0  # la media móvil de 3 radares recuerda ~4 s: margen tras cada ventana
 MAX_INTERP_GAP_S = 3.0  # no se interpola el GPS a través de un hueco mayor
 NORMAL_LINK_ID = "GCS-1"
 JUMP_MIN_M = 40.0  # salto mínimo del GPS cuando acaba el spoofing
-HIJACK_MIN_M = 300.0  # «cientos de metros»
+HIJACK_MIN_M = 100.0  # el dron se aleja de la ruta (con el simulador v2 frena y llega menos lejos)
 LOSS_MIN_M = 40.0  # desviación mínima de la verdad con 45 s de pérdida de GPS
 
 
@@ -58,7 +59,9 @@ class RunData:
     def positions(self, event_type: str) -> list[tuple[float, float, float]]:
         """(sim_time, x, y) de `PositionUpdated` (GPS) o `TrackUpdated` (radar)."""
         return [
-            (e["sim_time"], e["payload"]["x"], e["payload"]["y"]) for e in self.of_type(event_type)
+            (e["sim_time"], e["payload"]["x"], e["payload"]["y"])
+            for e in self.of_type(event_type)
+            if e["payload"]["x"] is not None  # sin fix el receptor no da posición
         ]
 
 
@@ -204,23 +207,23 @@ def _spoofing(c: _Checks, label: Label, dev: Series, until_s: float | None) -> N
     a, b = label.start_s, label.end_s
     gps_max = max(inside(reported_deviation(c.run, "PositionUpdated"), a, b))
     c.add(
-        f"{label.id} spoofing: GPS a < {DEVIATION_LIMIT_M:.0f} m del plan durante el engaño",
+        f"{label.id} spoofing: GPS a < 20 m del plan durante el engaño",
         f"{gps_max:.1f} m",
-        gps_max < DEVIATION_LIMIT_M,
+        gps_max < 20.0,
     )
     peak = max(inside(dev, a, b))
     c.add(
-        f"{label.id} spoofing: la verdad se aleja 70–90 m al final del engaño",
+        f"{label.id} spoofing: la verdad se aleja 50–100 m durante el engaño",
         f"{peak:.1f} m",
-        70 <= peak <= 90,
+        50 <= peak <= 100,
     )
     truth_end = inside(dev, b - 10, b)
     radar_end = inside(reported_deviation(c.run, "TrackUpdated"), b - 10, b)
     truth_mean, radar_mean = sum(truth_end) / len(truth_end), sum(radar_end) / len(radar_end)
     c.add(
-        f"{label.id} spoofing: el radar ve lo mismo que la verdad (media 10 s, ±8 m)",
+        f"{label.id} spoofing: el radar ve lo mismo que la verdad (media 10 s, ±12 m)",
         f"radar {radar_mean:.1f} m, verdad {truth_mean:.1f} m",
-        abs(radar_mean - truth_mean) < 8,
+        abs(radar_mean - truth_mean) < 12,
     )
     gps_pos = c.run.positions("PositionUpdated")
     before = [p for p in gps_pos if p[0] < b][-1]
@@ -242,19 +245,27 @@ def _hijack(c: _Checks, label: Label, dev: Series, until_s: float | None) -> Non
         f"{peak:.1f} m",
         peak > HIJACK_MIN_M,
     )
-    gps_max = max(inside(reported_deviation(c.run, "PositionUpdated"), a, b + 5))
+    radar_max = max(inside(reported_deviation(c.run, "TrackUpdated"), a, b + 5))
     c.add(
-        f"{label.id} secuestro: el GPS lo acompaña (> {HIJACK_MIN_M:.0f} m)",
-        f"{gps_max:.1f} m",
-        gps_max > HIJACK_MIN_M,
+        f"{label.id} secuestro: el radar lo acompaña (> {HIJACK_MIN_M:.0f} m)",
+        f"{radar_max:.1f} m",
+        radar_max > HIJACK_MIN_M,
+    )
+    telemetry = ("PositionUpdated", "GnssStatus", "AutopilotStatus", "BatteryStatus")
+    leaked = [e for t in telemetry for e in c.run.of_type(t) if a <= e["sim_time"] < b]
+    c.add(
+        f"{label.id} secuestro: no llega telemetría del dron (GPS, receptor, autopiloto, batería)",
+        f"{len(leaked)} eventos dentro del secuestro",
+        not leaked,
     )
     links = c.run.of_type("LinkStatus")
-    changed = [e["sim_time"] for e in links if e["payload"]["controller_id"] != NORMAL_LINK_ID]
+    lost = [e["sim_time"] for e in links if e["payload"]["rssi_dbm"] is None]
     expected = [e["sim_time"] for e in links if a <= e["sim_time"] < b]
     c.add(
-        f"{label.id} secuestro: LinkStatus cambia de controlador solo durante el secuestro",
-        f"{len(changed)} eventos, T+{min(changed):.0f}–{max(changed):.0f} s",
-        changed == expected,
+        f"{label.id} secuestro: LinkStatus dice enlace caído (100 %) solo durante el secuestro",
+        f"{len(lost)} eventos, T+{min(lost):.0f}–{max(lost):.0f} s",
+        lost == expected
+        and all(e["payload"]["packet_loss_pct"] == 100.0 for e in links if e["sim_time"] in lost),
     )
     c.recovery(label, dev, until_s)
 
@@ -288,15 +299,23 @@ def _faults(c: _Checks, labels: list[Label]) -> None:
 
 def _same_as_nominal(c: _Checks, nominal: RunData, until_s: float) -> None:
     """Hasta `until_s` (inicio de la pérdida de GPS; el fin del vuelo si no la hay)."""
-    same_truth = [x for x in c.run.truth.trajectory if x.t <= until_s] == [
-        x for x in nominal.truth.trajectory if x.t <= until_s
+    same_truth = [x for x in c.run.truth.trajectory if x.t < until_s] == [
+        x for x in nominal.truth.trajectory if x.t < until_s
     ]
     c.add(
         f"trayectoria idéntica a nominal hasta T+{until_s:.0f} s (truth.json)",
         "idéntica" if same_truth else "distinta",
         same_truth,
     )
-    sensors = {"PositionUpdated", "TrackUpdated", "WindReported", "LinkStatus", "BatteryStatus"}
+    sensors = {
+        "PositionUpdated",
+        "TrackUpdated",
+        "WindReported",
+        "LinkStatus",
+        "BatteryStatus",
+        "GnssStatus",
+        "AutopilotStatus",
+    }
     mine = {e["event_id"]: e for e in c.run.events if e["type"] in sensors}
     theirs = {e["event_id"]: e for e in nominal.events if e["type"] in sensors}
     early = {i for i, e in theirs.items() if e["sim_time"] < until_s}
@@ -320,8 +339,9 @@ def run_silenced(run: RunData, event: dict) -> bool:
     )
 
 
-def _loss(c: _Checks, label: Label, dev: Series) -> None:
-    """Pérdida de GPS: la estima sigue el plan, la verdad se desvía y el radar lo ve."""
+def _loss(c: _Checks, label: Label, dev: Series, drifts: bool) -> None:
+    """Pérdida de GPS: la estima sigue el plan; si el viento cambia durante la pérdida (`drifts`),
+    la    verdad se desvía, el radar lo ve y el GPS vuelve lejos de la estima."""
     run, a, b = c.run, label.start_s, label.end_s
     marks = {
         e["type"]: e["sim_time"]
@@ -337,21 +357,29 @@ def _loss(c: _Checks, label: Label, dev: Series) -> None:
     gps = run.of_type("PositionUpdated")
     during = [e["payload"] for e in gps if a <= e["sim_time"] < b]
     outside_ = [e["payload"] for e in gps if not a <= e["sim_time"] < b]
+    empty = ("x", "y", "alt_m", "speed_mps", "course_deg")
     ok = bool(during) and all(
-        p["fix"] == "none" and p["sats"] == 0 and p["hdop"] >= 10 for p in during
+        p["fix"] == "none"
+        and p["sats"] == 0
+        and p["hdop"] >= 10
+        and all(p[k] is None for k in empty)
+        for p in during
     )
     ok = ok and all(p["fix"] == "3d" for p in outside_)
     c.add(
-        f"{label.id} pérdida de GPS: fix none, sats 0 y hdop alto solo durante la pérdida",
+        f"{label.id} pérdida de GPS: sin fix y sin posición (null) solo durante la pérdida",
         f"{len(during)} PositionUpdated con pérdida",
         ok,
     )
-    gps_max = max(inside(reported_deviation(run, "PositionUpdated"), a, b))
+    pilot = [e["payload"] for e in run.of_type("AutopilotStatus") if a <= e["sim_time"] < b]
+    est_dev = max(distance_to_route((p["est_x"], p["est_y"]), run.route) for p in pilot)
     c.add(
-        f"{label.id} pérdida de GPS: la estima sigue a < {DEVIATION_LIMIT_M:.0f} m del plan",
-        f"{gps_max:.1f} m",
-        gps_max < DEVIATION_LIMIT_M,
+        f"{label.id} pérdida de GPS: la estima (AutopilotStatus) sigue a < 25 m del plan",
+        f"{est_dev:.1f} m",
+        est_dev < 25.0 and all(p["innovation_m"] is None for p in pilot),
     )
+    if not drifts:
+        return
     peak = max(inside(dev, a, b))
     c.add(
         f"{label.id} pérdida de GPS: la verdad se desvía > {LOSS_MIN_M:.0f} m del plan",
@@ -362,16 +390,14 @@ def _loss(c: _Checks, label: Label, dev: Series) -> None:
     radar_end = inside(reported_deviation(run, "TrackUpdated"), b - 10, b)
     truth_mean, radar_mean = sum(truth_end) / len(truth_end), sum(radar_end) / len(radar_end)
     c.add(
-        f"{label.id} pérdida de GPS: el radar ve lo mismo que la verdad (media 10 s, ±8 m)",
+        f"{label.id} pérdida de GPS: el radar ve lo mismo que la verdad (media 10 s, ±12 m)",
         f"radar {radar_mean:.1f} m, verdad {truth_mean:.1f} m",
-        abs(radar_mean - truth_mean) < 8,
+        abs(radar_mean - truth_mean) < 12,
     )
-    pos = run.positions("PositionUpdated")
-    before = [p for p in pos if p[0] < b][-1]
-    after = next(p for p in pos if p[0] >= b)
-    jump = ((after[1] - before[1]) ** 2 + (after[2] - before[2]) ** 2) ** 0.5
+    first = next(p for p in run.positions("PositionUpdated") if p[0] >= b)
+    jump = ((first[1] - pilot[-1]["est_x"]) ** 2 + (first[2] - pilot[-1]["est_y"]) ** 2) ** 0.5
     c.add(
-        f"{label.id} pérdida de GPS: el GPS salta a la real al volver (> {JUMP_MIN_M:.0f} m)",
+        f"{label.id} pérdida de GPS: el GPS vuelve a la real (> {JUMP_MIN_M:.0f} m de la estima)",
         f"{jump:.1f} m",
         jump > JUMP_MIN_M,
     )
@@ -394,13 +420,27 @@ def run_checks(name: str, runs_dir: Path = RUNS_DIR) -> list[Check]:
     c = _Checks(run)
     dev, disc = truth_deviation(run), gps_radar_distance(run)
     fault_types = SOURCE_LABEL_TYPES  # fallos y degradaciones de una fuente (sin criterio propio)
-    anomalies = sorted(
-        (lb for lb in run.labels if lb.type not in fault_types), key=lambda x: x.start_s
-    )
     faults = [lb for lb in run.labels if lb.type == LabelType.SOURCE_SILENT]
     losses = [lb for lb in run.labels if lb.type == LabelType.GPS_LOSS]
+    # un viento que coincide con una pérdida de GPS es lo que hace que la estima se desvíe: es parte
+    # de la pérdida, no una anomalía de viento aparte
+    anomalies = sorted(
+        (
+            lb
+            for lb in run.labels
+            if lb.type not in fault_types
+            and not (
+                lb.type == LabelType.WIND
+                and any(lb.start_s < x.end_s and x.start_s < lb.end_s for x in losses)
+            )
+        ),
+        key=lambda x: x.start_s,
+    )
 
-    if not anomalies:
+    degraded = any(
+        lb.type in (LabelType.GPS_DEGRADED, LabelType.LINK_DEGRADED) for lb in run.labels
+    )
+    if not anomalies and not degraded:  # con degradaciones el GPS ruidoso desvía al dron
         _nominal(c, dev, min((lb.start_s for lb in losses), default=None))
     for i, label in enumerate(anomalies):
         until_s = anomalies[i + 1].start_s if i + 1 < len(anomalies) else None
@@ -415,9 +455,13 @@ def run_checks(name: str, runs_dir: Path = RUNS_DIR) -> list[Check]:
     if faults or losses:
         _faults(c, faults)
         for label in losses:
-            _loss(c, label, dev)
+            wind_changes = any(
+                w.type == LabelType.WIND and w.start_s < label.end_s and label.start_s < w.end_s
+                for w in run.labels
+            )
+            _loss(c, label, dev, wind_changes)
             c.recovery(label, dev, None)
-        if not anomalies:  # con anomalías (demo-battery) el vuelo ya no es el nominal
+        if not anomalies and not degraded:  # con anomalías (demo-battery) ya no es el nominal
             until_s = min((lb.start_s for lb in losses), default=run.truth.duration_s)
             _same_as_nominal(c, load_run("nominal", runs_dir), until_s)
 

@@ -351,7 +351,7 @@ def test_scenarios(client: TestClient) -> None:
         "wind",
     ]
     demo = body["scenarios"][0]
-    assert demo["generated"] is True and demo["duration_s"] == pytest.approx(556.3)
+    assert demo["generated"] is True and demo["duration_s"] == pytest.approx(524.9)
     assert demo["description"]
 
 
@@ -587,3 +587,15 @@ def test_only_web_clients_can_send_instructor_commands(client: TestClient) -> No
         hello(ai, "ai-module")
         messages = control(ai, "instructor", WIND_COMMAND)
         assert messages == [{"op": "error", "message": "only clients of type web can send control"}]
+
+
+def test_the_truth_endpoint_carries_the_emitters_for_the_instructor_view(
+    client: TestClient,
+) -> None:
+    """`/api/truth` lleva los emisores y la estación del secuestrador (solo para la web)."""
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        hello(ws)
+        control(ws, "load", "demo")
+    emitters = {e["id"]: e["kind"] for e in client.get("/api/truth").json()["emitters"]}
+    assert emitters == {"spoofer-1": "spoofer", "hijacker-1": "hijacker"}

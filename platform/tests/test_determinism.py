@@ -26,15 +26,13 @@ def test_the_files_on_disk_match_a_fresh_generation_of_the_same_scenario(
         assert (tmp_path / f).read_bytes() == (runs_dir / "wind" / f).read_bytes(), f
 
 
-def test_another_seed_changes_the_noise_but_not_the_trajectory(tmp_path: Path) -> None:
+def test_another_seed_changes_the_noise_and_the_trajectory_but_not_the_plan(tmp_path: Path) -> None:
+    """Con el estimador a bordo el vuelo sigue el ruido del GPS: otra semilla da otra trayectoria y
+    otros eventos, pero el plan (sin perturbaciones ni ruido) es el mismo."""
     write_run(generate(scenario_config("nominal")), tmp_path / "a")
     write_run(generate(scenario_config("nominal", seed=7)), tmp_path / "b")
-    assert (tmp_path / "a" / "events.jsonl").read_bytes() != (
-        tmp_path / "b" / "events.jsonl"
-    ).read_bytes()
-    assert (tmp_path / "a" / "truth.json").read_bytes() == (
-        tmp_path / "b" / "truth.json"
-    ).read_bytes()
+    for f in ("events.jsonl", "truth.json"):
+        assert (tmp_path / "a" / f).read_bytes() != (tmp_path / "b" / f).read_bytes()
     assert (tmp_path / "a" / "plan.json").read_bytes() == (
         tmp_path / "b" / "plan.json"
     ).read_bytes()

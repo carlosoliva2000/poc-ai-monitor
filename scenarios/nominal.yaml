@@ -8,10 +8,12 @@ max_duration_s: 900
 drone:
   cruise_speed_mps: 15.0
   max_accel_mps2: 2.0
-  max_turn_rate_dps: 40.0
+  max_turn_rate_dps: 100.0        # yaw máximo del DJI Matrice 300 RTK
   altitude_m: 60.0
-  acceptance_radius_m: 25.0
+  acceptance_radius_m: 5.0
   lookahead_m: 40.0         # punto de mira sobre el tramo, por delante de la proyección
+  wind_limit_mps: 12.0         # resistencia al viento del DJI Matrice 300 RTK
+  max_airspeed_mps: 17.0       # velocidad máxima en modo P (https://www.dji.com/matrice-300/info)
 
 mission:
   id: MSN-NOMINAL
@@ -38,3 +40,15 @@ spoofing: null
 hijack: null
 
 faults: []              # fallos programados, mute o loss (ver README)
+
+# Simulador v2 (E7a): multirrotor con estimador a bordo, receptor GPS, radar con posición, estación en
+# tierra, enlace con física, batería con consumo y emisores. Se eliminan al cerrar la E7a (paso 7b).
+simulator:
+  multirotor_guidance: true
+  onboard_estimator: true
+  gps_receiver: true
+  radar_geometry: true
+  ground_station: true
+  link_physics: true
+  battery_model: true
+  emitters: true

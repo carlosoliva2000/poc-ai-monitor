@@ -174,9 +174,9 @@ class LinkConfig(Config):
     latency_ms: float
     rssi_floor_dbm: float = -95.0
     """Por debajo de esta señal no hay enlace (el failsafe empieza a contar) ⚠️."""
-    loss_rssi50_dbm: float = -85.0
+    loss_rssi50_dbm: float = -90.0
     """Señal con la que se pierde el 50 % de los paquetes (logística en el RSSI) ⚠️."""
-    loss_slope_db: Positive = 3.0
+    loss_slope_db: Positive = 2.5
     episodes: list[LinkEpisode] = Field(default_factory=list)
 
     @model_validator(mode="after")

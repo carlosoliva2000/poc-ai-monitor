@@ -39,9 +39,19 @@ ACTS = [("viento", 95.0, 168.0), ("engaño", 168.0, 335.0), ("secuestro", 335.0,
 
 def config(name: str, switches: dict | None, wind: float | None) -> ScenarioConfig:
     raw = yaml.safe_load((ROOT / "scenarios" / f"{name}.yaml").read_text(encoding="utf-8"))
+    # los YAML ya llevan el simulador v2 encendido: se fuerza cada variante
+    raw["simulator"] = switches or {}
     if switches:
-        raw["simulator"] = switches
         raw["drone"].update({"acceptance_radius_m": 5.0, "max_turn_rate_dps": 100.0})
+    else:  # el guiado de hoy: radio de 25 m y giro de 40 °/s
+        raw["drone"].update({"acceptance_radius_m": 25.0, "max_turn_rate_dps": 40.0})
+    if raw.get("hijack") and not (switches or {}).get("link_physics"):
+        # el enlace de antes (sin física) lleva la pista del secuestro
+        raw["hijack"]["link_hint"] = {
+            "controller_id": "UNK-4F2A",
+            "rssi_dbm": -79.0,
+            "latency_ms": 120.0,
+        }
     if wind is not None:
         raw["wind"]["episodes"][0]["speed_mps"] = wind
     return ScenarioConfig.model_validate(raw)

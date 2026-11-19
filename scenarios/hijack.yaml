@@ -1,6 +1,6 @@
 name: hijack
 description: >-
-  Unauthorised change of destination on the WP4→BASE leg, with a change on the command link; control is recovered after 45 s. Expected cause: HIJACK.
+  Unauthorised change of destination on the WP4→BASE leg: our station loses the command link (the drone obeys another controller) and the telemetry stops, while the radar keeps tracking it; control is recovered after 45 s. Expected cause: HIJACK.
 seed: 42
 t0: "2026-10-20T10:00:00Z"
 max_duration_s: 900
@@ -8,10 +8,12 @@ max_duration_s: 900
 drone:
   cruise_speed_mps: 15.0
   max_accel_mps2: 2.0
-  max_turn_rate_dps: 40.0
+  max_turn_rate_dps: 100.0        # yaw máximo del DJI Matrice 300 RTK
   altitude_m: 60.0
-  acceptance_radius_m: 25.0
+  acceptance_radius_m: 5.0
   lookahead_m: 40.0         # punto de mira sobre el tramo, por delante de la proyección
+  wind_limit_mps: 12.0         # resistencia al viento del DJI Matrice 300 RTK
+  max_airspeed_mps: 17.0       # velocidad máxima en modo P (https://www.dji.com/matrice-300/info)
 
 mission:
   id: MSN-HIJACK
@@ -38,7 +40,18 @@ spoofing: null
 hijack:
   start_s: 335.0
   end_s: 380.0
-  target: {x: 1500.0, y: -1400.0}
-  link_hint: {controller_id: UNK-4F2A, rssi_dbm: -79.0, latency_ms: 120.0}
+  target: {x: 1500.0, y: -1400.0}   # posición de la estación del secuestrador: el dron va allí
 
 faults: []              # fallos programados, mute o loss (ver README)
+
+# Simulador v2 (E7a): multirrotor con estimador a bordo, receptor GPS, radar con posición, estación en
+# tierra, enlace con física, batería con consumo y emisores. Se eliminan al cerrar la E7a (paso 7b).
+simulator:
+  multirotor_guidance: true
+  onboard_estimator: true
+  gps_receiver: true
+  radar_geometry: true
+  ground_station: true
+  link_physics: true
+  battery_model: true
+  emitters: true

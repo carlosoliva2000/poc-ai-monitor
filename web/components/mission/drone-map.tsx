@@ -290,6 +290,19 @@ export const DroneMap = memo(function DroneMap({ plan, data, truth, live, layers
   const gpsSegments = useMemo(() => segmentTrail(data.gps, GPS_GAP_S, (p) => (p.fix === 'none' ? 'none' : 'fix')), [data.gps])
   const radarSegments = useMemo(() => segmentTrail(data.radar, RADAR_GAP_S), [data.radar])
   const truthLine = useMemo(() => (truth ? points(truth.trajectory) : ''), [truth])
+  // Última posición conocida del dron para la línea a la base: la más reciente entre el GPS y el radar (el radar
+  // sigue con el enlace caído; el GPS no).
+  const linkEnd = useMemo(() => {
+    const g = data.gps[data.gps.length - 1]
+    const r = data.radar[data.radar.length - 1]
+    if (g && (!r || g.t >= r.t)) return { x: g.x, y: g.y }
+    return r ? { x: r.x, y: r.y } : null
+  }, [data.gps, data.radar])
+  // Vista del instructor: la estación del secuestrador se une con el dron (su posición real) mientras lo controla.
+  const hijackedAt = useMemo(() => {
+    const last = truth?.trajectory[truth.trajectory.length - 1]
+    return last && last.mode === 'foreign_control' ? { x: last.x, y: last.y } : null
+  }, [truth])
   const since = data.openDetections.length ? Math.min(...data.openDetections.map((d) => d.since)) : null
   const highlight = useMemo(() => (since === null ? '' : points(data.gps.filter((p) => p.t >= since))), [data.gps, since])
 
@@ -354,6 +367,26 @@ export const DroneMap = memo(function DroneMap({ plan, data, truth, live, layers
             <polyline points={truthLine} fill="none" className="stroke-foreground/70" strokeWidth={lineW} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
           )}
 
+          {/* 3b · Emisores y estación del secuestrador (vista del instructor, con la capa de la verdad): un punto con su
+              nombre; el secuestrador, con una línea a trazos al dron mientras lo controla. */}
+          {layers.truth &&
+            truth?.emitters?.map((em) => (
+              <g key={em.id} data-testid={`emitter-${em.kind}`} transform={`translate(${em.x} ${-em.y})`}>
+                <title>{`${em.kind} · ${em.id}`}</title>
+                {em.kind === 'hijacker' ? (
+                  <rect x={-u * 1.1} y={-u * 1.1} width={u * 2.2} height={u * 2.2} className="fill-destructive/70 stroke-destructive" strokeWidth={lineW} vectorEffect="non-scaling-stroke" />
+                ) : (
+                  <circle r={u * 1.2} className={em.kind === 'jammer' ? 'fill-accent/60 stroke-accent' : 'fill-primary/50 stroke-primary'} strokeWidth={lineW} vectorEffect="non-scaling-stroke" />
+                )}
+                <text x={u * 1.8} y={-u * 1.4} fontSize={labelSize} className="fill-foreground font-mono" {...halo}>
+                  {em.kind === 'hijacker' ? 'hijacker' : em.kind === 'jammer' ? 'jammer' : 'spoofer'}
+                </text>
+              </g>
+            ))}
+          {layers.truth && hijackedAt && truth?.emitters?.filter((em) => em.kind === 'hijacker').map((em) => (
+            <line key={`hl-${em.id}`} data-testid="hijacker-line" x1={em.x} y1={-em.y} x2={hijackedAt.x} y2={-hijackedAt.y} className="stroke-destructive" strokeWidth={lineW} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
+          ))}
+
           {/* 4 · Ruta planificada: referencia discontinua, bajo las estelas que se comparan con ella. */}
           {layers.plan && plan && (
             <polyline points={planned} fill="none" className="stroke-primary" strokeWidth={lineW} strokeDasharray="7 5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
@@ -407,6 +440,37 @@ export const DroneMap = memo(function DroneMap({ plan, data, truth, live, layers
                 ),
               )}
             </g>
+          )}
+
+          {/* 8b · Radar con su posición y su alcance máximo, y la línea dron–base con el estado del enlace de mando
+              (nuestra estación): azul tenue = bueno, naranja = degradado, rojo a trazos = caído. */}
+          {layers.plan && plan?.radar && (
+            <g data-testid="radar-position">
+              <title>{`Radar · max range ${plan.radar.max_range_m} m`}</title>
+              <circle cx={plan.radar.x} cy={-plan.radar.y} r={plan.radar.max_range_m} fill="none" stroke={RADAR} strokeOpacity={0.45} strokeWidth={lineW} strokeDasharray="2 7" vectorEffect="non-scaling-stroke" />
+              <g transform={`translate(${plan.radar.x} ${-plan.radar.y})`}>
+                <polygon points={`0,${-u * 1.5} ${u * 1.3},${u * 1} ${-u * 1.3},${u * 1}`} fill={RADAR} fillOpacity={0.25} stroke={RADAR} strokeWidth={lineW + 0.5} vectorEffect="non-scaling-stroke" />
+                <text x={u * 1.8} y={u * 2.4} fontSize={labelSize} className="fill-foreground font-mono" {...halo}>
+                  RADAR
+                </text>
+              </g>
+            </g>
+          )}
+          {layers.drone && linkEnd && data.linkState && (
+            <line
+              data-testid="link-line"
+              data-link-state={data.linkState}
+              x1={0}
+              y1={0}
+              x2={linkEnd.x}
+              y2={-linkEnd.y}
+              className={data.linkState === 'lost' ? 'stroke-destructive' : data.linkState === 'degraded' ? 'stroke-accent' : 'stroke-primary/35'}
+              strokeWidth={lineW + (data.linkState === 'good' ? 0 : 0.5)}
+              strokeDasharray={data.linkState === 'lost' ? '7 5' : data.linkState === 'degraded' ? '3 3' : undefined}
+              vectorEffect="non-scaling-stroke"
+            >
+              <title>{`Command link: ${data.linkState}`}</title>
+            </line>
           )}
 
           {/* 9 · Waypoints y sus letreros: sobre las estelas para que los ids sigan legibles. */}

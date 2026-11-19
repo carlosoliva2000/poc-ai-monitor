@@ -31,6 +31,8 @@
 //   node scripts/capture.mjs fase16 <carpeta> nominal a 4× con «esperar al agente» a 1920×1080 (Fase 16): panel «Instructor» plegado, desplegado y con
 //                                              viento activo; comando desde el panel (T+01:35) y otro desde el chat del instructor (propuesta, Confirm);
 //                                              el comando en el timeline y la alerta WIND del monitor (módulo de IA con la configuración por defecto)
+//   node scripts/capture.mjs e7a <carpeta>    demo a 16× sin módulo de IA (E7a): radar con su alcance, línea dron–base con el estado del enlace,
+//                                              huecos de telemetría en el secuestro y, con la capa de la verdad, los emisores y el secuestrador
 // Requiere plataforma (8100), módulo de IA y web (3000) en marcha. Una sola pestaña: los ids
 // `ops-` los calcula la web y con dos pestañas podrían repetirse.
 import { chromium } from 'playwright'
@@ -458,6 +460,31 @@ async function runIcons() {
   await page.getByRole('button', { name: 'Zoom in' }).click()
   await sleep(400)
   await shot('52_dos_iconos_zoom_moderado')
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
+async function runE7a() {
+  // Simulador v2 (E7a) sin módulo de IA: radar, línea dron–base, huecos de telemetría y emisores.
+  await setup('demo', { waitAgent: false, interactive: false, speed: 16 })
+  await page.getByRole('checkbox', { name: /Truth trail/ }).check()
+  await page.getByRole('button', { name: 'Start', exact: true }).click()
+  while ((await simTime()) < 195) await sleep(200)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await sleep(700)
+  note(`radar ${await count('[data-testid=radar-position]')}, enlace ${await page.locator('[data-testid=link-line]').getAttribute('data-link-state')}, emisores: engaño ${await count('[data-testid=emitter-spoofer]')}, secuestrador ${await count('[data-testid=emitter-hijacker]')}`)
+  await shot('70_engano_radar_enlace_emisor')
+  await page.getByRole('button', { name: 'Resume' }).click()
+  while ((await simTime()) < 360) await sleep(200)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await sleep(700)
+  note(`secuestro: enlace ${await page.locator('[data-testid=link-line]').getAttribute('data-link-state')}, línea del secuestrador ${await count('[data-testid=hijacker-line]')}`)
+  await shot('71_secuestro_enlace_caido_sin_telemetria')
+  await page.getByRole('button', { name: 'Resume' }).click()
+  while ((await simTime()) < 395) await sleep(200)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await sleep(700)
+  note(`recuperado: enlace ${await page.locator('[data-testid=link-line]').getAttribute('data-link-state')}`)
+  await shot('72_enlace_recuperado')
   writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
 }
 
@@ -1355,6 +1382,7 @@ try {
   else if (mode === 'compare') await runCompare()
   else if (mode === 'layout') await runLayout()
   else if (mode === 'icons') await runIcons()
+  else if (mode === 'e7a') await runE7a()
   else if (mode === 'chatsize') await runChatSize()
   else if (mode === 'deadgps') await runDeadGps()
   else if (mode === 'chattools') await runChatTools()

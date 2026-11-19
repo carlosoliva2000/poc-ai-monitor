@@ -65,13 +65,17 @@ def test_the_example_is_deterministic(tmp_path: Path) -> None:
 
 
 def test_gps_episode_follows_its_ramp_and_keeps_the_3d_fix() -> None:
+    """El episodio lleva `sats` y `hdop` hacia su objetivo con la rampa (los nominales varían
+    despacio con el receptor: ±1 satélite y ±0,25 de `hdop`)."""
     gps = readings(ScenarioConfig.model_validate(example_raw()), "PositionUpdated")
-    assert (gps[149.0]["sats"], gps[149.0]["hdop"]) == (14, 0.8)  # antes: lo nominal
-    assert (gps[150.0]["sats"], gps[150.0]["hdop"]) == (14, 0.8)  # al empezar, k = 0
-    assert (gps[155.0]["sats"], gps[155.0]["hdop"]) == (9, 4.9)  # mitad de la rampa
-    assert (gps[180.0]["sats"], gps[180.0]["hdop"]) == (4, 9.0)  # meseta
-    assert (gps[205.0]["sats"], gps[205.0]["hdop"]) == (9, 4.9)  # bajada
-    assert (gps[211.0]["sats"], gps[211.0]["hdop"]) == (14, 0.8)  # después
+
+    def near(t: float, sats: float, hdop: float, ds: float = 1.0, dh: float = 0.3) -> bool:
+        return abs(gps[t]["sats"] - sats) <= ds and abs(gps[t]["hdop"] - hdop) <= dh
+
+    assert near(149.0, 14, 0.8) and near(150.0, 14, 0.8)  # antes y al empezar (k = 0)
+    assert near(155.0, 9, 4.9, ds=1.5, dh=0.5)  # mitad de la rampa
+    assert near(180.0, 4, 9.0, ds=1.0, dh=0.5)  # meseta
+    assert near(205.0, 9, 4.9, ds=1.5, dh=0.5) and near(211.0, 14, 0.8)  # bajada y después
     assert {gps[t]["fix"] for t in gps} == {"3d"}
     assert isinstance(gps[155.0]["sats"], int)
 
@@ -81,7 +85,7 @@ def test_the_gps_loss_wins_over_an_episode() -> None:
     raw["faults"] = [{"source": "gps", "mode": "loss", "start_s": 170.0, "end_s": 190.0}]
     gps = readings(ScenarioConfig.model_validate(raw), "PositionUpdated")
     assert (gps[180.0]["fix"], gps[180.0]["sats"]) == ("none", 0)
-    assert (gps[195.0]["fix"], gps[195.0]["sats"], gps[195.0]["hdop"]) == ("3d", 4, 9.0)
+    assert gps[195.0]["fix"] == "3d" and abs(gps[195.0]["sats"] - 4) <= 1
 
 
 def test_link_episode_shifts_the_nominal_value_and_keeps_the_noise() -> None:
@@ -89,13 +93,19 @@ def test_link_episode_shifts_the_nominal_value_and_keeps_the_noise() -> None:
     link = readings(ScenarioConfig.model_validate(example_raw()), "LinkStatus")
     assert base.keys() == link.keys()
     for t in base:
-        if not 330.0 <= t <= 390.0:
-            assert link[t] == base[t], t  # fuera del episodio, idéntico a nominal
+        if t < 150.0:  # antes de cualquier episodio, idéntico a nominal
+            assert (link[t]["rssi_dbm"], link[t]["latency_ms"]) == (
+                base[t]["rssi_dbm"],
+                base[t]["latency_ms"],
+            ), t
             continue
-        # sin rampa: el mismo ruido sobre el valor objetivo (redondeo de 0,1)
-        assert link[t]["controller_id"] == "GCS-1"
+        if not 330.0 <= t <= 390.0:
+            continue  # fuera del episodio, y tras los de GPS, el dron sigue otra trayectoria
+        # sin rampa: el mismo ruido sobre el valor objetivo (la señal también cambia con la
+        # distancia a la base, que depende de la trayectoria)
+        assert "controller_id" not in link[t]
         assert link[t]["latency_ms"] == pytest.approx(base[t]["latency_ms"] + 205.0, abs=0.11)
-        assert link[t]["rssi_dbm"] == pytest.approx(base[t]["rssi_dbm"] - 23.0, abs=0.11)
+        assert link[t]["rssi_dbm"] == pytest.approx(base[t]["rssi_dbm"] - 23.0, abs=1.0)
 
 
 def test_the_hijack_link_wins_over_a_link_episode() -> None:

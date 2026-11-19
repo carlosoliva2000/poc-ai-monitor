@@ -1,6 +1,22 @@
 {
   "labels": [
     {
+      "id": "A1",
+      "type": "wind",
+      "source": null,
+      "start_s": 250.0,
+      "end_s": 300.0,
+      "expected_rules": [
+        "ROUTE_DEVIATION"
+      ],
+      "expected_cause": "WIND",
+      "also_accepted_causes": [],
+      "eval_window": [
+        250.0,
+        360.0
+      ]
+    },
+    {
       "id": "F1",
       "type": "source_silent",
       "source": "radar",

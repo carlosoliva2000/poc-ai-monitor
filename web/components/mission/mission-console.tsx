@@ -106,7 +106,7 @@ export function MissionConsole() {
           <SimControls state={state} data={data} marks={marks} duration={duration} scenarios={scenarios} waiting={waiting} onControl={control} />
           <FaultPanel state={state} onControl={control} />
           <InstructorPanel state={state} events={events} form={windForm} onForm={setWindForm} forceOpen={openTick} onControl={control} />
-          <TelemetryStrip data={data} plan={plan} faults={state?.active_faults ?? []} />
+          <TelemetryStrip data={data} plan={plan} faults={state?.active_faults ?? []} simTime={state?.sim_time ?? 0} />
 
           <div className="flex min-h-72 flex-1 border-t border-border lg:h-[100cqh] lg:min-h-0 lg:flex-none">
             <EventTimeline events={events} cursor={state?.cursor ?? 0} total={state?.total_events ?? 0} />

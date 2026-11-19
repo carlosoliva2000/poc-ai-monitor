@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AgentToolCall, Anomaly, Envelope } from './contracts.ts'
-import { callsByCause, chatEntries, enrichmentViews, groupByWarning, type ToolCallEvent } from './derive.ts'
+import { callsByCause, chatEntries, derive, enrichmentViews, groupByWarning, linkState, type ToolCallEvent } from './derive.ts'
 
 const base = { asset: null, event_time: '2026-10-20T10:00:01Z', ingestion_time: '2026-10-20T10:00:01.000Z', ephemeral: false }
 const call = (id: string, cause: string, agent: AgentToolCall['agent'], index: number): ToolCallEvent => ({
@@ -74,4 +74,28 @@ test('E6: la interpretación del LLM de cada alerta de la tabla (híbrido)', () 
   assert.equal(view(alert('ai-0004', { fallback: true })).state, 'none')
   const done = enrichmentViews([enriched, ev('ai-0010', 'ReportGenerated', {})])
   assert.equal(done(alert('ai-0002')).state, 'missing')
+})
+
+const tele = (type: string, t: number, payload: Record<string, unknown>): Envelope => ({
+  ...base, event_id: `${type}-${t}`, topic: `citadel.pub.evt.air.d1.${type}.v1`, type, source: 'd1', seq: t, sim_time: t, causation_id: null, payload,
+})
+
+test('sin fix no hay posición que pintar, pero se sabe el fix; y el enlace caído se ve como tal', () => {
+  const d = derive([
+    tele('PositionUpdated', 1, { x: 10, y: 20, alt_m: 60, speed_mps: 15, course_deg: 90, fix: '3d', sats: 14, hdop: 0.8 }),
+    tele('PositionUpdated', 2, { x: null, y: null, alt_m: null, speed_mps: null, course_deg: null, fix: 'none', sats: 0, hdop: 99.9 }),
+    tele('LinkStatus', 5, { rssi_dbm: null, latency_ms: null, packet_loss_pct: 100 }),
+  ])
+  assert.equal(d.gps.length, 1) // la posición nula no entra en la estela
+  assert.deepEqual(d.gpsStatus, { t: 2, fix: 'none', sats: 0 })
+  assert.equal(d.linkState, 'lost')
+  assert.equal(d.lastTelemetry, 2) // el último mensaje de telemetría del dron
+})
+
+test('el estado del enlace: bueno, degradado por pérdida o latencia, caído sin señal', () => {
+  assert.equal(linkState({ rssi_dbm: -70, latency_ms: 45, packet_loss_pct: 0 }), 'good')
+  assert.equal(linkState({ rssi_dbm: -70, latency_ms: 45, packet_loss_pct: 35 }), 'degraded')
+  assert.equal(linkState({ rssi_dbm: -70, latency_ms: 150, packet_loss_pct: 0 }), 'degraded')
+  assert.equal(linkState({ rssi_dbm: null, latency_ms: null, packet_loss_pct: 100 }), 'lost')
+  assert.equal(linkState(null), null)
 })
