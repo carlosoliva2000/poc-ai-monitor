@@ -201,7 +201,7 @@ def test_flight_summary_after_the_flight(runs_dir: Path) -> None:
     summary = FlightSummary.model_validate(call_tool(ctx, "get_flight_summary", {}))
     assert summary.mission_id == "MSN-DEMO"
     assert summary.mission_completed and summary.completion_reason == "returned_to_base"
-    assert summary.duration_s == pytest.approx(524.9, abs=1.0)
+    assert summary.duration_s == pytest.approx(571.7, abs=1.0)
     assert summary.waypoints_planned == ["WP1", "WP2", "WP3", "WP4"]
     assert [w.waypoint_id for w in summary.waypoints_reached] == ["WP1", "WP2", "WP3", "WP4"]
     assert summary.distance_m.gps and summary.distance_m.radar
@@ -548,9 +548,9 @@ def test_route_trend_is_steady_in_a_nominal_flight(runs_dir: Path) -> None:
 def test_route_trend_after_the_gps_recovery_ignores_the_jump(runs_dir: Path) -> None:
     """Con el engaño en marcha el GPS discrepa del radar: la tendencia sale del radar. Al volver el
     GPS de golpe a la posición real (el salto no es «alejarse») la tendencia es la del dron."""
-    spoofed = route_trend(runs_dir, "demo", 224.0)
+    spoofed = route_trend(runs_dir, "demo", 254.0)
     assert (spoofed["route_trend"], spoofed["route_trend_source"]) == ("moving_away", "radar")
-    back = route_trend(runs_dir, "demo", 232.0)
+    back = route_trend(runs_dir, "demo", 262.0)
     assert (back["route_trend"], back["route_trend_source"]) == ("approaching", "gps")
 
 

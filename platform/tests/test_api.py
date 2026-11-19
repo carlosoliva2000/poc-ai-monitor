@@ -351,7 +351,7 @@ def test_scenarios(client: TestClient) -> None:
         "wind",
     ]
     demo = body["scenarios"][0]
-    assert demo["generated"] is True and demo["duration_s"] == pytest.approx(524.9)
+    assert demo["generated"] is True and demo["duration_s"] == pytest.approx(571.7)
     assert demo["description"]
 
 

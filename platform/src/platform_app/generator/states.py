@@ -58,6 +58,9 @@ def _telemetry(a: Aux, cfg: ScenarioConfig) -> dict[str, str]:
     return out
 
 
+OVERSHOOT_WINDOW_S = 15.0  # ⚠️ tras acabar una causa, el rebasamiento al recuperar sigue siendo suyo
+
+
 def compute_states(
     cfg: ScenarioConfig, aux: dict[int, Aux], times: dict[int, float]
 ) -> list[StateRow]:
@@ -66,6 +69,7 @@ def compute_states(
     wind_limit = cfg.drone.wind_limit_mps
     rows: list[StateRow] = []
     situation, sticky = "on_route", NA
+    last_cause, last_cause_t = NA, -1e9  # última causa activa y cuándo (rebasamiento al recuperar)
     for n in sorted(aux):
         a = aux[n]
         facets: dict[str, str] = {}
@@ -108,10 +112,13 @@ def compute_states(
             if causes:
                 situation = "deviated"
                 sticky = min(causes, key=CAUSE_PRIORITY.index)
+                last_cause, last_cause_t = sticky, times[n]
             elif situation in ("deviated", "returning"):
                 situation = (
                     "returning"  # ya no hay causa activa y el dron sigue fuera: la causa pega
                 )
+            elif times[n] - last_cause_t <= OVERSHOOT_WINDOW_S:
+                situation, sticky = "deviated", last_cause  # rebasamiento al recuperar: misma causa
             else:
                 situation, sticky = "deviated", "unexplained"
         elif situation in ("deviated", "returning") and d > lab.returning_m:

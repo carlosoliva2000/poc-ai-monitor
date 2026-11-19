@@ -38,30 +38,32 @@ def test_every_row_has_every_facet_with_a_state_of_the_catalogue(demo, faults) -
 
 
 def test_the_situation_and_the_cause_follow_the_demo_injections(demo) -> None:
-    """Viento por encima de la velocidad máxima del dron (T+95), engaño (el dron se desvía unos 30 s
+    """Viento por encima del límite del dron (T+125), engaño (el dron se desvía unos 30 s
     después de empezar) y secuestro: la causa es la de mayor prioridad y pega mientras vuelve."""
-    causes = {s: (a, b) for s, a, b in segments(demo, "drone.cause")}
+    causes: dict = {}
+    for cause, a, b in segments(demo, "drone.cause"):
+        causes.setdefault(cause, (a, b))  # el primer tramo de cada causa
     assert segments(demo, "drone.situation")[0][:2] == ("on_route", 0.0)
     assert [c for c, _, _ in segments(demo, "drone.cause")] == [
-        "n/a", "wind", "n/a", "spoofed_position", "n/a", "foreign_control", "n/a"
+        "n/a", "wind", "n/a", "wind", "n/a", "spoofed_position", "n/a", "foreign_control", "n/a"
     ]  # fmt: skip
-    assert 100.0 <= causes["wind"][0] <= 115.0  # el viento supera al dron hacia T+100
-    assert 168.0 < causes["spoofed_position"][0] < 215.0  # desde que el desfase pasa de 25 m
+    assert 130.0 <= causes["wind"][0] <= 145.0  # el viento supera al dron hacia T+135
+    assert 198.0 < causes["spoofed_position"][0] < 245.0  # desde que el desfase pasa de 25 m
     start, end = causes["foreign_control"]
-    assert 336.0 <= start <= 360.0 and 385.0 < end < 440.0  # dura hasta que vuelve a la ruta
+    assert 369.0 <= start <= 395.0 and 418.0 < end < 470.0  # dura hasta que vuelve a la ruta
     assert "unexplained" not in causes
 
 
 def test_the_hijack_is_a_lost_link_and_the_telemetry_is_not_observable(demo) -> None:
     """Secuestro = nuestra estación pierde el enlace: la telemetría del dron vale `?` (con su
     estado real en `hidden`), el radar y la estación siguen, y el modo es control ajeno."""
-    row = next(r for r in demo.states if r.t == 350.0)
+    row = next(r for r in demo.states if r.t == 390.0)
     assert row.facets["link.availability"] == "lost" and row.facets["link.quality"] == "n/a"
     assert row.facets["drone.mode"] == "foreign_control"
     for facet in ("gps.availability", "gps.quality", "gps.integrity", "battery.level"):
         assert row.facets[facet] == "?" and facet in row.hidden
     assert row.facets["radar.availability"] == "normal" and row.facets["drone.situation"] != "?"
-    truth = next(s for s in demo.truth.trajectory if s.t == 350.0)
+    truth = next(s for s in demo.truth.trajectory if s.t == 390.0)
     assert truth.mode == "foreign_control" and not truth.link_up
 
 

@@ -267,3 +267,29 @@ a wind change during the GPS loss. Acceptance criteria rewritten for the new
 physics. Web: telemetry gaps, drone-base line with the link state, radar
 position and, in the instructor view, the emitters and the hijacker.
 ```
+
+## Ajuste de `demo` tras revisar el 7a (19/11/2026)
+Con el simulador v2 el dron va por detrás de los instantes de antes (frena en las esquinas y con 18 m/s avanza a 1 m/s), así que los tres actos caían en otros tramos. Se recolocan en `demo`, `demo-battery` y `demo-meteo` (los demás escenarios no cambian: `runs/` idéntico):
+
+| Acto | Antes | Ahora | Dónde está el dron |
+|---|---|---|---|
+| 1 · viento 18 m/s | T+95–150 (rampa 10 s) | **T+125–160** | mitad de WP1→WP2 (meseta de 18 m/s de 15 s) |
+| 2 · engaño | T+168–222 | **T+198–252** | WP2→WP3, desde su inicio; el desfase pasa de 25 m a T+211 |
+| 3 · secuestro | T+335–380 | **T+368–413** | WP4→BASE (empieza a 10 s del WP4), el giro hacia el secuestrador se ve claro (máx. ~680 m) |
+
+- **Cambio en `generator/states.py`:** al acabar el viento, el dron rebasa la línea (hasta 33 m al otro lado, porque el viento estimado va con retraso) y salía 2 s de `unexplained`. Ahora, si el dron vuelve a desviarse **dentro de `OVERSHOOT_WINDOW_S` (15 s ⚠️)** de acabar una causa, conserva esa causa. `states.jsonl` de `demo`: viento (T+136–171, con el rebasamiento), engaño (T+211–263), control ajeno (T+374–469); `unexplained` 0 s.
+- Tests adaptados a los instantes nuevos: `test_generator` (etiquetas), `test_states` (secuencia de causas con el rebasamiento y el instante del secuestro), `test_tools` (duración 571,7 s, tendencia tras el engaño), `test_api` (duración). Plataforma: 360 pasan.
+- Ficheros que cambian: `scenarios/demo*.yaml`, `runs/demo*/` (`events`, `labels`, `states`, `truth`, PNG), `generator/states.py`.
+
+## Pendiente al cerrar la sesión (19/11/2026)
+El 7a está revisado y con su commit. **El 7b queda pendiente** por decisión de Carlos; no se ha tocado nada de él. Antes de borrar, avisar a Carlos.
+
+**Qué incluye el 7b:**
+- Borrar el camino antiguo del simulador (`_advance_legacy`, la estima de pérdida antigua, `aim_point` si ya no se usa, y lo que quede sin uso).
+- Borrar los interruptores `simulator:` (los YAML, `SimulatorConfig` y sus validadores, y su texto en `contracts/eventos.md`) y los tests del camino antiguo.
+- Retirar `HijackConfig.link_hint` y `LinkStatus.controller_id` / `LinkConfig.controller_id`.
+- Comprobar que `runs/` sale idéntico tras el borrado.
+- Documentación final: `contracts/eventos.md`, `docs/quien_decide_que.md`, los `CLAUDE.md`, `docs/mejoras_futuras.md` (lista «después de la E8»), `scenarios/README.md`. Avisar de que la especificación debe actualizarse (giro del morro 100 °/s en lugar de 90).
+- Cierre: reglas 13 y 15 (`snapshots/e7a/`, `snapshots-limpias/e7a/` con sus `grep`), copia a `results/`, puertos 8000 y 8100 libres y mensaje de commit propuesto sin aplicar.
+
+**Decisión pendiente: Next.js 16.4.1.** `pnpm dev` mostró un aviso de seguridad y propuso `next upgrade`. No se ha actualizado. Carlos decide si se actualiza y cuándo.

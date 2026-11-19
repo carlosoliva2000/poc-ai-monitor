@@ -34,18 +34,18 @@ sensors:
 wind:
   base: {speed_mps: 2.0, from_deg: 300.0}
   episodes:
-    - {start_s: 95.0, end_s: 150.0, ramp_s: 10.0, speed_mps: 18.0, from_deg: 350.0}
+    - {start_s: 125.0, end_s: 160.0, ramp_s: 10.0, speed_mps: 18.0, from_deg: 350.0}
 
 spoofing:
-  start_s: 168.0
-  end_s: 222.0
+  start_s: 198.0
+  end_s: 252.0
   drift_rate_mps: 1.5
   direction_deg: 45.0
   emitter: {x: 1400.0, y: 1900.0, power_db: 12.0}   # emisor de engaño: sube el C/N0 y baja el AGC
 
 hijack:
-  start_s: 335.0
-  end_s: 380.0
+  start_s: 368.0
+  end_s: 413.0
   target: {x: 1500.0, y: -1400.0}   # posición de la estación del secuestrador: el dron va allí
 
 faults:                 # mute: la fuente no se publica; loss (solo GPS): el dron navega a estima. Inserta FaultInjected/FaultCleared

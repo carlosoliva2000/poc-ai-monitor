@@ -158,12 +158,12 @@ def test_battery_drains_and_gps_fix_is_3d(runs_dir: Path) -> None:
 def test_labels_of_the_demo(runs_dir: Path) -> None:
     labels = load_run("demo", runs_dir).labels
     assert [(lb.id, lb.type.value, lb.start_s, lb.end_s) for lb in labels] == [
-        ("A1", "wind", 95.0, 150.0),
-        ("A2", "gps_spoofing", 168.0, 222.0),
-        ("A3", "hijack", 335.0, 380.0),
+        ("A1", "wind", 125.0, 160.0),
+        ("A2", "gps_spoofing", 198.0, 252.0),
+        ("A3", "hijack", 368.0, 413.0),
     ]
     assert [lb.expected_cause.value for lb in labels] == ["WIND", "GPS_SPOOFING", "HIJACK"]
-    assert labels[0].eval_window == (95.0, 210.0)
+    assert labels[0].eval_window == (125.0, 220.0)
     assert [r.value for r in labels[0].expected_rules] == ["ROUTE_DEVIATION"]
     assert "SOURCE_DISCREPANCY" in [r.value for r in labels[1].expected_rules]
     assert all(lb.source is None for lb in labels)
