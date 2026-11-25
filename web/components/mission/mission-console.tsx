@@ -5,25 +5,32 @@ import { useStoredState } from '@/hooks/use-stored-state'
 import { clampConsoleWidth, DEFAULT_CONSOLE } from '@/lib/map-view'
 import { usePlatform, useTruth } from '@/hooks/use-platform'
 import { derive } from '@/lib/derive'
+import { eventsForView, reviveView, type View } from '@/lib/view'
 import type { Conversation, Proposal } from '@/lib/contracts'
 import { activeWind, EMPTY_FORM, formFromParams, remaining, type WindForm } from '@/lib/instructor'
 import { AgentConsole } from './agent-console'
 import { DroneMap } from './drone-map'
 import { EventTimeline } from './event-timeline'
 import { FaultPanel } from './fault-panel'
+import { InjectedPanel } from './injected-panel'
 import { InstructorPanel } from './instructor-panel'
-import { LayersPanel, useLayers } from './layers-panel'
+import { LayersPanel, layersForView, useLayers } from './layers-panel'
 import { MissionHeader } from './mission-header'
 import { progressMarks, SimControls } from './sim-controls'
 import { TelemetryStrip } from './telemetry-strip'
 
 export function MissionConsole() {
   const { connection, events, state, errors, chunks, activity, toolCalls, reportPhase, scenarios, plan, live, setTruthFeed, control, sendOperatorMessage } = usePlatform()
-  const [layers, setLayers] = useLayers()
+  const [savedLayers, setLayers] = useLayers()
+  const [view, setView] = useStoredState<View>('poc-view-v1', 'instructor', reviveView)
+  const student = view === 'student'
+  // La vista del alumno nunca pinta la verdad, aunque la capa esté marcada para el instructor.
+  const layers = layersForView(savedLayers, student)
   const [windForm, setWindForm] = useState<WindForm>(EMPTY_FORM)
   const [openTick, setOpenTick] = useState(0)
   const data = useMemo(() => derive(events), [events])
-  const truth = useTruth(layers.truth, state?.run_id ?? null, state?.status === 'running')
+  // La verdad la piden la capa «Truth trail» y el panel «Injected vs detected» (solo del instructor).
+  const truth = useTruth(layers.truth || !student, state?.run_id ?? null, state?.status === 'running')
   // La posición real en directo solo se pide mientras su capa está activa.
   useEffect(() => setTruthFeed(layers.truthDrone), [layers.truthDrone, setTruthFeed])
   const [storedWidth, setStoredWidth] = useStoredState<number>('poc-console-width-v1', DEFAULT_CONSOLE, (raw) => (typeof raw === 'number' ? raw : DEFAULT_CONSOLE))
@@ -35,7 +42,9 @@ export function MissionConsole() {
     return () => window.removeEventListener('resize', measure)
   }, [])
   const consoleWidth = clampConsoleWidth(storedWidth, viewport)
-  const marks = useMemo(() => progressMarks(events), [events])
+  // En la vista del alumno, sin los fallos, el modo interactivo, los comandos ni el chat del instructor.
+  const shownEvents = useMemo(() => eventsForView(events, view), [events, view])
+  const marks = useMemo(() => progressMarks(shownEvents), [shownEvents])
 
   const started = events.find((e) => e.type === 'SimulationStarted')
   const duration = started ? (started.payload as { duration_s: number }).duration_s : (plan?.duration_s ?? 0)
@@ -69,7 +78,7 @@ export function MissionConsole() {
 
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh lg:overflow-hidden">
-      <MissionHeader missionId={plan?.mission_id ?? '—'} state={state} connection={connection} waiting={waitingAgent} agentBusy={agentBusy} />
+      <MissionHeader missionId={plan?.mission_id ?? '—'} state={state} connection={connection} waiting={waitingAgent} agentBusy={agentBusy} view={view} onView={setView} />
 
       {errors.length > 0 && (
         <div className="flex flex-col gap-1 border-b border-destructive/30 bg-destructive/10 px-4 py-2" role="alert">
@@ -96,26 +105,27 @@ export function MissionConsole() {
               <h2 id="map-title" className="text-sm font-semibold text-foreground">
                 Top view · x,y plane (m)
               </h2>
-              <LayersPanel layers={layers} onChange={setLayers} />
+              <LayersPanel layers={savedLayers} onChange={setLayers} student={student} />
             </div>
             <div className="aspect-[1060/652] w-full border-y border-border bg-card lg:aspect-auto lg:h-[clamp(420px,60dvh,900px)]">
-              <DroneMap plan={plan} data={data} truth={truth} live={live} layers={layers} faults={state?.active_faults ?? []} running={state?.status === 'running'} speed={state?.speed ?? 1} simTime={state?.sim_time ?? 0} />
+              <DroneMap plan={plan} data={data} truth={layers.truth ? truth : null} live={live} layers={layers} faults={state?.active_faults ?? []} running={state?.status === 'running'} speed={state?.speed ?? 1} simTime={state?.sim_time ?? 0} />
             </div>
           </section>
 
-          <SimControls state={state} data={data} marks={marks} duration={duration} scenarios={scenarios} waiting={waiting} onControl={control} />
-          <FaultPanel state={state} onControl={control} />
-          <InstructorPanel state={state} events={events} form={windForm} onForm={setWindForm} forceOpen={openTick} onControl={control} />
+          <SimControls state={state} data={data} marks={marks} duration={duration} scenarios={scenarios} waiting={waiting} onControl={control} instructorControls={!student} />
+          {!student && <FaultPanel state={state} onControl={control} />}
+          {!student && <InstructorPanel state={state} events={events} form={windForm} onForm={setWindForm} forceOpen={openTick} onControl={control} />}
+          {!student && <InjectedPanel events={events} truth={truth} />}
           <TelemetryStrip data={data} plan={plan} faults={state?.active_faults ?? []} simTime={state?.sim_time ?? 0} />
 
           <div className="flex min-h-72 flex-1 border-t border-border lg:h-[100cqh] lg:min-h-0 lg:flex-none">
-            <EventTimeline events={events} cursor={state?.cursor ?? 0} total={state?.total_events ?? 0} />
+            <EventTimeline events={shownEvents} cursor={state?.cursor ?? 0} total={state?.total_events ?? 0} />
           </div>
         </div>
 
         <div className="relative min-h-[80dvh] bg-card lg:h-full lg:min-h-0 lg:overflow-hidden">
           <ResizeHandle width={consoleWidth} viewport={viewport} onChange={setStoredWidth} />
-          <AgentConsole events={events} data={data} chunks={chunks} activity={activity} toolCalls={toolCalls} reportPhase={reportPhase} finished={state?.status === 'finished'} onSend={sendInstructorAware} interactive={Boolean(state?.interactive)} onConfirmProposal={confirmProposal} onEditProposal={editProposal} />
+          <AgentConsole events={events} data={data} chunks={chunks} activity={activity} toolCalls={toolCalls} reportPhase={reportPhase} finished={state?.status === 'finished'} onSend={sendInstructorAware} interactive={Boolean(state?.interactive)} onConfirmProposal={confirmProposal} onEditProposal={editProposal} view={view} simTime={state?.sim_time ?? 0} />
         </div>
       </main>
     </div>

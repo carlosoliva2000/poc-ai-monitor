@@ -1,0 +1,48 @@
+# Política de incidentes: nombre, severidad base, qué comprobar y qué facetas se enseñan como
+# evidencias. Es política, no dato aprendido: la decide una persona y queda escrita aquí.
+# PROVISIONAL para el vídeo del 19/11/2026 (severidad sin escalado por tiempo; confianza fija por
+# fila en tables.yaml).
+#
+# La severidad baja un nivel en recuperación. El nombre solo cambia hacia un tipo más grave
+# (`rank`, de menos a más), sin cerrar el incidente.
+
+rank: [UNDETERMINED, WIND, LINK_LOSS, GPS_SPOOFING, HIJACK]
+
+kinds:
+  WIND:
+    name: Wind beyond limit
+    severity: low
+    facets: [environment.wind, drone.situation]
+    checks:
+      - Compare the onboard wind estimate with the weather station
+      - Watch that the drone gets back to the route when the wind drops
+  GPS_SPOOFING:
+    name: GPS spoofing
+    severity: high
+    facets: [gps.integrity, drone.situation]
+    checks:
+      - Compare the GPS position with the radar track
+      - Check C/N0 and AGC of the GPS receiver
+      - Do not trust the GPS position until both agree again
+  LINK_LOSS:
+    name: Command link lost
+    severity: medium
+    facets: [link.availability, drone.situation]
+    checks:
+      - Check our ground station and the command link
+      - Follow the drone on the radar while there is no telemetry
+  HIJACK:
+    name: Hijack
+    severity: high
+    facets: [link.availability, drone.situation]
+    checks:
+      - Check our ground station and the command link
+      - Follow the drone on the radar and report its position
+      - Warn the chain of command
+  UNDETERMINED:
+    name: Undetermined deviation
+    severity: medium
+    facets: [drone.situation, gps.integrity, environment.wind, link.availability]
+    checks:
+      - Compare the GPS position with the radar track
+      - Check the wind and the command link

@@ -99,10 +99,18 @@ const GROUPS: { title: string; items: Item[] }[] = [
   },
 ]
 
-export function LayersPanel({ layers, onChange }: { layers: Layers; onChange: (l: Layers) => void }) {
+/** Capas que enseñan la verdad del ejercicio: solo en la vista del instructor. */
+export const TRUTH_LAYERS: (keyof Layers)[] = ['truth', 'truthDrone']
+
+/** La vista del alumno nunca pinta la verdad, ni siquiera si la capa se dejó marcada. */
+export const layersForView = (layers: Layers, student: boolean): Layers => (student ? { ...layers, truth: false, truthDrone: false } : layers)
+
+export function LayersPanel({ layers, onChange, student = false }: { layers: Layers; onChange: (l: Layers) => void; student?: boolean }) {
   return (
     <div className="flex flex-wrap items-stretch gap-1.5 text-xs text-muted-foreground" role="group" aria-label="Map layers">
-      {GROUPS.map((group) => (
+      {GROUPS.map((group) => ({ ...group, items: group.items.filter((item) => !(student && TRUTH_LAYERS.includes(item.id))) }))
+        .filter((group) => group.items.length > 0)
+        .map((group) => (
         <fieldset key={group.title} className="m-0 min-w-0 rounded-md border border-border/70 px-2 pb-1 pt-0">
           <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">{group.title}</legend>
           <ul className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">

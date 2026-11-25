@@ -438,3 +438,34 @@ def test_alert_enriched_is_written_by_the_llm_and_its_hypothesis_is_bounded() ->
     spec = EVENT_SPECS[EventType.ALERT_ENRICHED]
     assert spec.source == "ai-enricher" and not spec.ephemeral
     assert spec.source not in TOOL_SOURCE_TO_ENVELOPE_SOURCE.values()  # ninguna tool lo devuelve
+
+
+def test_incident_events_v1_1() -> None:
+    """v1.1: un incidente por transiciones; el texto del asistente no lo cambia."""
+    from poc_contracts.payloads import IncidentEnriched, IncidentUpdated
+    from poc_contracts.topics import EVENT_SPECS, topic_for
+
+    base = {"incident_id": "inc-0001", "revision": 1, "kind": "WIND", "name": "Wind",
+            "state": "open", "severity": "low", "confidence": "probable", "opened_at": 138.0,
+            "as_of_sim_time": 138.0, "change": "opened", "evidence": [], "context": [],
+            "checks": [], "evidence_event_ids": [], "decided_by": "table",
+            "table": "t"}  # fmt: skip
+    IncidentUpdated(**base)
+    for bad in ({"revision": 2}, {"change": "state"}, {"decided_by": "llm"},
+                {"as_of_sim_time": 100.0}, {"state": "closed"}):  # fmt: skip
+        with pytest.raises(ValidationError):
+            IncidentUpdated(**{**base, **bad})
+    IncidentUpdated(**{**base, "revision": 4, "change": "closed", "state": "closed"})
+    text = {"incident_id": "inc-0001", "revision": 1, "state": "open", "text": "t",
+            "hypothesis": None, "role": "explain", "decided_by": "llm",
+            "as_of_sim_time": 138.0}  # fmt: skip
+    IncidentEnriched(**text)
+    hyp = {"kind": "WIND", "confidence": "possible", "evidence_event_ids": ["rad-000042"]}
+    IncidentEnriched(**{**text, "role": "hypothesis", "hypothesis": hyp})
+    for bad in ({"role": "hypothesis"}, {"hypothesis": hyp}, {"decided_by": "table"},
+                {"role": "hypothesis", "hypothesis": {**hyp, "kind": "UNDETERMINED"}}):  # fmt: skip
+        with pytest.raises(ValidationError):
+            IncidentEnriched(**{**text, **bad})
+    assert EVENT_SPECS[EventType.INCIDENT_UPDATED].source == "ai-monitor"
+    assert EVENT_SPECS[EventType.INCIDENT_ENRICHED].source == "ai-enricher"
+    assert topic_for(EventType.INCIDENT_UPDATED) == "citadel.pub.evt.ai.d1.IncidentUpdated.v1"

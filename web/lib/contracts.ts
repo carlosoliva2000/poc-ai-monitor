@@ -117,6 +117,50 @@ export type AlertEnriched = {
   as_of_sim_time: number
   alert_status: 'open' | 'superseded' | 'closed'
 }
+/** v1.1: tipo de incidente del monitor de situación. `UNDETERMINED` es una salida del sistema
+ *  con confianza baja, no una etiqueta de la verdad. */
+export type IncidentKind = 'WIND' | 'GPS_SPOOFING' | 'HIJACK' | 'LINK_LOSS' | 'GPS_DEGRADED' | 'DEAD_RECKONING' | 'BATTERY' | 'UNDETERMINED'
+export type IncidentState = 'open' | 'recovering' | 'closed'
+export type IncidentChange = 'opened' | 'state' | 'renamed' | 'severity' | 'evidence' | 'closed'
+export type ConfidenceLevel = 'confirmed' | 'probable' | 'possible'
+export type EvidenceValue = number | string | boolean | null
+export type EvidenceCondition = { feature: string; op: '>=' | '<=' | '>' | '<' | '==' | '!='; threshold: EvidenceValue; value: EvidenceValue }
+/** Un paso del camino de la tabla: faceta → estado → fila → condiciones con su valor. */
+export type EvidenceItem = { facet: string; state: string; rule_id: string; conditions: EvidenceCondition[] }
+export type ContextItem = { feature: string; value: EvidenceValue }
+/** v1.1: estado de un incidente, un evento por transición (fuente `ai-monitor`). La web se
+ *  queda con el último por `incident_id`. */
+export type IncidentUpdated = {
+  incident_id: string
+  revision: number
+  kind: IncidentKind
+  name: string
+  state: IncidentState
+  severity: Severity
+  confidence: ConfidenceLevel
+  opened_at: number
+  as_of_sim_time: number
+  change: IncidentChange
+  evidence: EvidenceItem[]
+  context: ContextItem[]
+  checks: string[]
+  evidence_event_ids: string[]
+  decided_by: 'table'
+  table: string
+}
+export type IncidentHypothesis = { kind: IncidentKind; confidence: 'possible'; evidence_event_ids: string[] }
+/** v1.1: texto del asistente sobre una revisión de un incidente (fuente `ai-enricher`,
+ *  `causation_id` = el `IncidentUpdated`). No cambia el incidente. */
+export type IncidentEnriched = {
+  incident_id: string
+  revision: number
+  state: IncidentState
+  text: string
+  hypothesis: IncidentHypothesis | null
+  role: 'explain' | 'hypothesis'
+  decided_by: 'llm'
+  as_of_sim_time: number
+}
 export type DetectionAcknowledged = {
   detection_id: string
   alert_id: string | null

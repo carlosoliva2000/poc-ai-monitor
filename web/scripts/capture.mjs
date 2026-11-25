@@ -33,6 +33,11 @@
 //                                              el comando en el timeline y la alerta WIND del monitor (módulo de IA con la configuración por defecto)
 //   node scripts/capture.mjs e7a <carpeta>    demo a 16× sin módulo de IA (E7a): radar con su alcance, línea dron–base con el estado del enlace,
 //                                              huecos de telemetría en el secuestro y, con la capa de la verdad, los emisores y el secuestrador
+//   node scripts/capture.mjs video1 <carpeta> ensayo del vídeo 1 (19/11/2026): demo con las velocidades, pausas y la pregunta del chat del guion,
+//                                              en la vista del alumno (y un momento en la del instructor). Plataforma con --no-ai y el monitor de
+//                                              situación (`python -m ai_module.situation`) en marcha
+//   node scripts/capture.mjs video2 <carpeta> ensayo del vídeo 2: nominal en la vista del instructor, modo interactivo, las dos órdenes del guion
+//                                              (viento del norte de 19 m/s y quitarlo) con Confirm y el incidente de viento
 // Requiere plataforma (8100), módulo de IA y web (3000) en marcha. Una sola pestaña: los ids
 // `ops-` los calcula la web y con dos pestañas podrían repetirse.
 import { chromium } from 'playwright'
@@ -67,6 +72,8 @@ const simTime = async () => {
 
 async function setup(scenario, { waitAgent, interactive, speed, resetCheck = false }) {
   await page.goto('http://127.0.0.1:3000')
+  // el recordatorio de seguridad de Next.js en desarrollo (`1 Insight`) sale en las capturas: se oculta
+  await page.addStyleTag({ content: 'nextjs-portal { display: none !important }' })
   await page.waitForFunction(() => document.querySelectorAll('select[aria-label=Scenario] option').length > 1, null, { timeout: 15000 })
   if (resetCheck) {
     // el modo interactivo se enciende antes de cargar: la carga tiene que apagarlo
@@ -1308,6 +1315,220 @@ async function runFase16() {
   writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
 }
 
+// --- Ensayo de los vídeos del 19/11/2026 (monitor de situación y textos preparados) ---
+const setView = async (name) => {
+  await page.getByRole('radio', { name, exact: true }).click()
+  await sleep(300)
+  note(`vista ${name}`)
+}
+const untilSim = async (t, label) => {
+  while ((await simTime()) < t) await sleep(150)
+  if (label) note(`${label}: T+${await simTime()}`)
+}
+const speed = async (x) => {
+  await page.getByRole('button', { name: `${x}×`, exact: true }).click()
+  note(`velocidad ${x}×`)
+}
+const pause = async () => {
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await sleep(500)
+}
+const resume = async () => page.getByRole('button', { name: 'Resume' }).click()
+const card = (kind) => page.locator(`[data-testid=incident-card][data-kind=${kind}]`)
+async function waitCard(kind, state, timeout = 60000) {
+  const sel = `[data-testid=incident-card][data-kind=${kind}]${state ? `[data-state=${state}]` : ''}`
+  await page.locator(sel).first().waitFor({ timeout })
+}
+/** Cuenta lo que dice y muestra la tarjeta de un incidente (para comprobar los textos con lo que se ve). */
+async function describeCard(kind) {
+  const c = card(kind).first()
+  // un incidente cerrado está plegado: se despliega para leerlo
+  if ((await c.getAttribute('data-state')) === 'closed' && !(await c.locator('details').first().evaluate((d) => d.open))) await c.locator('summary').first().click()
+  const text = async (sel) => ((await c.locator(sel).count()) ? (await c.locator(sel).first().innerText()).replace(/\s+/g, ' ') : null)
+  note(`tarjeta ${kind}: ${await text('[data-testid=incident-name]')} · ${await text('[data-testid=incident-severity]')} · ${await text('[data-testid=incident-state]')} · ${await text('[data-testid=incident-confidence]')} · ${await text('[data-testid=incident-since]')}`)
+  const rows = await c.locator('[data-testid=evidence-row]').allInnerTexts()
+  for (const r of rows) note(`   evidencia: ${r.replace(/\s+/g, ' ')}`)
+  for (const id of ['incident-why-opened', 'incident-why-renamed']) {
+    if (await c.locator(`[data-testid=${id}]`).count()) note(`   ${id}: ${(await c.locator(`[data-testid=${id}]`).first().innerText()).replace(/\s+/g, ' ')}`)
+  }
+  note(`   what to check: ${(await c.locator('[data-testid=incident-checks]').count()) ? 'sí' : 'no'} · botones Rules: ${await c.locator('[data-testid=rules-button]').count()}`)
+  note(`   interpretación: ${await text('[data-testid=interpretation]')}`)
+}
+/** Abre la ventana «Rules» de la fila indicada de la tarjeta, la captura y la cierra. */
+async function openRules(kind, rowIndex, shotName) {
+  const button = card(kind).first().locator('[data-testid=rules-button]').nth(rowIndex)
+  await button.click()
+  const dialog = page.locator('[data-testid=rules-dialog]')
+  await dialog.waitFor({ timeout: 5000 })
+  await sleep(400)
+  await shot(shotName)
+  note(`ventana Rules: ${(await dialog.locator('h2').innerText()).replace(/\s+/g, ' ')} · filas ${await dialog.locator('ol > li').count()} · resaltada: ${(await dialog.locator('li[data-matched=true]').first().innerText()).replace(/\s+/g, ' ').slice(0, 90)}`)
+  await page.keyboard.press('Escape')
+  await dialog.waitFor({ state: 'detached', timeout: 5000 })
+}
+async function answered(chat, timeout = 30000) {
+  const started = Date.now()
+  while (Date.now() - started < timeout) {
+    const streaming = await chat.locator('span.animate-pulse').count()
+    const replies = await chat.locator('article:not(.items-end)').count()
+    if (replies > 0 && streaming === 0) return true
+    await sleep(250)
+  }
+  return false
+}
+
+async function runVideo1() {
+  // Vídeo 1 · demo (572 s): vista del alumno; interruptores fijados antes desde la del instructor.
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await setup('demo', { waitAgent: false, interactive: false, speed: 8 })
+  await setView('Student')
+  await page.getByRole('button', { name: 'Start', exact: true }).click()
+  note('play')
+  await untilSim(120, 'T+120 → 2×')
+  await speed(2)
+  await waitCard('WIND', 'open', 90000)
+  await pause()
+  note('pausa: WIND abierto')
+  await sleep(4500) // la interpretación llega a los 2–3,5 s de reloj de pared
+  await shot('01_wind_abierto_interpretacion')
+  await describeCard('WIND')
+  await resume()
+  await untilSim(185, 'T+185 → 8×')
+  await speed(8)
+  await untilSim(195, 'T+195 → 2×')
+  await speed(2)
+  await waitCard('GPS_SPOOFING', 'open', 60000)
+  await pause()
+  note('pausa: GPS_SPOOFING abierto (lo ve antes de que el dron se desvíe)')
+  await sleep(4500)
+  await shot('02_engano_abierto_antes_de_desviarse')
+  await describeCard('GPS_SPOOFING')
+  await openRules('GPS_SPOOFING', 0, '02b_reglas_integridad_del_gps')
+  // un momento en la vista del instructor con la posición real
+  await setView('Instructor')
+  await page.getByRole('checkbox', { name: /True position/ }).check()
+  await page.getByRole('checkbox', { name: /Truth trail/ }).check()
+  await sleep(1200)
+  await shot('03_engano_vista_instructor_posicion_real')
+  await page.getByRole('checkbox', { name: /True position/ }).uncheck()
+  await page.getByRole('checkbox', { name: /Truth trail/ }).uncheck()
+  await setView('Student')
+  await resume()
+  await untilSim(228, 'engaño: el radar ya ve la desviación')
+  await pause()
+  await shot('03b_engano_desviacion_del_radar')
+  await describeCard('GPS_SPOOFING')
+  await resume()
+  await untilSim(255, 'engaño: evidencias actualizadas')
+  await pause()
+  await shot('04_engano_evidencias_actualizadas')
+  await describeCard('GPS_SPOOFING')
+  await resume()
+  await untilSim(275, 'T+275 → 8×')
+  await speed(8)
+  await untilSim(360, 'T+360 → 2×')
+  await speed(2)
+  await untilSim(398, 'T+398: pausa para la pregunta')
+  await pause()
+  await shot('05_secuestro_antes_de_preguntar')
+  await describeCard('HIJACK')
+  const box = page.locator('#input-monitor')
+  await box.fill('Why do you think the drone is being hijacked?')
+  await box.press('Enter')
+  note('pregunta al monitor')
+  const chat = page.locator('[data-testid="chat-monitor"]')
+  await sleep(1800)
+  await shot('06_chat_respuesta_en_streaming')
+  note(`respuesta completa: ${await answered(chat)}`)
+  await sleep(500)
+  await shot('07_chat_respuesta')
+  note(`texto del chat: ${(await chat.locator('article:not(.items-end)').last().innerText()).replace(/\s+/g, ' ')}`)
+  await resume()
+  await untilSim(480, 'T+480 → 16×')
+  await speed(16)
+  const t1 = Date.now()
+  while (Date.now() - t1 < 120000 && !(await page.getByText(/Closed \(3\)/).count())) await sleep(500)
+  await sleep(1500)
+  await shot('08_final_alumno_incidentes_cerrados')
+  for (const kind of ['WIND', 'GPS_SPOOFING', 'HIJACK']) await describeCard(kind)
+  await card('HIJACK').first().scrollIntoViewIfNeeded()
+  await sleep(500)
+  await shot('08b_final_cerrados_desplegados')
+  await page.getByRole('tab', { name: 'Report' }).click()
+  await page.locator('[data-testid=report-done]').waitFor({ timeout: 30000 })
+  await sleep(500)
+  await shot('09_informe')
+  note(`informe: ${(await page.locator('[data-testid=report-view]').innerText()).replace(/\s+/g, ' ')}`)
+  await page.getByRole('tab', { name: 'Monitor' }).click()
+  await setView('Instructor')
+  await sleep(800)
+  const injected = page.locator('[data-testid=injected-panel]')
+  await injected.scrollIntoViewIfNeeded()
+  await sleep(600)
+  await shot('10_final_vista_instructor')
+  for (const row of await injected.locator('[data-testid=injected-row]').allInnerTexts()) note(`   inyectado: ${row.replace(/\s+/g, ' ')}`)
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
+async function runVideo2() {
+  // Vídeo 2 · nominal: vista del instructor, modo interactivo y las dos órdenes del guion.
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await setup('nominal', { waitAgent: false, interactive: true, speed: 4 })
+  await setView('Instructor')
+  await page.getByRole('button', { name: 'Start', exact: true }).click()
+  note('play')
+  await untilSim(105, 'T+105: pausa y orden 1')
+  await pause()
+  await page.getByRole('tab', { name: 'Instructor' }).click()
+  const box = page.locator('#input-instructor')
+  await box.fill('Put a strong wind from the north, 19 m/s, until I cancel it')
+  await box.press('Enter')
+  note('orden 1 escrita')
+  const proposals = page.locator('[data-testid=proposal-card]')
+  await proposals.first().waitFor({ timeout: 30000 })
+  await sleep(600)
+  await shot('01_orden_1_propuesta')
+  note(`tarjeta 1: ${(await proposals.first().innerText()).replace(/\s+/g, ' ')}`)
+  await proposals.first().getByRole('button', { name: 'Confirm' }).click()
+  await sleep(1200)
+  await shot('02_orden_1_confirmada')
+  await resume()
+  await speed(2)
+  await page.getByRole('tab', { name: 'Monitor' }).click()
+  await waitCard('WIND', 'open', 120000)
+  note(`incidente WIND abierto a T+${await simTime()}`)
+  await sleep(4500)
+  await shot('03_wind_abierto')
+  await describeCard('WIND')
+  await openRules('WIND', 1, '03b_reglas_situacion_del_dron')
+  await untilSim(148, 'T+148: pausa y orden 2')
+  await pause()
+  await shot('04_antes_de_la_orden_2')
+  await page.getByRole('tab', { name: 'Instructor' }).click()
+  await box.fill('Remove the wind')
+  await box.press('Enter')
+  note('orden 2 escrita')
+  await proposals.nth(1).waitFor({ timeout: 30000 })
+  await sleep(600)
+  await shot('05_orden_2_propuesta')
+  note(`tarjeta 2: ${(await proposals.nth(1).innerText()).replace(/\s+/g, ' ')}`)
+  await proposals.nth(1).getByRole('button', { name: 'Confirm' }).click()
+  await sleep(1200)
+  await resume()
+  await page.getByRole('tab', { name: 'Monitor' }).click()
+  await waitCard('WIND', 'recovering', 90000)
+  note(`WIND en recuperación a T+${await simTime()}`)
+  await sleep(4500)
+  await shot('06_wind_recuperando')
+  await describeCard('WIND')
+  await waitCard('WIND', 'closed', 90000)
+  note(`WIND cerrado a T+${await simTime()}`)
+  await sleep(4500)
+  await shot('07_wind_cerrado')
+  await describeCard('WIND')
+  writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
+}
+
 async function runFase10() {
   await page.setViewportSize({ width: 1920, height: 1080 })
   await setup('demo', { waitAgent: true, interactive: false, speed: 4 })
@@ -1391,6 +1612,8 @@ try {
   else if (mode === 'fase9_2') await runFase9_2()
   else if (mode === 'fase10') await runFase10()
   else if (mode === 'fase16') await runFase16()
+  else if (mode === 'video1') await runVideo1()
+  else if (mode === 'video2') await runVideo2()
   else if (mode === 'fase14_1') await runFase14_1()
   else if (mode === 'fase14_2') await runFase14_2()
   else if (mode === 'followcheck') await runFollowCheck()

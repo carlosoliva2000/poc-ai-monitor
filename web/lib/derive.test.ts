@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AgentToolCall, Anomaly, Envelope } from './contracts.ts'
-import { callsByCause, chatEntries, derive, enrichmentViews, groupByWarning, linkState, type ToolCallEvent } from './derive.ts'
+import { callsByCause, chatEntries, derive, enrichmentViews, groupByWarning, incidents, linkState, TEXT_PENDING_MS, type ToolCallEvent } from './derive.ts'
 
 const base = { asset: null, event_time: '2026-10-20T10:00:01Z', ingestion_time: '2026-10-20T10:00:01.000Z', ephemeral: false }
 const call = (id: string, cause: string, agent: AgentToolCall['agent'], index: number): ToolCallEvent => ({
@@ -98,4 +98,56 @@ test('el estado del enlace: bueno, degradado por pérdida o latencia, caído sin
   assert.equal(linkState({ rssi_dbm: -70, latency_ms: 150, packet_loss_pct: 0 }), 'degraded')
   assert.equal(linkState({ rssi_dbm: null, latency_ms: null, packet_loss_pct: 100 }), 'lost')
   assert.equal(linkState(null), null)
+})
+
+// --- Incidentes (contrato v1.1) ---
+const inc = (id: string, revision: number, over: Record<string, unknown>, ingestion = '2026-10-20T10:00:00.000Z'): Envelope =>
+  ({
+    ...base, event_id: `ai-${id}-${revision}`, topic: 'citadel.pub.evt.ai.d1.IncidentUpdated.v1', type: 'IncidentUpdated', source: 'ai-monitor', seq: revision, sim_time: 100 + revision, ingestion_time: ingestion, causation_id: null,
+    payload: { incident_id: id, revision, kind: 'WIND', name: 'Wind beyond limit', state: 'open', severity: 'low', confidence: 'probable', opened_at: 100, as_of_sim_time: 100 + revision, change: 'state', evidence: [], context: [], checks: [], evidence_event_ids: [], decided_by: 'table', table: 't', ...over },
+  }) as unknown as Envelope
+const text = (id: string, revision: number, state: string, t: string): Envelope =>
+  ({ ...base, event_id: `txt-${id}-${revision}`, topic: 'citadel.pub.evt.ai.d1.IncidentEnriched.v1', type: 'IncidentEnriched', source: 'ai-enricher', seq: 9, sim_time: 120, causation_id: null,
+    payload: { incident_id: id, revision, state, text: t, hypothesis: null, role: 'explain', decided_by: 'llm', as_of_sim_time: 100 + revision } }) as unknown as Envelope
+
+test('v1.1: un incidente es el último IncidentUpdated por id, con su historia', () => {
+  const events = [
+    inc('inc-0001', 1, { change: 'opened', kind: 'LINK_LOSS', name: 'Command link lost' }),
+    inc('inc-0002', 1, { change: 'opened', kind: 'GPS_SPOOFING', name: 'GPS spoofing', opened_at: 90 }),
+    inc('inc-0001', 3, { change: 'state', kind: 'HIJACK', name: 'Hijack', state: 'recovering' }),
+    inc('inc-0001', 2, { change: 'renamed', kind: 'HIJACK', name: 'Hijack' }),
+    inc('inc-0001', 4, { change: 'evidence', kind: 'HIJACK', name: 'Hijack', state: 'recovering' }),
+    inc('inc-0001', 5, { change: 'closed', kind: 'HIJACK', name: 'Hijack', state: 'closed' }),
+  ]
+  const list = incidents(events)
+  assert.deepEqual(list.map((i) => i.id), ['inc-0002', 'inc-0001']) // por apertura
+  const hijack = list[1]
+  assert.equal(hijack.latest.payload.revision, 5)
+  assert.equal(hijack.open, false)
+  assert.deepEqual(hijack.path, ['Command link lost', 'Hijack', 'recovering', 'closed']) // el evidence no añade paso
+  assert.equal(list[0].open, true)
+  assert.equal(hijack.opened.payload.revision, 1)
+})
+
+test('v1.1: el texto del asistente es el de la última revisión interpretable', () => {
+  const open = inc('inc-0001', 1, { change: 'opened' }, '2026-10-20T10:00:00.000Z')
+  const events = [open, inc('inc-0001', 2, { change: 'evidence' })]
+  const t0 = Date.parse('2026-10-20T10:00:00.000Z')
+  // recién publicado y sin texto: pendiente; pasado el plazo y sin que el asistente haya contestado nunca: nada
+  assert.deepEqual(incidents(events, t0 + 1000)[0].text, { state: 'pending' })
+  assert.deepEqual(incidents(events, t0 + TEXT_PENDING_MS + 1000)[0].text, { state: 'none' })
+  assert.deepEqual(incidents(events)[0].text, { state: 'none' }) // sin reloj no se inventa un pendiente
+  // el texto de la revisión 1 vale aunque la 2 sea solo de evidencias
+  const done = incidents([...events, text('inc-0001', 1, 'open', 'Wind.')], t0 + 60000)[0].text
+  assert.equal(done.state, 'published')
+  assert.equal(done.state === 'published' && done.enrichment.text, 'Wind.')
+  // un texto de otra ejecución (mismo id y revisión, otro instante) no se pega a este incidente
+  const stale = { ...text('inc-0001', 1, 'open', 'Old.'), payload: { ...text('inc-0001', 1, 'open', 'Old.').payload, as_of_sim_time: 297 } }
+  assert.deepEqual(incidents([...events, stale], t0 + 1000)[0].text, { state: 'pending' })
+  // una revisión nueva interpretable sin texto: pendiente (el asistente ya ha contestado antes)
+  const next = [...events, text('inc-0001', 1, 'open', 'Wind.'), inc('inc-0001', 3, { change: 'state', state: 'recovering' })]
+  assert.deepEqual(incidents(next, t0 + 60000)[0].text, { state: 'pending' })
+  // con el informe ya publicado no llegará nada más
+  const report = { ...base, event_id: 'ai-r', topic: 't', type: 'ReportGenerated', source: 'ai-report', seq: 99, sim_time: 500, causation_id: null, payload: {} } as unknown as Envelope
+  assert.deepEqual(incidents([...next, report], t0 + 60000)[0].text, { state: 'none' })
 })

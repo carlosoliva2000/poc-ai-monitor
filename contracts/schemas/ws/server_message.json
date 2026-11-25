@@ -180,6 +180,8 @@
         "AnomalyDetected",
         "AlertClosed",
         "AlertEnriched",
+        "IncidentUpdated",
+        "IncidentEnriched",
         "ReportGenerated",
         "OperatorMessage",
         "AgentReply",

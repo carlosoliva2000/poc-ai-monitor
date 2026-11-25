@@ -13,17 +13,25 @@ const MARKS: Record<string, { className: string; label: string }> = {
   DetectionRaised: { className: 'bg-accent', label: 'detection' },
   AnomalyDetected: { className: 'bg-destructive', label: 'alert' },
   AlertClosed: { className: 'bg-primary', label: 'closure' },
+  IncidentUpdated: { className: 'bg-destructive', label: 'incident' },
   FaultInjected: { className: 'bg-foreground', label: 'fault' },
   FaultCleared: { className: 'bg-muted-foreground', label: 'end of fault' },
   InstructorCommand: { className: 'bg-warning', label: 'instructor command' },
   InteractiveModeChanged: { className: 'bg-muted-foreground', label: 'interactive mode' },
 }
 
+const INCIDENT_MARKED = new Set(['opened', 'renamed', 'closed'])
+
 export function progressMarks(events: Envelope[]): Mark[] {
   const out: Mark[] = []
   for (const e of events) {
     const m = MARKS[e.type]
-    if (m) out.push({ key: e.event_id, t: e.sim_time, className: m.className, title: `${formatT(e.sim_time)} ${m.label}` })
+    // del incidente solo se marca lo que importa: que se abre, se renombra o se cierra
+    if (e.type === 'IncidentUpdated' && !INCIDENT_MARKED.has((e.payload as { change?: string }).change ?? '')) continue
+    if (!m) continue
+    const p = e.payload as { name?: string; change?: string }
+    const label = e.type === 'IncidentUpdated' ? `${p.name} ${p.change}` : m.label
+    out.push({ key: e.event_id, t: e.sim_time, className: m.className, title: `${formatT(e.sim_time)} ${label}` })
   }
   return out
 }
@@ -37,9 +45,11 @@ type Props = {
   /** Aviso mientras el reproductor espera al monitor. */
   waiting: string | null
   onControl: (message: ControlMessage) => void
+  /** Vista del instructor: con los interruptores «Wait for the agent» y «Interactive mode». */
+  instructorControls?: boolean
 }
 
-export function SimControls({ state, data, marks, duration, scenarios, waiting, onControl }: Props) {
+export function SimControls({ state, data, marks, duration, scenarios, waiting, onControl, instructorControls = true }: Props) {
   const status = state?.status ?? 'idle'
   const running = status === 'running'
   const finished = status === 'finished'
@@ -125,16 +135,20 @@ export function SimControls({ state, data, marks, duration, scenarios, waiting, 
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Toggle
-            label="Wait for the agent"
-            checked={state?.wait_agent ?? false}
-            onChange={(v) => onControl({ action: 'wait_agent', value: v })}
-          />
-          <Toggle
-            label="Interactive mode"
-            checked={state?.interactive ?? false}
-            onChange={(v) => onControl({ action: 'interactive', value: v })}
-          />
+          {instructorControls && (
+            <>
+              <Toggle
+                label="Wait for the agent"
+                checked={state?.wait_agent ?? false}
+                onChange={(v) => onControl({ action: 'wait_agent', value: v })}
+              />
+              <Toggle
+                label="Interactive mode"
+                checked={state?.interactive ?? false}
+                onChange={(v) => onControl({ action: 'interactive', value: v })}
+              />
+            </>
+          )}
           <div className="flex items-center gap-2" role="group" aria-label="Simulation speed">
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Speed</span>
             <div className="flex rounded-md border border-border bg-background p-0.5">

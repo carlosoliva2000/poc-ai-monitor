@@ -9,6 +9,11 @@ import type {
   DetectionAcknowledged,
   DetectionCleared,
   Envelope,
+  IncidentChange,
+  IncidentEnriched,
+  IncidentKind,
+  IncidentState,
+  IncidentUpdated,
   Link,
   Position,
   Proposal,
@@ -347,4 +352,78 @@ export function enrichmentViews(events: Envelope[]): (alert: Anomaly) => Enrichm
     if (!hybrid || alert.decided_by !== 'table' || alert.fallback) return { state: 'none' }
     return reportDone ? { state: 'missing' } : { state: 'pending' }
   }
+}
+
+/** v1.1: cambios de un incidente que el asistente interpreta (un `evidence` o un `severity` no). */
+export const INTERPRETED_CHANGES: ReadonlySet<IncidentChange> = new Set<IncidentChange>(['opened', 'state', 'renamed', 'closed'])
+/** Cuánto se espera, en reloj de pared desde que el bus publicó la revisión, a un asistente que
+ *  aún no ha contestado antes de decir que no hay (con el asistente apagado no llega nunca). */
+export const TEXT_PENDING_MS = 8000
+
+/** Estado del texto del asistente sobre un incidente: de su última revisión interpretable. */
+export type IncidentText =
+  | { state: 'none' }
+  | { state: 'pending' }
+  | { state: 'published'; enrichment: IncidentEnriched }
+
+export type IncidentView = {
+  id: string
+  kind: IncidentKind
+  /** Última revisión: lo que la tarjeta enseña (estado, severidad, evidencias). */
+  latest: Envelope<IncidentUpdated>
+  /** Primera revisión (la apertura). */
+  opened: Envelope<IncidentUpdated>
+  revisions: Envelope<IncidentUpdated>[]
+  /** Nombre y estados por los que ha pasado: «Command link lost → Hijack → recovering → closed». */
+  path: string[]
+  open: boolean
+  text: IncidentText
+}
+
+/**
+ * Los incidentes de la ejecución (v1.1): el último `IncidentUpdated` por `incident_id` con su
+ * historia, y el texto del asistente (`IncidentEnriched`) de su última revisión interpretable.
+ * `nowMs` (reloj de pared) sirve para decir «pending…» mientras el texto puede llegar: siempre
+ * si el asistente ya ha contestado alguna vez en la ejecución, y si no, durante `TEXT_PENDING_MS`
+ * desde que se publicó la revisión. En orden de apertura.
+ */
+export function incidents(events: Envelope[], nowMs?: number): IncidentView[] {
+  const byId = new Map<string, Envelope<IncidentUpdated>[]>()
+  const texts = new Map<string, IncidentEnriched>()
+  let reportDone = false
+  for (const e of events) {
+    if (e.type === 'IncidentUpdated') {
+      const p = e.payload as unknown as IncidentUpdated
+      const list = byId.get(p.incident_id) ?? []
+      list.push(e as unknown as Envelope<IncidentUpdated>)
+      byId.set(p.incident_id, list)
+    } else if (e.type === 'IncidentEnriched') {
+      const p = e.payload as unknown as IncidentEnriched
+      texts.set(`${p.incident_id}#${p.revision}`, p)
+    } else if (e.type === 'ReportGenerated') {
+      reportDone = true
+    }
+  }
+  const assistantSeen = texts.size > 0
+  const out: IncidentView[] = []
+  for (const [id, list] of byId) {
+    const revisions = [...list].sort((a, b) => a.payload.revision - b.payload.revision)
+    const latest = revisions[revisions.length - 1]
+    const path: string[] = []
+    for (const r of revisions) {
+      const p = r.payload
+      if (p.change === 'opened' || p.change === 'renamed') path.push(p.name)
+      if (p.change === 'state' || p.change === 'closed') path.push(p.state)
+    }
+    const target = [...revisions].reverse().find((r) => INTERPRETED_CHANGES.has(r.payload.change)) ?? latest
+    const candidate = texts.get(`${id}#${target.payload.revision}`)
+    // solo vale el texto escrito para esta revisión (mismo instante): uno rezagado de otra ejecución no
+    const found = candidate && candidate.as_of_sim_time === target.payload.as_of_sim_time ? candidate : undefined
+    const recent = nowMs !== undefined && nowMs - Date.parse(target.ingestion_time) < TEXT_PENDING_MS
+    let text: IncidentText = { state: 'none' }
+    if (found) text = { state: 'published', enrichment: found }
+    else if (!reportDone && (assistantSeen || recent)) text = { state: 'pending' }
+    out.push({ id, kind: latest.payload.kind, latest, opened: revisions[0], revisions, path, open: latest.payload.state !== ('closed' satisfies IncidentState), text })
+  }
+  return out.sort((a, b) => a.opened.payload.opened_at - b.opened.payload.opened_at)
 }

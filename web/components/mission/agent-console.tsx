@@ -3,15 +3,17 @@
 import { Hourglass } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useStoredState } from '@/hooks/use-stored-state'
 import type { ReportPhase } from '@/hooks/use-platform'
 import type { AgentActivity, Conversation, Envelope, Proposal } from '@/lib/contracts'
 import { chatEntries, type Derived, type ToolCallEvent } from '@/lib/derive'
 import { formatT } from '@/lib/format'
+import type { View } from '@/lib/view'
 import { splitReport } from '@/lib/report'
 import { cn } from '@/lib/utils'
 import { ChatPanel, TypingDots } from './chat-panel'
+import { IncidentList } from './incident-list'
 import { MonitorFeed } from './monitor-feed'
 import { ProposalCard, type Decision } from './proposal-card'
 
@@ -24,7 +26,9 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 const MONITOR_SUGGESTIONS = ['What is happening right now?', 'Why do you think that is the cause?', 'Which alerts are open?']
-const INSTRUCTOR_SUGGESTIONS = ['Wind from the north-east at 8 m/s', 'Put a 12 m/s wind from the north for one minute', 'Remove the wind']
+/** Con un secuestro en el ejercicio, la pregunta que lo cuestiona va la primera. */
+const HIJACK_QUESTION = 'Why do you think the drone is being hijacked?'
+const INSTRUCTOR_SUGGESTIONS = ['Put a strong wind from the north, 19 m/s, until I cancel it', 'Remove the wind', 'Wind from the north-east at 8 m/s', 'Put a 12 m/s wind from the north for one minute']
 const REPORT_SUGGESTIONS = ['What happened during the flight?', 'Which was the most serious anomaly?', 'What do you recommend?']
 
 type Props = {
@@ -41,14 +45,26 @@ type Props = {
   interactive: boolean
   onConfirmProposal: (proposal: Proposal, text: string) => void
   onEditProposal: (proposal: Proposal) => void
+  /** Vista del alumno: sin la pestaña del instructor. */
+  view?: View
+  /** Instante actual de la simulación (cuánto lleva abierto cada incidente). */
+  simTime?: number
 }
 
-export function AgentConsole({ events, data, chunks, activity, toolCalls, reportPhase, finished, onSend, interactive, onConfirmProposal, onEditProposal }: Props) {
+export function AgentConsole({ events, data, chunks, activity, toolCalls, reportPhase, finished, onSend, interactive, onConfirmProposal, onEditProposal, view = 'instructor', simTime = 0 }: Props) {
   const [decisions, setDecisions] = useState<Record<string, Decision>>({})
-  const [tab, setTab] = useState<Tab>('monitor')
+  const [selected, setTab] = useState<Tab>('monitor')
+  const tabs = view === 'student' ? TABS.filter((t) => t.id !== 'instructor') : TABS
+  const tab: Tab = tabs.some((t) => t.id === selected) ? selected : 'monitor'
   const [showCalls, setShowCalls] = useStoredState<boolean>('poc-toolcalls-v1', true, (raw) => raw !== false)
   const calls = showCalls ? toolCalls : []
   const writing = reportPhase === 'writing' && !data.report
+  // El monitor de situación publica incidentes; las ejecuciones con el detector y las alertas
+  // (módulo anterior) se siguen viendo con su lista de avisos.
+  const legacy = useMemo(() => events.some((e) => e.source === 'ai-detector' || e.type === 'AnomalyDetected'), [events])
+  const hijack = useMemo(() => events.some((e) => e.type === 'IncidentUpdated' && (e.payload as { kind?: string }).kind === 'HIJACK'), [events])
+  const incidentRun = useMemo(() => events.some((e) => e.type === 'IncidentUpdated'), [events])
+  const monitorSuggestions = hijack ? [HIJACK_QUESTION, ...MONITOR_SUGGESTIONS] : MONITOR_SUGGESTIONS
 
   return (
     <section aria-labelledby="agent-title" className="flex h-full min-h-0 flex-col bg-card">
@@ -58,7 +74,6 @@ export function AgentConsole({ events, data, chunks, activity, toolCalls, report
             Agent console
           </h2>
           <div className="flex items-center gap-3 text-xs text-muted-foreground" aria-label="Who is speaking">
-            <Legend className="bg-muted-foreground" label="Detector" />
             <Legend className="bg-primary" label="Monitor" />
             <Legend className="bg-[oklch(0.55_0.12_195)]" label="Report" />
             <Legend className="bg-accent" label="Operator" />
@@ -66,7 +81,7 @@ export function AgentConsole({ events, data, chunks, activity, toolCalls, report
         </div>
         <div className="-mb-px flex items-end justify-between gap-4">
           <div role="tablist" aria-label="Agent" className="flex gap-4">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.id}
                 role="tab"
@@ -94,13 +109,13 @@ export function AgentConsole({ events, data, chunks, activity, toolCalls, report
 
       {tab === 'monitor' ? (
         <>
-          <MonitorFeed events={events} data={data} activity={activity} toolCalls={calls} />
+          {legacy ? <MonitorFeed events={events} data={data} activity={activity} toolCalls={calls} /> : <IncidentList events={events} simTime={simTime} />}
           <ChatPanel
             title="monitor"
             agentLabel="MONITOR"
             agentClass="text-primary"
             entries={chatEntries(events, 'monitor', chunks, calls)}
-            suggestions={MONITOR_SUGGESTIONS}
+            suggestions={monitorSuggestions}
             placeholder="Ask the monitor…"
             onSend={(text) => onSend('monitor', text)}
             showToolCalls={showCalls}
@@ -147,7 +162,7 @@ export function AgentConsole({ events, data, chunks, activity, toolCalls, report
                   className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 font-mono text-xs text-foreground"
                   data-testid="report-done"
                 >
-                  Report generated · {formatT(data.report.sim_time)} · {data.report.payload.alerts_count} {data.report.payload.alerts_count === 1 ? 'alert' : 'alerts'}
+                  Report generated · {formatT(data.report.sim_time)} · {data.report.payload.alerts_count} {noun(data.report.payload.alerts_count, incidentRun)}
                 </p>
                 <ReportBody markdown={data.report.payload.markdown} />
               </div>
@@ -175,6 +190,9 @@ export function AgentConsole({ events, data, chunks, activity, toolCalls, report
 
 /** Qué decir en la pestaña Informe mientras no hay informe. */
 /** Informe de misión y, plegada, la autoevaluación técnica del monitor (anexo). */
+/** «3 incidents» si el monitor publicó incidentes; «3 alerts» con el módulo anterior. */
+const noun = (n: number, incidents: boolean) => (incidents ? (n === 1 ? 'incident' : 'incidents') : n === 1 ? 'alert' : 'alerts')
+
 function ReportBody({ markdown }: { markdown: string }) {
   const { mission, annex, annexTitle } = splitReport(markdown)
   return (
@@ -208,7 +226,7 @@ function ReportNotice({ phase, finished }: { phase: ReportPhase; finished: boole
     phase === 'finished'
       ? 'The report agent finished without publishing a report.'
       : finished
-        ? 'The simulation has finished. The report agent starts when the monitor has answered every detection.'
+        ? 'The simulation has finished and no report has been published for this run.'
         : 'The report is generated when the simulation ends. Until then nothing appears here.'
   return (
     <p role="status" className="m-auto max-w-72 pt-8 text-center text-sm leading-relaxed text-muted-foreground text-pretty" data-testid="report-notice">

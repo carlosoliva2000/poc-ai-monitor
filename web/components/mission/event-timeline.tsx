@@ -58,6 +58,8 @@ export const EventTimeline = memo(function EventTimeline({ events, cursor, total
   const types = useMemo(() => countBy(events, (e) => e.type), [events])
   const topics = useMemo(() => countBy(events, topicOf), [events])
 
+  // El monitor de situación no usa detector: su casilla sobra
+  const groups = GROUPS.filter((g) => g.id !== 'detector')
   const set = (patch: Partial<Saved>) => setSaved((prev) => ({ ...prev, ...patch }))
   const columns = saved.showTopic ? 'grid-cols-[4.5rem_14rem_1fr]' : 'grid-cols-[4.5rem_11rem_1fr]'
 
@@ -74,7 +76,7 @@ export const EventTimeline = memo(function EventTimeline({ events, cursor, total
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-label="Filter by source">
-          {GROUPS.map((g) => (
+          {groups.map((g) => (
             <li key={g.id}>
               <label className="flex cursor-pointer items-center gap-1">
                 <input

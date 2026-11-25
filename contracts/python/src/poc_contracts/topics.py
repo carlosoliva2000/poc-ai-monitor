@@ -58,6 +58,9 @@ EVENT_SPECS: dict[EventType, EventSpec] = {
     _T.ALERT_CLOSED: EventSpec("ai", "d1", "ai", "ai-monitor"),
     # E6 (v0.19): fuente propia para que ninguna tool de datos lo devuelva (los chats no lo ven)
     _T.ALERT_ENRICHED: EventSpec("ai", "d1", "ai", "ai-enricher"),
+    # v1.1: monitor de situación (incidentes) y asistente (su texto, con la fuente de AlertEnriched)
+    _T.INCIDENT_UPDATED: EventSpec("ai", "d1", "ai", "ai-monitor"),
+    _T.INCIDENT_ENRICHED: EventSpec("ai", "d1", "ai", "ai-enricher"),
     _T.REPORT_GENERATED: EventSpec("ai", "d1", "ai", "ai-report"),
     _T.OPERATOR_MESSAGE: EventSpec("ops", None, "ops", "web-operator"),
     _T.AGENT_REPLY: EventSpec("ai", None, "ai", None),
