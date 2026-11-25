@@ -1,0 +1,60 @@
+facet: gps.availability
+table: gps_availability
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: GA-01
+  state: no_fix
+  when: gps_hacc_m > 73.6
+  training:
+    probability: 1.0
+    instants: 12272
+    variants: 287
+    episodes: 316
+  validation:
+    instants: 2575
+    right: 2575
+    precision: 1.0
+  reject: false
+  thresholds:
+  - feature: gps_hacc_m
+    op: '>'
+    value: 73.595
+    round_to: null
+- id: GA-02
+  state: no_data
+  when: gps_hacc_m <= 73.6 (or missing) and age_gnss > 0.5
+  training:
+    probability: 0.7252
+    instants: 6035
+    variants: 125
+    episodes: 129
+  validation:
+    instants: 1888
+    right: 1245
+    precision: 0.6594
+  reject: false
+  thresholds:
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: age_gnss
+    op: '>'
+    value: 0.5
+    round_to: null
+- id: GA-03
+  state: normal
+  when: everything the rows above do not match
+  training:
+    probability: 1.0
+    instants: 1199724
+    variants: 1680
+    episodes: 3553
+  validation:
+    instants: 253844
+    right: 253844
+    precision: 1.0
+  reject: false
+  thresholds: []

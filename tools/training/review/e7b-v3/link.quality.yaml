@@ -1,0 +1,120 @@
+facet: link.quality
+table: link_quality
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: LQ-01
+  state: degraded
+  when: link_latency_vs_base > 1.407 and link_latency_ms > 52.7 (or missing)
+  training:
+    probability: 0.919
+    instants: 6390
+    variants: 129
+    episodes: 137
+  validation:
+    instants: 1282
+    right: 1120
+    precision: 0.8736
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: link_latency_vs_base
+    op: '>'
+    value: 1.40652
+    round_to: null
+  - feature: link_latency_ms
+    op: '>'
+    value: 52.7
+    round_to: null
+- id: LQ-02
+  state: degraded
+  when: link_latency_vs_base <= 1.407 (or missing) and link_rssi_dbm <= -81.65
+  training:
+    probability: 0.7315
+    instants: 1414
+    variants: 35
+    episodes: 37
+  validation:
+    instants: 464
+    right: 309
+    precision: 0.6659
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: link_latency_vs_base
+    op: <=
+    value: 1.40652
+    round_to: null
+  - feature: link_rssi_dbm
+    op: <=
+    value: -81.65
+    round_to: null
+- id: LQ-03
+  state: degraded
+  when: link_latency_vs_base <= 1.407 (or missing) and link_rssi_dbm > -81.65 (or missing) and link_loss_pct
+    > 97.7
+  training:
+    probability: 0.0375
+    instants: 31
+    variants: 8
+    episodes: 11
+  validation:
+    instants: 200
+    right: 7
+    precision: 0.035
+  confidence: possible
+  reject: true
+  thresholds:
+  - feature: link_latency_vs_base
+    op: <=
+    value: 1.40652
+    round_to: null
+  - feature: link_rssi_dbm
+    op: '>'
+    value: -81.65
+    round_to: null
+  - feature: link_loss_pct
+    op: '>'
+    value: 97.7
+    round_to: null
+  reason: 'probability 0.04: in its own training the state it gives is wrong more than 9 times out of
+    10 (the row exists because of the class weight)'
+- id: LQ-04
+  state: good
+  when: link_latency_vs_base > 1.407 and link_latency_ms <= 52.7
+  training:
+    probability: 0.9994
+    instants: 1596
+    variants: 90
+    episodes: 322
+  validation:
+    instants: 431
+    right: 431
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: link_latency_vs_base
+    op: '>'
+    value: 1.40652
+    round_to: null
+  - feature: link_latency_ms
+    op: <=
+    value: 52.7
+    round_to: null
+- id: LQ-05
+  state: good
+  when: everything the rows above do not match
+  training:
+    probability: 0.9998
+    instants: 1346892
+    variants: 1680
+    episodes: 2598
+  validation:
+    instants: 287510
+    right: 287450
+    precision: 0.9998
+  confidence: confirmed
+  reject: false
+  thresholds: []

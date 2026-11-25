@@ -67,6 +67,7 @@ def compute_states(
     """Una fila por cada instante de `aux` (`times`: paso → `sim_time`), en orden."""
     lab = cfg.labeling
     wind_limit = cfg.drone.wind_limit_mps
+    wind_notable = lab.wind_notable_over_limit * wind_limit  # «notable» es relativo al dron (v1.2)
     rows: list[StateRow] = []
     situation, sticky = "on_route", NA
     last_cause, last_cause_t = NA, -1e9  # última causa activa y cuándo (rebasamiento al recuperar)
@@ -90,11 +91,7 @@ def compute_states(
         facets["meteo.availability"] = "no_data" if a.meteo_mute else "normal"
         w = a.wind_speed_mps
         facets["environment.wind"] = (
-            "beyond_limit"
-            if w >= wind_limit
-            else "notable"
-            if w >= lab.wind_notable_mps
-            else "calm"
+            "beyond_limit" if w >= wind_limit else "notable" if w >= wind_notable else "calm"
         )
 
         # Enlace.
@@ -106,7 +103,7 @@ def compute_states(
 
         # Dron: modo, situación (respecto a la referencia del modo, con histéresis) y causa.
         facets["drone.mode"] = a.mode
-        causes = _causes(a, lab.wind_notable_mps)
+        causes = _causes(a, wind_notable)
         d = a.ref_dist_m
         if d > lab.deviated_m:
             if causes:

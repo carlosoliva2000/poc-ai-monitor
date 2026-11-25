@@ -1,0 +1,17 @@
+{
+  "frozen_at": "2026-11-25",
+  "dataset": "e7b-v3",
+  "margin_k": 0.5,
+  "combined_sha256": "13f6cfd61d835c6e2632a88a5981158a7b3e63464d8118481ca254e7dc3390cb",
+  "files": {
+    "ai-module-py/src/ai_module/situation/tables_learned.yaml": "377b40babe649efc3a69917f16c933fa96d60b9ec7fc8a588383aebda9b2828f",
+    "ai-module-py/src/ai_module/situation/situation_rule.yaml": "64ad7142eff626df2253da35125acc76c920a388f3cff0097cca00318e863c51",
+    "ai-module-py/src/ai_module/situation/situation_rule.py": "82904fbd2e12c08a04733eb62d7ee79abda7e600c1a89b828200da0464664b04",
+    "ai-module-py/src/ai_module/situation/features.py": "a451bb321a24d1bfc4de4ae397843dd3497041ce83f45684e3289723a09e876e",
+    "ai-module-py/src/ai_module/situation/assets.yaml": "ea49568413a3d3471b8807de50682dc1f73cf3edd66bba3d514f965c58faf81e",
+    "ai-module-py/src/ai_module/decision/table.py": "c1922b3dc56d69d32b0e58ca47258af5478da09b160030225b3ddc80c50626e8",
+    "tools/training/manifests/e7b-v3.yaml": "ff8b6af726e84c916cb46933f2296f979342851a2d948a44a1a816d853368918",
+    "tools/training/candidates/e7b-v3.yaml": "9e52501ff98bfdbc0efc0629e0b9752b3e5353d43d2e84944fb3c91e1585b3b7",
+    "tools/training/review/e7b-v3/rejected.yaml": "35b6cd71e90826f4ff39cb3c269d99657217101ce690f3e9f6a4157a0861e7fd"
+  }
+}

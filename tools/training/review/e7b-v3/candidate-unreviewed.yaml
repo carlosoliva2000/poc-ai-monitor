@@ -1,0 +1,1298 @@
+# Tablas candidatas de la E7b: un árbol CART por faceta convertido en reglas (política
+# FIRST). Salen de `tools/training/tree_to_table.py`; no se editan a mano.
+# Cada fila dice cuántas variantes distintas la sostienen.
+version: 1
+tables:
+  gps_availability:
+    description: 'Learned from simulator data (CART tree, 4 rows): gps.availability.'
+    hit_policy: FIRST
+    inputs:
+    - gps_hdop
+    - age_gps_p
+    - age_gnss_p
+    outputs: &id001
+    - state
+    - probability
+    - confidence
+    - instants
+    - variants
+    - episodes
+    rules:
+    - id: GA-01
+      note: 280 variants, 303 episodes, 12167 training instants
+      when:
+        gps_hdop: '> 53.95000076293945'
+      then:
+        state: no_fix
+        probability: 0.9952
+        confidence: confirmed
+        instants: 12167
+        variants: 280
+        episodes: 303
+    - id: GA-02
+      note: 103 variants, 104 episodes, 4927 training instants
+      when:
+        gps_hdop: <= 53.95000076293945, null
+        age_gps_p: '> 0.75, null'
+        age_gnss_p: '> 0.75'
+      then:
+        state: no_data
+        probability: 0.8295
+        confidence: probable
+        instants: 4927
+        variants: 103
+        episodes: 104
+    - id: GA-03
+      note: 95 variants, 758 episodes, 1015 training instants
+      when:
+        gps_hdop: <= 53.95000076293945, null
+        age_gps_p: <= 0.75
+        age_gnss_p: '> 0.75'
+      then:
+        state: normal
+        probability: 1.0
+        confidence: confirmed
+        instants: 1015
+        variants: 95
+        episodes: 758
+    - id: GA-04
+      note: '1680 variants, 3348 episodes, 1339192 training instants (default row: everything the rows
+        above do not match)'
+      when: {}
+      then:
+        state: normal
+        probability: 0.9999
+        confidence: confirmed
+        instants: 1339192
+        variants: 1680
+        episodes: 3348
+  gps_quality:
+    description: 'Learned from simulator data (CART tree, 3 rows): gps.quality.'
+    hit_policy: FIRST
+    inputs:
+    - gps_hdop
+    - gps_hacc_m
+    outputs: *id001
+    rules:
+    - id: GQ-01
+      note: 268 variants, 375 episodes, 18638 training instants
+      when:
+        gps_hdop: '> 1.2450000047683716'
+        gps_hacc_m: '> 5.984999895095825, null'
+      then:
+        state: degraded
+        probability: 0.9393
+        confidence: confirmed
+        instants: 18638
+        variants: 268
+        episodes: 375
+    - id: GQ-02
+      note: 207 variants, 2283 episodes, 3399 training instants
+      when:
+        gps_hdop: <= 1.2450000047683716, null
+        gps_hacc_m: '> 5.984999895095825, null'
+      then:
+        state: good
+        probability: 0.9864
+        confidence: confirmed
+        instants: 3399
+        variants: 207
+        episodes: 2283
+    - id: GQ-03
+      note: '1680 variants, 3761 episodes, 1317950 training instants (default row: everything the rows
+        above do not match)'
+      when: {}
+      then:
+        state: good
+        probability: 1.0
+        confidence: confirmed
+        instants: 1317950
+        variants: 1680
+        episodes: 3761
+  gps_integrity:
+    description: 'Learned from simulator data (CART tree, 4 rows): gps.integrity.'
+    hit_policy: FIRST
+    inputs:
+    - gps_radar_avg_sigma
+    - cn0_vs_nominal_db
+    - agc_vs_nominal_db
+    outputs: *id001
+    rules:
+    - id: GI-01
+      note: 234 variants, 279 episodes, 15964 training instants
+      when:
+        cn0_vs_nominal_db: '> -3.649999976158142, null'
+        agc_vs_nominal_db: <= -1.0049999952316284
+      then:
+        state: spoofed
+        probability: 0.9624
+        confidence: confirmed
+        instants: 15964
+        variants: 234
+        episodes: 279
+    - id: GI-02
+      note: 6 variants, 11 episodes, 230 training instants
+      when:
+        gps_radar_avg_sigma: '> 1.993122935295105'
+        cn0_vs_nominal_db: <= -3.649999976158142
+        agc_vs_nominal_db: <= -1.0049999952316284
+      then:
+        state: spoofed
+        probability: 0.1629
+        confidence: possible
+        instants: 230
+        variants: 6
+        episodes: 11
+    - id: GI-03
+      note: 162 variants, 605 episodes, 13656 training instants
+      when:
+        gps_radar_avg_sigma: <= 1.993122935295105, null
+        cn0_vs_nominal_db: <= -3.649999976158142
+        agc_vs_nominal_db: <= -1.0049999952316284
+      then:
+        state: reliable
+        probability: 0.9971
+        confidence: confirmed
+        instants: 13656
+        variants: 162
+        episodes: 605
+    - id: GI-04
+      note: '1680 variants, 3157 episodes, 1309470 training instants (default row: everything the rows
+        above do not match)'
+      when: {}
+      then:
+        state: reliable
+        probability: 0.9999
+        confidence: confirmed
+        instants: 1309470
+        variants: 1680
+        episodes: 3157
+  radar_availability:
+    description: 'Learned from simulator data (CART tree, 3 rows): radar.availability.'
+    hit_policy: FIRST
+    inputs:
+    - radar_range_ratio
+    - age_radar_p
+    outputs: *id001
+    rules:
+    - id: RA-01
+      note: 166 variants, 265 episodes, 45409 training instants
+      when:
+        radar_range_ratio: '> 0.9925965964794159, null'
+        age_radar_p: '> 0.875'
+      then:
+        state: out_of_range
+        probability: 0.9901
+        confidence: confirmed
+        instants: 45409
+        variants: 166
+        episodes: 265
+    - id: RA-02
+      note: 111 variants, 111 episodes, 5423 training instants
+      when:
+        radar_range_ratio: <= 0.9925965964794159
+        age_radar_p: '> 0.875'
+      then:
+        state: no_data
+        probability: 0.9686
+        confidence: confirmed
+        instants: 5423
+        variants: 111
+        episodes: 111
+    - id: RA-03
+      note: '1678 variants, 2029 episodes, 1380963 training instants (default row: everything the rows
+        above do not match)'
+      when: {}
+      then:
+        state: normal
+        probability: 0.9998
+        confidence: confirmed
+        instants: 1380963
+        variants: 1678
+        episodes: 2029
+  link_availability:
+    description: 'Learned from simulator data (CART tree, 2 rows): link.availability.'
+    hit_policy: FIRST
+    inputs:
+    - tele_gap_p
+    outputs: *id001
+    rules:
+    - id: LA-01
+      note: 468 variants, 481 episodes, 74102 training instants
+      when:
+        tele_gap_p: '> 0.75'
+      then:
+        state: lost
+        probability: 0.9912
+        confidence: confirmed
+        instants: 74102
+        variants: 468
+        episodes: 481
+    - id: LA-02
+      note: '1680 variants, 2411 episodes, 1357814 training instants (default row: everything the rows
+        above do not match)'
+      when: {}
+      then:
+        state: connected
+        probability: 0.9999
+        confidence: confirmed
+        instants: 1357814
+        variants: 1680
+        episodes: 2411
+  link_quality:
+    description: 'Learned from simulator data (CART tree, 5 rows): link.quality.'
+    hit_policy: FIRST
+    inputs:
+    - link_loss_pct
+    - link_rssi_dbm
+    - link_latency_ms
+    - link_latency_vs_base
+    outputs: *id001
+    rules:
+    - id: LQ-01
+      note: 129 variants, 137 episodes, 6390 training instants
+      when:
+        link_latency_ms: '> 52.69999885559082, null'
+        link_latency_vs_base: '> 1.4065226912498474'
+      then:
+        state: degraded
+        probability: 0.919
+        confidence: confirmed
+        instants: 6390
+        variants: 129
+        episodes: 137
+    - id: LQ-02
+      note: 35 variants, 37 episodes, 1414 training instants
+      when:
+        link_rssi_dbm: <= -81.64999771118164
+        link_latency_vs_base: <= 1.4065226912498474, null
+      then:
+        state: degraded
+        probability: 0.7315
+        confidence: probable
+        instants: 1414
+        variants: 35
+        episodes: 37
+    - id: LQ-03
+      note: 8 variants, 11 episodes, 31 training instants
+      when:
+        link_loss_pct: '> 97.70000076293945'
+        link_rssi_dbm: '> -81.64999771118164, null'
+        link_latency_vs_base: <= 1.4065226912498474, null
+      then:
+        state: degraded
+        probability: 0.0375
+        confidence: possible
+        instants: 31
+        variants: 8
+        episodes: 11
+    - id: LQ-04
+      note: 90 variants, 322 episodes, 1596 training instants
+      when:
+        link_latency_ms: <= 52.69999885559082
+        link_latency_vs_base: '> 1.4065226912498474'
+      then:
+        state: good
+        probability: 0.9994
+        confidence: confirmed
+        instants: 1596
+        variants: 90
+        episodes: 322
+    - id: LQ-05
+      note: '1680 variants, 2598 episodes, 1346892 training instants (default row: everything the rows
+        above do not match)'
+      when: {}
+      then:
+        state: good
+        probability: 0.9998
+        confidence: confirmed
+        instants: 1346892
+        variants: 1680
+        episodes: 2598
+  meteo_availability:
+    description: 'Learned from simulator data (CART tree, 2 rows): meteo.availability.'
+    hit_policy: FIRST
+    inputs:
+    - age_meteo_p
+    outputs: *id001
+    rules:
+    - id: MA-01
+      note: 135 variants, 137 episodes, 6233 training instants
+      when:
+        age_meteo_p: '> 0.9749999940395355'
+      then:
+        state: no_data
+        probability: 0.9085
+        confidence: confirmed
+        instants: 6233
+        variants: 135
+        episodes: 137
+    - id: MA-02
+      note: '1680 variants, 1815 episodes, 1425214 training instants (default row: everything the rows
+        above do not match)'
+      when: {}
+      then:
+        state: normal
+        probability: 0.9996
+        confidence: confirmed
+        instants: 1425214
+        variants: 1680
+        episodes: 1815
+  battery_availability:
+    description: 'Learned from simulator data (CART tree, 2 rows): battery.availability.'
+    hit_policy: FIRST
+    inputs:
+    - age_battery_p
+    outputs: *id001
+    rules:
+    - id: BA-01
+      note: 144 variants, 148 episodes, 6372 training instants
+      when:
+        age_battery_p: '> 0.9749999940395355'
+      then:
+        state: no_data
+        probability: 0.5722
+        confidence: possible
+        instants: 6372
+        variants: 144
+        episodes: 148
+    - id: BA-02
+      note: '1680 variants, 2343 episodes, 1346632 training instants (default row: everything the rows
+        above do not match)'
+      when: {}
+      then:
+        state: normal
+        probability: 0.9995
+        confidence: confirmed
+        instants: 1346632
+        variants: 1680
+        episodes: 2343
+  battery_level:
+    description: 'Learned from simulator data (CART tree, 4 rows): battery.level.'
+    hit_policy: FIRST
+    inputs:
+    - battery_pct
+    outputs: *id001
+    rules:
+    - id: BL-01
+      note: 194 variants, 195 episodes, 13394 training instants
+      when:
+        battery_pct: (7.75..16.84999942779541]
+      then:
+        state: low
+        probability: 0.8323
+        confidence: probable
+        instants: 13394
+        variants: 194
+        episodes: 195
+    - id: BL-02
+      note: 180 variants, 181 episodes, 3797 training instants
+      when:
+        battery_pct: <= 7.25
+      then:
+        state: critical
+        probability: 0.9768
+        confidence: confirmed
+        instants: 3797
+        variants: 180
+        episodes: 181
+    - id: BL-03
+      note: 50 variants, 67 episodes, 362 training instants
+      when:
+        battery_pct: (7.25..7.75]
+      then:
+        state: critical
+        probability: 0.3991
+        confidence: possible
+        instants: 362
+        variants: 50
+        episodes: 67
+    - id: BL-04
+      note: '1680 variants, 2188 episodes, 1330471 training instants (default row: everything the rows
+        above do not match)'
+      when: {}
+      then:
+        state: normal
+        probability: 1.0
+        confidence: confirmed
+        instants: 1330471
+        variants: 1680
+        episodes: 2188
+  battery_endurance:
+    description: 'Learned from simulator data (CART tree, 10 rows): battery.endurance.'
+    hit_policy: FIRST
+    inputs:
+    - battery_pct
+    - home_time_ratio
+    - wind_est_over_airspeed
+    - ground_speed_over_cruise
+    outputs: *id001
+    rules:
+    - id: BE-01
+      note: 186 variants, 196 episodes, 17523 training instants
+      when:
+        battery_pct: <= 18.449999809265137
+      then:
+        state: cannot_reach_home
+        probability: 0.735
+        confidence: probable
+        instants: 17523
+        variants: 186
+        episodes: 196
+    - id: BE-02
+      note: 82 variants, 87 episodes, 3718 training instants
+      when:
+        battery_pct: '> 32.64999961853027, null'
+        wind_est_over_airspeed: '> 0.8454915285110474'
+      then:
+        state: cannot_reach_home
+        probability: 0.3985
+        confidence: possible
+        instants: 3718
+        variants: 82
+        episodes: 87
+    - id: BE-03
+      note: 83 variants, 91 episodes, 2818 training instants
+      when:
+        battery_pct: (18.449999809265137..25.65000057220459]
+        home_time_ratio: '> 0.44069746136665344, null'
+      then:
+        state: cannot_reach_home
+        probability: 0.5903
+        confidence: possible
+        instants: 2818
+        variants: 83
+        episodes: 91
+    - id: BE-04
+      note: 29 variants, 30 episodes, 952 training instants
+      when:
+        battery_pct: (25.65000057220459..32.64999961853027]
+        home_time_ratio: '> 0.3142392486333847'
+      then:
+        state: cannot_reach_home
+        probability: 0.2109
+        confidence: possible
+        instants: 952
+        variants: 29
+        episodes: 30
+    - id: BE-05
+      note: 7 variants, 8 episodes, 198 training instants
+      when:
+        battery_pct: (18.449999809265137..25.65000057220459]
+        home_time_ratio: (0.3007781505584717..0.44069746136665344]
+        ground_speed_over_cruise: <= 0.7139822840690613
+      then:
+        state: cannot_reach_home
+        probability: 0.2837
+        confidence: possible
+        instants: 198
+        variants: 7
+        episodes: 8
+    - id: BE-06
+      note: 6 variants, 6 episodes, 105 training instants
+      when:
+        battery_pct: '> 32.64999961853027, null'
+        home_time_ratio: '> 0.3642898052930832'
+        wind_est_over_airspeed: <= 0.8454915285110474, null
+      then:
+        state: cannot_reach_home
+        probability: 0.0632
+        confidence: possible
+        instants: 105
+        variants: 6
+        episodes: 6
+    - id: BE-07
+      note: 128 variants, 133 episodes, 6731 training instants
+      when:
+        battery_pct: (25.65000057220459..32.64999961853027]
+        home_time_ratio: <= 0.3142392486333847, null
+      then:
+        state: sufficient
+        probability: 0.9993
+        confidence: confirmed
+        instants: 6731
+        variants: 128
+        episodes: 133
+    - id: BE-08
+      note: 114 variants, 121 episodes, 5037 training instants
+      when:
+        battery_pct: (18.449999809265137..25.65000057220459]
+        home_time_ratio: <= 0.3007781505584717
+      then:
+        state: sufficient
+        probability: 0.9941
+        confidence: confirmed
+        instants: 5037
+        variants: 114
+        episodes: 121
+    - id: BE-09
+      note: 101 variants, 136 episodes, 2337 training instants
+      when:
+        battery_pct: (18.449999809265137..25.65000057220459]
+        home_time_ratio: (0.3007781505584717..0.44069746136665344]
+        ground_speed_over_cruise: '> 0.7139822840690613, null'
+      then:
+        state: sufficient
+        probability: 0.9924
+        confidence: confirmed
+        instants: 2337
+        variants: 101
+        episodes: 136
+    - id: BE-10
+      note: '1680 variants, 3201 episodes, 1292312 training instants (default row: everything the rows
+        above do not match)'
+      when: {}
+      then:
+        state: sufficient
+        probability: 0.9999
+        confidence: confirmed
+        instants: 1292312
+        variants: 1680
+        episodes: 3201
+  environment_wind:
+    description: 'Learned from simulator data (CART tree, 8 rows): environment.wind.'
+    hit_policy: FIRST
+    inputs:
+    - wind_est_over_limit
+    - wind_est_mean5_over_limit
+    - station_wind_over_limit
+    outputs: *id001
+    rules:
+    - id: EW-01
+      note: 1052 variants, 6785 episodes, 747666 training instants
+      when:
+        wind_est_over_limit: <= 0.9247071444988251
+        wind_est_mean5_over_limit: '> 0.40381674468517303, null'
+        station_wind_over_limit: <= 0.8013116717338562, null
+      then:
+        state: notable
+        probability: 0.9846
+        confidence: confirmed
+        instants: 747666
+        variants: 1052
+        episodes: 6785
+    - id: EW-02
+      note: 318 variants, 1103 episodes, 33380 training instants
+      when:
+        wind_est_over_limit: (0.9247071444988251..0.9324304163455963], null
+        wind_est_mean5_over_limit: '> 0.40381674468517303, null'
+        station_wind_over_limit: (0.3404630720615387..0.6784826219081879]
+      then:
+        state: notable
+        probability: 0.9522
+        confidence: confirmed
+        instants: 33380
+        variants: 318
+        episodes: 1103
+    - id: EW-03
+      note: 190 variants, 240 episodes, 9467 training instants
+      when:
+        wind_est_over_limit: '> 0.9324304163455963'
+        wind_est_mean5_over_limit: '> 0.40381674468517303, null'
+      then:
+        state: beyond_limit
+        probability: 0.6669
+        confidence: probable
+        instants: 9467
+        variants: 190
+        episodes: 240
+    - id: EW-04
+      note: 21 variants, 29 episodes, 638 training instants
+      when:
+        wind_est_over_limit: (0.9247071444988251..0.9324304163455963], null
+        wind_est_mean5_over_limit: '> 0.40381674468517303, null'
+        station_wind_over_limit: '> 0.6784826219081879'
+      then:
+        state: beyond_limit
+        probability: 0.2336
+        confidence: possible
+        instants: 638
+        variants: 21
+        episodes: 29
+    - id: EW-05
+      note: 15 variants, 25 episodes, 269 training instants
+      when:
+        wind_est_over_limit: <= 0.9247071444988251
+        wind_est_mean5_over_limit: '> 0.40381674468517303, null'
+        station_wind_over_limit: '> 0.8013116717338562'
+      then:
+        state: beyond_limit
+        probability: 0.1121
+        confidence: possible
+        instants: 269
+        variants: 15
+        episodes: 25
+    - id: EW-06
+      note: 13 variants, 14 episodes, 253 training instants
+      when:
+        wind_est_mean5_over_limit: <= 0.40381674468517303
+        station_wind_over_limit: '> 0.48085789382457733'
+      then:
+        state: beyond_limit
+        probability: 0.108
+        confidence: possible
+        instants: 253
+        variants: 13
+        episodes: 14
+    - id: EW-07
+      note: 217 variants, 938 episodes, 31636 training instants
+      when:
+        wind_est_over_limit: (0.9247071444988251..0.9324304163455963], null
+        wind_est_mean5_over_limit: '> 0.40381674468517303, null'
+        station_wind_over_limit: <= 0.3404630720615387, null
+      then:
+        state: calm
+        probability: 0.8109
+        confidence: probable
+        instants: 31636
+        variants: 217
+        episodes: 938
+    - id: EW-08
+      note: '711 variants, 3994 episodes, 561319 training instants (default row: everything the rows above
+        do not match)'
+      when: {}
+      then:
+        state: calm
+        probability: 0.9718
+        confidence: confirmed
+        instants: 561319
+        variants: 711
+        episodes: 3994
+  drone_mode:
+    description: 'Learned from simulator data (CART tree, 13 rows): drone.mode.'
+    hit_policy: FIRST
+    inputs:
+    - mode_hold
+    - mode_return
+    - mode_land
+    - age_autopilot_p
+    - radar_dev_sigma
+    - radar_dev_sigma_max30
+    - radar_dev_slope_cruise
+    outputs: *id001
+    rules:
+    - id: DM-01
+      note: 89 variants, 115 episodes, 70593 training instants
+      when:
+        mode_hold: '> 0.5'
+      then:
+        state: failsafe_hold
+        probability: 1.0
+        confidence: confirmed
+        instants: 70593
+        variants: 89
+        episodes: 115
+    - id: DM-02
+      note: 179 variants, 185 episodes, 51396 training instants
+      when:
+        mode_hold: <= 0.5, null
+        mode_land: '> 0.5, null'
+        age_autopilot_p: '> 15.75, null'
+        radar_dev_sigma: '> 5.698874235153198, null'
+        radar_dev_sigma_max30: '> 12.06684684753418, null'
+      then:
+        state: foreign_control
+        probability: 0.9766
+        confidence: confirmed
+        instants: 51396
+        variants: 179
+        episodes: 185
+    - id: DM-03
+      note: 324 variants, 332 episodes, 41336 training instants
+      when:
+        mode_hold: <= 0.5, null
+        mode_return: '> 0.5'
+        mode_land: <= 0.5
+      then:
+        state: failsafe_return
+        probability: 0.9972
+        confidence: confirmed
+        instants: 41336
+        variants: 324
+        episodes: 332
+    - id: DM-04
+      note: 17 variants, 190 episodes, 2488 training instants
+      when:
+        mode_hold: <= 0.5, null
+        mode_land: '> 0.5, null'
+        age_autopilot_p: '> 60.25, null'
+        radar_dev_sigma: '> 5.698874235153198, null'
+        radar_dev_sigma_max30: <= 12.06684684753418
+      then:
+        state: foreign_control
+        probability: 0.9428
+        confidence: confirmed
+        instants: 2488
+        variants: 17
+        episodes: 190
+    - id: DM-05
+      note: 13 variants, 184 episodes, 1707 training instants
+      when:
+        mode_hold: <= 0.5, null
+        mode_land: '> 0.5, null'
+        age_autopilot_p: '> 60.25'
+        radar_dev_sigma: <= 5.698874235153198
+        radar_dev_sigma_max30: '> 2.134842038154602, null'
+      then:
+        state: foreign_control
+        probability: 0.8731
+        confidence: probable
+        instants: 1707
+        variants: 13
+        episodes: 184
+    - id: DM-06
+      note: 117 variants, 147 episodes, 1418 training instants
+      when:
+        mode_hold: <= 0.5, null
+        mode_land: '> 0.5, null'
+        age_autopilot_p: (15.75..60.25]
+        radar_dev_sigma: '> 5.698874235153198, null'
+        radar_dev_sigma_max30: <= 12.06684684753418
+      then:
+        state: foreign_control
+        probability: 0.7205
+        confidence: probable
+        instants: 1418
+        variants: 117
+        episodes: 147
+    - id: DM-07
+      note: 67 variants, 90 episodes, 1172 training instants
+      when:
+        mode_hold: <= 0.5, null
+        mode_return: not(null)
+        mode_land: '> 0.5, null'
+        age_autopilot_p: <= 60.25, null
+        radar_dev_sigma: <= 5.698874235153198
+      then:
+        state: failsafe_land
+        probability: 0.9915
+        confidence: confirmed
+        instants: 1172
+        variants: 67
+        episodes: 90
+    - id: DM-08
+      note: 83 variants, 107 episodes, 892 training instants
+      when:
+        mode_hold: <= 0.5, null
+        mode_land: '> 0.5, null'
+        age_autopilot_p: <= 15.75
+        radar_dev_sigma: '> 5.698874235153198, null'
+        radar_dev_slope_cruise: '> 0.3722030967473984, null'
+      then:
+        state: foreign_control
+        probability: 0.3197
+        confidence: possible
+        instants: 892
+        variants: 83
+        episodes: 107
+    - id: DM-09
+      note: 157 variants, 199 episodes, 858 training instants
+      when:
+        mode_hold: <= 0.5, null
+        mode_return: 'null'
+        mode_land: '> 0.5, null'
+        age_autopilot_p: <= 5.25
+        radar_dev_sigma: <= 5.698874235153198
+      then:
+        state: foreign_control
+        probability: 0.299
+        confidence: possible
+        instants: 858
+        variants: 157
+        episodes: 199
+    - id: DM-10
+      note: 46 variants, 49 episodes, 823 training instants
+      when:
+        mode_hold: <= 0.5, null
+        mode_return: 'null'
+        mode_land: '> 0.5, null'
+        age_autopilot_p: (5.25..60.25], null
+        radar_dev_sigma: <= 5.698874235153198
+      then:
+        state: failsafe_land
+        probability: 0.0813
+        confidence: possible
+        instants: 823
+        variants: 46
+        episodes: 49
+    - id: DM-11
+      note: 29 variants, 30 episodes, 588 training instants
+      when:
+        mode_hold: <= 0.5, null
+        mode_land: '> 0.5, null'
+        age_autopilot_p: '> 60.25'
+        radar_dev_sigma: <= 5.698874235153198
+        radar_dev_sigma_max30: <= 2.134842038154602
+      then:
+        state: failsafe_hold
+        probability: 0.4921
+        confidence: possible
+        instants: 588
+        variants: 29
+        episodes: 30
+    - id: DM-12
+      note: 11 variants, 19 episodes, 82 training instants
+      when:
+        mode_hold: <= 0.5, null
+        mode_land: '> 0.5, null'
+        age_autopilot_p: <= 15.75
+        radar_dev_sigma: '> 5.698874235153198, null'
+        radar_dev_slope_cruise: <= 0.3722030967473984
+      then:
+        state: failsafe_land
+        probability: 0.1876
+        confidence: possible
+        instants: 82
+        variants: 11
+        episodes: 19
+    - id: DM-13
+      note: '1680 variants, 2324 episodes, 1242582 training instants (default row: everything the rows
+        above do not match)'
+      when: {}
+      then:
+        state: mission
+        probability: 0.9998
+        confidence: confirmed
+        instants: 1242582
+        variants: 1680
+        episodes: 2324
+  drone_situation:
+    description: 'Learned from simulator data (CART tree, 19 rows): drone.situation.'
+    hit_policy: FIRST
+    inputs:
+    - gps_dev_m
+    - radar_dev_m
+    - mode_return
+    - age_radar_p
+    - gps_dev_sigma
+    - radar_dev_sigma_max30
+    - gps_dev_slope_cruise
+    - radar_dev_slope_cruise
+    - gps_radar_avg_sigma
+    outputs: *id001
+    rules:
+    - id: DS-01
+      note: 545 variants, 836 episodes, 69088 training instants
+      when:
+        gps_dev_m: <= 10.629149436950684, null
+        radar_dev_m: '> 19.176836013793945'
+        radar_dev_sigma_max30: '> 2.8006930351257324, null'
+      then:
+        state: deviated
+        probability: 0.9064
+        confidence: confirmed
+        instants: 69088
+        variants: 545
+        episodes: 836
+    - id: DS-02
+      note: 192 variants, 495 episodes, 3562 training instants
+      when:
+        gps_dev_m: '> 10.629149436950684'
+        radar_dev_sigma_max30: '> 2.8006930351257324, null'
+        gps_dev_slope_cruise: <= 0.6069498658180237
+        radar_dev_slope_cruise: '> 0.1638956442475319, null'
+        gps_radar_avg_sigma: <= 2.38900089263916
+      then:
+        state: deviated
+        probability: 0.6179
+        confidence: probable
+        instants: 3562
+        variants: 192
+        episodes: 495
+    - id: DS-03
+      note: 133 variants, 192 episodes, 2559 training instants
+      when:
+        gps_dev_m: '> 10.629149436950684'
+        radar_dev_sigma_max30: '> 2.8006930351257324, null'
+        gps_dev_slope_cruise: <= -0.769842654466629, null
+        radar_dev_slope_cruise: <= 0.1638956442475319
+      then:
+        state: returning
+        probability: 0.3906
+        confidence: possible
+        instants: 2559
+        variants: 133
+        episodes: 192
+    - id: DS-04
+      note: 14 variants, 22 episodes, 2202 training instants
+      when:
+        gps_dev_m: (10.231003761291504..10.629149436950684], null
+        radar_dev_m: <= 19.176836013793945, null
+        age_radar_p: '> 3.375'
+        radar_dev_sigma_max30: '> 2.8006930351257324, null'
+      then:
+        state: deviated
+        probability: 0.7822
+        confidence: probable
+        instants: 2202
+        variants: 14
+        episodes: 22
+    - id: DS-05
+      note: 222 variants, 433 episodes, 1652 training instants
+      when:
+        gps_dev_m: '> 10.180768966674805, null'
+        radar_dev_m: '> 16.757357597351074, null'
+        radar_dev_sigma_max30: <= 2.8006930351257324
+      then:
+        state: deviated
+        probability: 0.2173
+        confidence: possible
+        instants: 1652
+        variants: 222
+        episodes: 433
+    - id: DS-06
+      note: 119 variants, 182 episodes, 1470 training instants
+      when:
+        gps_dev_m: '> 10.629149436950684'
+        mode_return: <= 0.5, null
+        gps_dev_sigma: '> 1.1586259007453918, null'
+        radar_dev_sigma_max30: '> 2.8006930351257324, null'
+        gps_dev_slope_cruise: '> -0.769842654466629'
+        radar_dev_slope_cruise: <= 0.1638956442475319
+      then:
+        state: returning
+        probability: 0.1308
+        confidence: possible
+        instants: 1470
+        variants: 119
+        episodes: 182
+    - id: DS-07
+      note: 156 variants, 187 episodes, 940 training instants
+      when:
+        gps_dev_m: '> 10.629149436950684'
+        radar_dev_m: <= 56.02849769592285
+        radar_dev_sigma_max30: '> 2.8006930351257324, null'
+        gps_dev_slope_cruise: '> 0.6069498658180237, null'
+        radar_dev_slope_cruise: '> 0.1638956442475319, null'
+      then:
+        state: deviated
+        probability: 0.5475
+        confidence: possible
+        instants: 940
+        variants: 156
+        episodes: 187
+    - id: DS-08
+      note: 37 variants, 105 episodes, 608 training instants
+      when:
+        gps_dev_m: '> 10.629149436950684'
+        radar_dev_sigma_max30: '> 7.174126625061035, null'
+        gps_dev_slope_cruise: <= 0.6069498658180237
+        radar_dev_slope_cruise: '> 0.1638956442475319, null'
+        gps_radar_avg_sigma: '> 2.38900089263916, null'
+      then:
+        state: deviated
+        probability: 0.6793
+        confidence: probable
+        instants: 608
+        variants: 37
+        episodes: 105
+    - id: DS-09
+      note: 31 variants, 97 episodes, 385 training instants
+      when:
+        gps_dev_m: '> 10.629149436950684'
+        mode_return: '> 0.5'
+        radar_dev_sigma_max30: (2.8006930351257324..5.902510404586792]
+        gps_dev_slope_cruise: '> -0.769842654466629'
+        radar_dev_slope_cruise: <= 0.1638956442475319
+      then:
+        state: deviated
+        probability: 0.5746
+        confidence: possible
+        instants: 385
+        variants: 31
+        episodes: 97
+    - id: DS-10
+      note: 48 variants, 67 episodes, 343 training instants
+      when:
+        gps_dev_m: '> 10.629149436950684'
+        radar_dev_m: (56.02849769592285..886.5291442871094], null
+        radar_dev_sigma_max30: '> 2.8006930351257324, null'
+        gps_dev_slope_cruise: '> 0.6069498658180237, null'
+        radar_dev_slope_cruise: '> 0.1638956442475319, null'
+      then:
+        state: returning
+        probability: 0.0935
+        confidence: possible
+        instants: 343
+        variants: 48
+        episodes: 67
+    - id: DS-11
+      note: 22 variants, 37 episodes, 212 training instants
+      when:
+        gps_dev_m: <= 10.180768966674805
+        radar_dev_sigma_max30: <= 2.8006930351257324
+        gps_radar_avg_sigma: '> 3.3366215229034424'
+      then:
+        state: deviated
+        probability: 0.0955
+        confidence: possible
+        instants: 212
+        variants: 22
+        episodes: 37
+    - id: DS-12
+      note: 18 variants, 88 episodes, 149 training instants
+      when:
+        gps_dev_m: '> 10.629149436950684'
+        mode_return: <= 0.5, null
+        gps_dev_sigma: <= 1.1586259007453918
+        radar_dev_sigma_max30: '> 2.8006930351257324, null'
+        gps_dev_slope_cruise: '> -0.769842654466629'
+        radar_dev_slope_cruise: <= 0.1638956442475319
+      then:
+        state: deviated
+        probability: 0.3772
+        confidence: possible
+        instants: 149
+        variants: 18
+        episodes: 88
+    - id: DS-13
+      note: 20 variants, 26 episodes, 138 training instants
+      when:
+        gps_dev_m: '> 10.629149436950684'
+        mode_return: '> 0.5'
+        radar_dev_sigma_max30: '> 5.902510404586792, null'
+        gps_dev_slope_cruise: '> -0.769842654466629'
+        radar_dev_slope_cruise: <= 0.1638956442475319
+      then:
+        state: returning
+        probability: 0.0981
+        confidence: possible
+        instants: 138
+        variants: 20
+        episodes: 26
+    - id: DS-14
+      note: 5 variants, 10 episodes, 28 training instants
+      when:
+        gps_dev_m: '> 10.629149436950684'
+        radar_dev_sigma_max30: (2.8006930351257324..7.174126625061035]
+        gps_dev_slope_cruise: <= 0.6069498658180237
+        radar_dev_slope_cruise: '> 0.1638956442475319, null'
+        gps_radar_avg_sigma: '> 2.38900089263916, null'
+      then:
+        state: returning
+        probability: 0.1657
+        confidence: possible
+        instants: 28
+        variants: 5
+        episodes: 10
+    - id: DS-15
+      note: 1230 variants, 3997 episodes, 80722 training instants
+      when:
+        gps_dev_m: <= 10.231003761291504
+        radar_dev_m: <= 19.176836013793945, null
+        radar_dev_sigma_max30: '> 2.8006930351257324, null'
+      then:
+        state: on_route
+        probability: 0.992
+        confidence: confirmed
+        instants: 80722
+        variants: 1230
+        episodes: 3997
+    - id: DS-16
+      note: 1103 variants, 3737 episodes, 23519 training instants
+      when:
+        gps_dev_m: '> 10.180768966674805, null'
+        radar_dev_m: <= 16.757357597351074
+        radar_dev_sigma_max30: <= 2.8006930351257324
+      then:
+        state: on_route
+        probability: 0.9621
+        confidence: confirmed
+        instants: 23519
+        variants: 1103
+        episodes: 3737
+    - id: DS-17
+      note: 97 variants, 1512 episodes, 2700 training instants
+      when:
+        gps_dev_m: (10.231003761291504..10.629149436950684], null
+        radar_dev_m: <= 19.176836013793945, null
+        age_radar_p: <= 3.375, null
+        radar_dev_sigma_max30: '> 2.8006930351257324, null'
+      then:
+        state: on_route
+        probability: 0.9484
+        confidence: confirmed
+        instants: 2700
+        variants: 97
+        episodes: 1512
+    - id: DS-18
+      note: 22 variants, 35 episodes, 2240 training instants
+      when:
+        gps_dev_m: '> 10.629149436950684'
+        radar_dev_m: '> 886.5291442871094'
+        radar_dev_sigma_max30: '> 2.8006930351257324, null'
+        gps_dev_slope_cruise: '> 0.6069498658180237, null'
+        radar_dev_slope_cruise: '> 0.1638956442475319, null'
+      then:
+        state: on_route
+        probability: 0.9614
+        confidence: confirmed
+        instants: 2240
+        variants: 22
+        episodes: 35
+    - id: DS-19
+      note: '1678 variants, 5814 episodes, 1199721 training instants (default row: everything the rows
+        above do not match)'
+      when: {}
+      then:
+        state: on_route
+        probability: 0.9995
+        confidence: confirmed
+        instants: 1199721
+        variants: 1678
+        episodes: 5814
+  drone_cause:
+    description: 'Learned from simulator data (CART tree, 11 rows): drone.cause.'
+    hit_policy: FIRST
+    inputs:
+    - gps_fix_3d
+    - age_gps_p
+    - tele_gap_p
+    - station_wind_over_limit
+    - radar_dev_sigma
+    - radar_dev_sigma_max30
+    - cn0_vs_nominal_db
+    outputs: *id001
+    rules:
+    - id: DC-01
+      note: 170 variants, 173 episodes, 50580 training instants
+      when:
+        tele_gap_p: '> 16.25, null'
+        radar_dev_sigma_max30: '> 15.460861206054688, null'
+      then:
+        state: foreign_control
+        probability: 0.9978
+        confidence: confirmed
+        instants: 50580
+        variants: 170
+        episodes: 173
+    - id: DC-02
+      note: 608 variants, 937 episodes, 17771 training instants
+      when:
+        gps_fix_3d: '> 0.5, null'
+        tele_gap_p: <= 16.25
+        station_wind_over_limit: '> 0.31884928047657013, null'
+        cn0_vs_nominal_db: <= 2.549999952316284, null
+      then:
+        state: wind
+        probability: 0.9027
+        confidence: confirmed
+        instants: 17771
+        variants: 608
+        episodes: 937
+    - id: DC-03
+      note: 187 variants, 215 episodes, 8822 training instants
+      when:
+        tele_gap_p: <= 16.25
+        cn0_vs_nominal_db: '> 2.549999952316284'
+      then:
+        state: spoofed_position
+        probability: 0.9984
+        confidence: confirmed
+        instants: 8822
+        variants: 187
+        episodes: 215
+    - id: DC-04
+      note: 150 variants, 160 episodes, 3976 training instants
+      when:
+        gps_fix_3d: <= 0.5
+        tele_gap_p: <= 16.25
+        cn0_vs_nominal_db: <= 2.549999952316284, null
+      then:
+        state: dead_reckoning
+        probability: 0.9643
+        confidence: confirmed
+        instants: 3976
+        variants: 150
+        episodes: 160
+    - id: DC-05
+      note: 8 variants, 9 episodes, 2809 training instants
+      when:
+        age_gps_p: '> 116.25'
+        tele_gap_p: '> 16.25, null'
+        radar_dev_sigma_max30: (5.709058046340942..15.460861206054688]
+      then:
+        state: foreign_control
+        probability: 1.0
+        confidence: confirmed
+        instants: 2809
+        variants: 8
+        episodes: 9
+    - id: DC-06
+      note: 135 variants, 149 episodes, 2601 training instants
+      when:
+        age_gps_p: <= 116.25, null
+        tele_gap_p: '> 16.25, null'
+        radar_dev_sigma_max30: (5.709058046340942..15.460861206054688]
+      then:
+        state: foreign_control
+        probability: 0.9006
+        confidence: confirmed
+        instants: 2601
+        variants: 135
+        episodes: 149
+    - id: DC-07
+      note: 80 variants, 96 episodes, 1313 training instants
+      when:
+        gps_fix_3d: '> 0.5, null'
+        tele_gap_p: <= 16.25
+        station_wind_over_limit: <= 0.31884928047657013
+        cn0_vs_nominal_db: <= 2.549999952316284, null
+      then:
+        state: spoofed_position
+        probability: 0.2106
+        confidence: possible
+        instants: 1313
+        variants: 80
+        episodes: 96
+    - id: DC-08
+      note: 63 variants, 90 episodes, 759 training instants
+      when:
+        tele_gap_p: '> 16.25, null'
+        radar_dev_sigma: '> 1.928959608078003, null'
+        radar_dev_sigma_max30: <= 5.709058046340942
+      then:
+        state: foreign_control
+        probability: 0.848
+        confidence: probable
+        instants: 759
+        variants: 63
+        episodes: 90
+    - id: DC-09
+      note: 29 variants, 33 episodes, 248 training instants
+      when:
+        tele_gap_p: '> 16.25, null'
+        station_wind_over_limit: '> 0.3370255082845688, null'
+        radar_dev_sigma: <= 1.928959608078003
+        radar_dev_sigma_max30: <= 5.709058046340942
+      then:
+        state: wind
+        probability: 0.7873
+        confidence: probable
+        instants: 248
+        variants: 29
+        episodes: 33
+    - id: DC-10
+      note: 5 variants, 6 episodes, 46 training instants
+      when:
+        tele_gap_p: '> 16.25, null'
+        station_wind_over_limit: <= 0.3370255082845688
+        radar_dev_sigma: <= 1.928959608078003
+        radar_dev_sigma_max30: <= 5.709058046340942
+      then:
+        state: dead_reckoning
+        probability: 0.3358
+        confidence: possible
+        instants: 46
+        variants: 5
+        episodes: 6
+    - id: DC-11
+      note: '0 variants, 0 episodes, 0 training instants (fallback: no row of the tree reaches it)'
+      when: {}
+      then:
+        state: unexplained
+        probability: 0.0
+        confidence: possible
+        instants: 0
+        variants: 0
+        episodes: 0

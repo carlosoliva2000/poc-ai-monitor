@@ -1,0 +1,86 @@
+facet: battery.level
+table: battery_level
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: BL-01
+  state: low
+  when: battery_pct in (7.75, 16.85]
+  training:
+    probability: 0.8323
+    instants: 13394
+    variants: 194
+    episodes: 195
+  validation:
+    instants: 3348
+    right: 2879
+    precision: 0.8599
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 7.75
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 16.85
+    round_to: null
+- id: BL-02
+  state: critical
+  when: battery_pct <= 7.25
+  training:
+    probability: 0.9768
+    instants: 3797
+    variants: 180
+    episodes: 181
+  validation:
+    instants: 693
+    right: 684
+    precision: 0.987
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: <=
+    value: 7.25
+    round_to: null
+- id: BL-03
+  state: critical
+  when: battery_pct in (7.25, 7.75]
+  training:
+    probability: 0.3991
+    instants: 362
+    variants: 50
+    episodes: 67
+  validation:
+    instants: 190
+    right: 89
+    precision: 0.4684
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 7.25
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 7.75
+    round_to: null
+- id: BL-04
+  state: normal
+  when: everything the rows above do not match
+  training:
+    probability: 1.0
+    instants: 1330471
+    variants: 1680
+    episodes: 2188
+  validation:
+    instants: 284278
+    right: 284264
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds: []

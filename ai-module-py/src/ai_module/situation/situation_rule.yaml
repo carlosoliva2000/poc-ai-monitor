@@ -1,0 +1,58 @@
+# Situación del dron: regla determinista (E7b, paso 2c), no aprendida. La etiqueta es geométrica:
+# «desviado» a más de 25 m de la referencia del modo, «en ruta» a menos de 15 m, y entre medias se
+# mantiene el estado anterior (histéresis); «volviendo» es seguir fuera de ruta cuando ya no hay
+# causa activa. Mismo formato y evaluador que `tables.yaml` (política FIRST).
+#
+# Entradas (las calcula `situation_rule.rule_inputs`):
+# - dev_lo_m, dev_hi_m: distancia a la referencia del modo menos y más un margen según el error
+#   esperado de la posición usada (GPS si es fiable y reciente; si no, el radar promediado). Sirven
+#   para no cambiar de estado por ruido cerca de los umbrales: se salta a «desviado» solo con
+#   `dev_lo_m` > 25 y a «en ruta» solo con `dev_hi_m` <= 15.
+# - previous: la situación del segundo anterior.
+# - cause_active: hay una causa activa según las facetas aprendidas (viento notable, GPS engañado,
+#   GPS sin fix o control ajeno).
+version: 1
+tables:
+  drone_situation_rule:
+    description: "Drone situation from the distance to the reference of its mode (25 m deviated, 15 m on route) with a margin for the expected position error and hysteresis; returning = still off route with no active cause."
+    hit_policy: FIRST
+    inputs: [dev_lo_m, dev_hi_m, previous, cause_active]
+    outputs: [state]
+    rules:
+      - id: SR-01
+        note: "no usable position: the previous situation is kept"
+        when: {dev_lo_m: 'null', previous: '"deviated"'}
+        then: {state: deviated}
+      - id: SR-02
+        when: {dev_lo_m: 'null', previous: '"returning"'}
+        then: {state: returning}
+      - id: SR-03
+        when: {dev_lo_m: 'null'}
+        then: {state: on_route}
+      - id: SR-04
+        note: "surely more than 25 m away with an active cause"
+        when: {dev_lo_m: '> 25', cause_active: 'true'}
+        then: {state: deviated}
+      - id: SR-05
+        note: "surely more than 25 m away, the cause is over and it was already off route: coming back"
+        when: {dev_lo_m: '> 25', previous: '"deviated","returning"'}
+        then: {state: returning}
+      - id: SR-06
+        note: "surely more than 25 m away without a cause and it was on route (e.g. overshoot after the cause ended)"
+        when: {dev_lo_m: '> 25'}
+        then: {state: deviated}
+      - id: SR-07
+        note: "surely within 15 m"
+        when: {dev_hi_m: '<= 15'}
+        then: {state: on_route}
+      - id: SR-08
+        note: "between 15 and 25 m: it keeps being deviated while the cause is active"
+        when: {previous: '"deviated"', cause_active: 'true'}
+        then: {state: deviated}
+      - id: SR-09
+        when: {previous: '"deviated","returning"'}
+        then: {state: returning}
+      - id: SR-10
+        note: "between 15 and 25 m coming from on route: stays on route"
+        when: {}
+        then: {state: on_route}

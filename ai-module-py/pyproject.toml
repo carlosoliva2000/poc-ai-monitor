@@ -15,6 +15,9 @@ dev = [
     "pytest>=8",
     "types-pyyaml>=6.0.12.20260906",
 ]
+train = [
+    "scikit-learn>=1.9.1",
+]
 
 [tool.uv.sources]
 poc-contracts = { path = "../contracts/python", editable = true }

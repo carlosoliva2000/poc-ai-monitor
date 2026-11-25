@@ -1,0 +1,99 @@
+facet: gps.integrity
+table: gps_integrity
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: GI-01
+  state: spoofed
+  when: agc_vs_nominal_db <= -1.005 and cn0_vs_nominal_db > -3.65 (or missing)
+  training:
+    probability: 0.9624
+    instants: 15964
+    variants: 234
+    episodes: 279
+  validation:
+    instants: 3267
+    right: 3132
+    precision: 0.9587
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: agc_vs_nominal_db
+    op: <=
+    value: -1.005
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: '>'
+    value: -3.65
+    round_to: null
+- id: GI-02
+  state: spoofed
+  when: agc_vs_nominal_db <= -1.005 and cn0_vs_nominal_db <= -3.65 and gps_radar_avg_sigma > 1.993
+  training:
+    probability: 0.1629
+    instants: 230
+    variants: 6
+    episodes: 11
+  validation:
+    instants: 235
+    right: 2
+    precision: 0.0085
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: agc_vs_nominal_db
+    op: <=
+    value: -1.005
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: <=
+    value: -3.65
+    round_to: null
+  - feature: gps_radar_avg_sigma
+    op: '>'
+    value: 1.99312
+    round_to: null
+- id: GI-03
+  state: reliable
+  when: agc_vs_nominal_db <= -1.005 and cn0_vs_nominal_db <= -3.65 and gps_radar_avg_sigma <= 1.993 (or
+    missing)
+  training:
+    probability: 0.9971
+    instants: 13656
+    variants: 162
+    episodes: 605
+  validation:
+    instants: 2446
+    right: 2446
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: agc_vs_nominal_db
+    op: <=
+    value: -1.005
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: <=
+    value: -3.65
+    round_to: null
+  - feature: gps_radar_avg_sigma
+    op: <=
+    value: 1.99312
+    round_to: null
+- id: GI-04
+  state: reliable
+  when: everything the rows above do not match
+  training:
+    probability: 0.9999
+    instants: 1309470
+    variants: 1680
+    episodes: 3157
+  validation:
+    instants: 280706
+    right: 280694
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds: []

@@ -1,0 +1,273 @@
+facet: battery.endurance
+table: battery_endurance
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: BE-01
+  state: cannot_reach_home
+  when: battery_pct <= 18.45
+  training:
+    probability: 0.735
+    instants: 17523
+    variants: 186
+    episodes: 196
+  validation:
+    instants: 4876
+    right: 3539
+    precision: 0.7258
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: <=
+    value: 18.45
+    round_to: null
+- id: BE-02
+  state: cannot_reach_home
+  when: battery_pct > 32.65 (or missing) and wind_est_over_airspeed > 0.8455
+  training:
+    probability: 0.3985
+    instants: 3718
+    variants: 82
+    episodes: 87
+  validation:
+    instants: 1581
+    right: 597
+    precision: 0.3776
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 32.65
+    round_to: null
+  - feature: wind_est_over_airspeed
+    op: '>'
+    value: 0.845492
+    round_to: null
+- id: BE-03
+  state: cannot_reach_home
+  when: battery_pct in (18.45, 25.65] and home_time_ratio > 0.4407 (or missing)
+  training:
+    probability: 0.5903
+    instants: 2818
+    variants: 83
+    episodes: 91
+  validation:
+    instants: 1334
+    right: 983
+    precision: 0.7369
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 18.45
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 25.65
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.440697
+    round_to: null
+- id: BE-04
+  state: cannot_reach_home
+  when: battery_pct in (25.65, 32.65] and home_time_ratio > 0.3142
+  training:
+    probability: 0.2109
+    instants: 952
+    variants: 29
+    episodes: 30
+  validation:
+    instants: 1087
+    right: 428
+    precision: 0.3937
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 25.65
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 32.65
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.314239
+    round_to: null
+- id: BE-05
+  state: cannot_reach_home
+  when: battery_pct in (18.45, 25.65] and home_time_ratio in (0.3008, 0.4407] and ground_speed_over_cruise
+    <= 0.714
+  training:
+    probability: 0.2837
+    instants: 198
+    variants: 7
+    episodes: 8
+  validation:
+    instants: 130
+    right: 0
+    precision: 0.0
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 18.45
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 25.65
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.300778
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.440697
+    round_to: null
+  - feature: ground_speed_over_cruise
+    op: <=
+    value: 0.713982
+    round_to: null
+- id: BE-06
+  state: cannot_reach_home
+  when: battery_pct > 32.65 (or missing) and wind_est_over_airspeed <= 0.8455 (or missing) and home_time_ratio
+    > 0.3643
+  training:
+    probability: 0.0632
+    instants: 105
+    variants: 6
+    episodes: 6
+  validation:
+    instants: 796
+    right: 37
+    precision: 0.0465
+  confidence: possible
+  reject: true
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 32.65
+    round_to: null
+  - feature: wind_est_over_airspeed
+    op: <=
+    value: 0.845492
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.36429
+    round_to: null
+  reason: 'probability 0.06: in its own training the state it gives is wrong more than 9 times out of
+    10 (the row exists because of the class weight)'
+- id: BE-07
+  state: sufficient
+  when: battery_pct in (25.65, 32.65] and home_time_ratio <= 0.3142 (or missing)
+  training:
+    probability: 0.9993
+    instants: 6731
+    variants: 128
+    episodes: 133
+  validation:
+    instants: 1300
+    right: 1300
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 25.65
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 32.65
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.314239
+    round_to: null
+- id: BE-08
+  state: sufficient
+  when: battery_pct in (18.45, 25.65] and home_time_ratio <= 0.3008
+  training:
+    probability: 0.9941
+    instants: 5037
+    variants: 114
+    episodes: 121
+  validation:
+    instants: 760
+    right: 760
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 18.45
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 25.65
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.300778
+    round_to: null
+- id: BE-09
+  state: sufficient
+  when: battery_pct in (18.45, 25.65] and home_time_ratio in (0.3008, 0.4407] and ground_speed_over_cruise
+    > 0.714 (or missing)
+  training:
+    probability: 0.9924
+    instants: 2337
+    variants: 101
+    episodes: 136
+  validation:
+    instants: 479
+    right: 465
+    precision: 0.9708
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 18.45
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 25.65
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.300778
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.440697
+    round_to: null
+  - feature: ground_speed_over_cruise
+    op: '>'
+    value: 0.713982
+    round_to: null
+- id: BE-10
+  state: sufficient
+  when: everything the rows above do not match
+  training:
+    probability: 0.9999
+    instants: 1292312
+    variants: 1680
+    episodes: 3201
+  validation:
+    instants: 276166
+    right: 276147
+    precision: 0.9999
+  confidence: confirmed
+  reject: false
+  thresholds: []

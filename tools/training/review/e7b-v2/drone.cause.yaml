@@ -1,0 +1,435 @@
+facet: drone.cause
+table: drone_cause
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: DC-01
+  state: foreign_control
+  when: tele_gap_p > 65.25 (or missing) and radar_dev_sigma > 6.273 (or missing)
+  training:
+    probability: 0.9991
+    instants: 45841
+    variants: 135
+    episodes: 172
+  validation:
+    instants: 7728
+    right: 7685
+    precision: 0.9944
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: '>'
+    value: 65.25
+    round_to: null
+  - feature: radar_dev_sigma
+    op: '>'
+    value: 6.27256
+    round_to: null
+- id: DC-02
+  state: wind
+  when: tele_gap_p <= 3.25 and gps_fix_3d > 0.5 (or missing) and cn0_vs_nominal_db <= 2.45 and station_wind_over_limit
+    > 0.4417 (or missing)
+  training:
+    probability: 0.9687
+    instants: 12814
+    variants: 487
+    episodes: 742
+  validation:
+    instants: 2538
+    right: 2420
+    precision: 0.9535
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: <=
+    value: 3.25
+    round_to: null
+  - feature: gps_fix_3d
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: <=
+    value: 2.45
+    round_to: null
+  - feature: station_wind_over_limit
+    op: '>'
+    value: 0.441719
+    round_to: null
+- id: DC-03
+  state: spoofed_position
+  when: tele_gap_p <= 3.25 and gps_fix_3d > 0.5 (or missing) and cn0_vs_nominal_db > 2.45 (or missing)
+  training:
+    probability: 0.9748
+    instants: 8915
+    variants: 186
+    episodes: 208
+  validation:
+    instants: 2121
+    right: 2061
+    precision: 0.9717
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: <=
+    value: 3.25
+    round_to: null
+  - feature: gps_fix_3d
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: '>'
+    value: 2.45
+    round_to: null
+- id: DC-04
+  state: foreign_control
+  when: tele_gap_p in (3.25, 65.25] and radar_dev_sigma > 6.273 (or missing)
+  training:
+    probability: 0.9492
+    instants: 8785
+    variants: 184
+    episodes: 216
+  validation:
+    instants: 1846
+    right: 1791
+    precision: 0.9702
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: '>'
+    value: 3.25
+    round_to: null
+  - feature: tele_gap_p
+    op: <=
+    value: 65.25
+    round_to: null
+  - feature: radar_dev_sigma
+    op: '>'
+    value: 6.27256
+    round_to: null
+- id: DC-05
+  state: dead_reckoning
+  when: tele_gap_p <= 3.25 and gps_fix_3d <= 0.5 and cn0_vs_nominal_db <= 2.25 (or missing)
+  training:
+    probability: 0.9736
+    instants: 3682
+    variants: 153
+    episodes: 171
+  validation:
+    instants: 1038
+    right: 960
+    precision: 0.9249
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: <=
+    value: 3.25
+    round_to: null
+  - feature: gps_fix_3d
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: <=
+    value: 2.25
+    round_to: null
+- id: DC-06
+  state: wind
+  when: tele_gap_p <= 3.25 and gps_fix_3d > 0.5 (or missing) and cn0_vs_nominal_db <= 2.45 and station_wind_over_limit
+    in (0.2899, 0.4417] and gps_radar_cusum_sigma <= 50.38 (or missing)
+  training:
+    probability: 0.8281
+    instants: 3565
+    variants: 199
+    episodes: 310
+  validation:
+    instants: 1035
+    right: 707
+    precision: 0.6831
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: <=
+    value: 3.25
+    round_to: null
+  - feature: gps_fix_3d
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: <=
+    value: 2.45
+    round_to: null
+  - feature: station_wind_over_limit
+    op: '>'
+    value: 0.289923
+    round_to: null
+  - feature: station_wind_over_limit
+    op: <=
+    value: 0.441719
+    round_to: null
+  - feature: gps_radar_cusum_sigma
+    op: <=
+    value: 50.3776
+    round_to: null
+- id: DC-07
+  state: foreign_control
+  when: tele_gap_p > 3.25 (or missing) and radar_dev_sigma <= 6.273 and radar_dev_sigma_max30 > 2.204
+    (or missing)
+  training:
+    probability: 0.8307
+    instants: 2434
+    variants: 166
+    episodes: 258
+  validation:
+    instants: 1564
+    right: 1460
+    precision: 0.9335
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: '>'
+    value: 3.25
+    round_to: null
+  - feature: radar_dev_sigma
+    op: <=
+    value: 6.27256
+    round_to: null
+  - feature: radar_dev_sigma_max30
+    op: '>'
+    value: 2.20357
+    round_to: null
+- id: DC-08
+  state: spoofed_position
+  when: tele_gap_p <= 3.25 and gps_fix_3d > 0.5 (or missing) and cn0_vs_nominal_db <= 2.45 and station_wind_over_limit
+    <= 0.2899 and gps_radar_cusum_sigma > 2.31 (or missing)
+  training:
+    probability: 0.7965
+    instants: 1225
+    variants: 77
+    episodes: 93
+  validation:
+    instants: 302
+    right: 234
+    precision: 0.7748
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: <=
+    value: 3.25
+    round_to: null
+  - feature: gps_fix_3d
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: <=
+    value: 2.45
+    round_to: null
+  - feature: station_wind_over_limit
+    op: <=
+    value: 0.289923
+    round_to: null
+  - feature: gps_radar_cusum_sigma
+    op: '>'
+    value: 2.30965
+    round_to: null
+- id: DC-09
+  state: wind
+  when: tele_gap_p <= 3.25 and gps_fix_3d > 0.5 (or missing) and cn0_vs_nominal_db <= 2.45 and station_wind_over_limit
+    <= 0.2899 and gps_radar_cusum_sigma <= 2.31 and cn0_vs_slow_db > -5.7
+  training:
+    probability: 0.4482
+    instants: 1000
+    variants: 83
+    episodes: 116
+  validation:
+    instants: 1204
+    right: 369
+    precision: 0.3065
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: <=
+    value: 3.25
+    round_to: null
+  - feature: gps_fix_3d
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: <=
+    value: 2.45
+    round_to: null
+  - feature: station_wind_over_limit
+    op: <=
+    value: 0.289923
+    round_to: null
+  - feature: gps_radar_cusum_sigma
+    op: <=
+    value: 2.30965
+    round_to: null
+  - feature: cn0_vs_slow_db
+    op: '>'
+    value: -5.7
+    round_to: null
+- id: DC-10
+  state: wind
+  when: tele_gap_p > 3.25 (or missing) and radar_dev_sigma <= 6.273 and radar_dev_sigma_max30 <= 2.204
+  training:
+    probability: 0.721
+    instants: 628
+    variants: 57
+    episodes: 61
+  validation:
+    instants: 202
+    right: 119
+    precision: 0.5891
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: '>'
+    value: 3.25
+    round_to: null
+  - feature: radar_dev_sigma
+    op: <=
+    value: 6.27256
+    round_to: null
+  - feature: radar_dev_sigma_max30
+    op: <=
+    value: 2.20357
+    round_to: null
+- id: DC-11
+  state: spoofed_position
+  when: tele_gap_p <= 3.25 and gps_fix_3d > 0.5 (or missing) and cn0_vs_nominal_db <= 2.45 and station_wind_over_limit
+    in (0.2899, 0.4417] and gps_radar_cusum_sigma > 50.38
+  training:
+    probability: 0.4424
+    instants: 315
+    variants: 24
+    episodes: 37
+  validation:
+    instants: 150
+    right: 44
+    precision: 0.2933
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: <=
+    value: 3.25
+    round_to: null
+  - feature: gps_fix_3d
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: <=
+    value: 2.45
+    round_to: null
+  - feature: station_wind_over_limit
+    op: '>'
+    value: 0.289923
+    round_to: null
+  - feature: station_wind_over_limit
+    op: <=
+    value: 0.441719
+    round_to: null
+  - feature: gps_radar_cusum_sigma
+    op: '>'
+    value: 50.3776
+    round_to: null
+- id: DC-12
+  state: dead_reckoning
+  when: tele_gap_p <= 3.25 and gps_fix_3d > 0.5 (or missing) and cn0_vs_nominal_db <= 2.45 and station_wind_over_limit
+    <= 0.2899 and gps_radar_cusum_sigma <= 2.31 and cn0_vs_slow_db <= -5.7 (or missing)
+  training:
+    probability: 0.5464
+    instants: 212
+    variants: 15
+    episodes: 17
+  validation:
+    instants: 135
+    right: 37
+    precision: 0.2741
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: <=
+    value: 3.25
+    round_to: null
+  - feature: gps_fix_3d
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: <=
+    value: 2.45
+    round_to: null
+  - feature: station_wind_over_limit
+    op: <=
+    value: 0.289923
+    round_to: null
+  - feature: gps_radar_cusum_sigma
+    op: <=
+    value: 2.30965
+    round_to: null
+  - feature: cn0_vs_slow_db
+    op: <=
+    value: -5.7
+    round_to: null
+- id: DC-13
+  state: spoofed_position
+  when: tele_gap_p <= 3.25 and gps_fix_3d <= 0.5 and cn0_vs_nominal_db > 2.25
+  training:
+    probability: 1.0
+    instants: 131
+    variants: 6
+    episodes: 8
+  validation:
+    instants: 45
+    right: 45
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: tele_gap_p
+    op: <=
+    value: 3.25
+    round_to: null
+  - feature: gps_fix_3d
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: '>'
+    value: 2.25
+    round_to: null
+- id: DC-14
+  state: unexplained
+  when: 'never reached: the rows above cover everything (leaves the cause undetermined)'
+  training:
+    probability: 0.0
+    instants: 0
+    variants: 0
+    episodes: 0
+  validation:
+    instants: 0
+    right: 0
+    precision: null
+  confidence: possible
+  reject: false
+  thresholds: []

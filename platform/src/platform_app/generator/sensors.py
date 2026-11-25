@@ -27,9 +27,6 @@ if TYPE_CHECKING:
 GPS_ALT_SIGMA_M = 0.5
 GPS_SPEED_SIGMA_MPS = 0.2
 GPS_HEADING_SIGMA_DEG = 1.0
-GNSS_CN0_NOMINAL_DBHZ = (
-    45.0  # ⚠️ de partida: C/N0 medio de un receptor sano (se modela en el paso 3)
-)
 GPS_LOSS_HDOP = 99.9  # con la pérdida, el receptor reporta sin fix, sin satélites y hdop enorme
 RADAR_SPEED_SIGMA_MPS = 0.5
 RADAR_COURSE_SIGMA_DEG = 3.0

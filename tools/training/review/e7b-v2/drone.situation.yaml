@@ -1,0 +1,318 @@
+facet: drone.situation
+table: drone_situation
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: DS-01
+  state: deviated
+  when: radar_dev_sigma_max30 > 2.866 (or missing) and gps_dev_m <= 6.413 (or missing) and radar_dev_m
+    > 19.08
+  training:
+    probability: 0.9226
+    instants: 67539
+    variants: 531
+    episodes: 850
+  validation:
+    instants: 14277
+    right: 13154
+    precision: 0.9213
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: radar_dev_sigma_max30
+    op: '>'
+    value: 2.86564
+    round_to: null
+  - feature: gps_dev_m
+    op: <=
+    value: 6.41279
+    round_to: null
+  - feature: radar_dev_m
+    op: '>'
+    value: 19.075
+    round_to: null
+- id: DS-02
+  state: deviated
+  when: radar_dev_sigma_max30 > 2.866 (or missing) and gps_dev_m > 6.413 and wind_est_over_limit > 0.5329
+    and station_wind_over_limit > 0.4366 (or missing)
+  training:
+    probability: 0.6102
+    instants: 10540
+    variants: 414
+    episodes: 845
+  validation:
+    instants: 2453
+    right: 1769
+    precision: 0.7212
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: radar_dev_sigma_max30
+    op: '>'
+    value: 2.86564
+    round_to: null
+  - feature: gps_dev_m
+    op: '>'
+    value: 6.41279
+    round_to: null
+  - feature: wind_est_over_limit
+    op: '>'
+    value: 0.532944
+    round_to: null
+  - feature: station_wind_over_limit
+    op: '>'
+    value: 0.436564
+    round_to: null
+- id: DS-03
+  state: returning
+  when: radar_dev_sigma_max30 > 2.866 (or missing) and gps_dev_m > 6.413 and wind_est_over_limit <= 0.387
+  training:
+    probability: 0.3288
+    instants: 3232
+    variants: 173
+    episodes: 347
+  validation:
+    instants: 3297
+    right: 1517
+    precision: 0.4601
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: radar_dev_sigma_max30
+    op: '>'
+    value: 2.86564
+    round_to: null
+  - feature: gps_dev_m
+    op: '>'
+    value: 6.41279
+    round_to: null
+  - feature: wind_est_over_limit
+    op: <=
+    value: 0.386959
+    round_to: null
+- id: DS-04
+  state: deviated
+  when: radar_dev_sigma_max30 <= 2.866 and gps_dev_m > 14.64 (or missing) and radar_dev_m > 15.46 (or
+    missing)
+  training:
+    probability: 0.2335
+    instants: 1868
+    variants: 251
+    episodes: 500
+  validation:
+    instants: 2257
+    right: 499
+    precision: 0.2211
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: radar_dev_sigma_max30
+    op: <=
+    value: 2.86564
+    round_to: null
+  - feature: gps_dev_m
+    op: '>'
+    value: 14.6413
+    round_to: null
+  - feature: radar_dev_m
+    op: '>'
+    value: 15.4625
+    round_to: null
+- id: DS-05
+  state: deviated
+  when: radar_dev_sigma_max30 > 2.866 (or missing) and gps_dev_m <= 6.413 (or missing) and radar_dev_m
+    <= 19.08 (or missing) and agc_vs_nominal_db <= -2.895 (or missing)
+  training:
+    probability: 0.2598
+    instants: 1830
+    variants: 51
+    episodes: 149
+  validation:
+    instants: 1788
+    right: 829
+    precision: 0.4636
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: radar_dev_sigma_max30
+    op: '>'
+    value: 2.86564
+    round_to: null
+  - feature: gps_dev_m
+    op: <=
+    value: 6.41279
+    round_to: null
+  - feature: radar_dev_m
+    op: <=
+    value: 19.075
+    round_to: null
+  - feature: agc_vs_nominal_db
+    op: <=
+    value: -2.895
+    round_to: null
+- id: DS-06
+  state: deviated
+  when: radar_dev_sigma_max30 <= 2.866 and gps_dev_m <= 14.64 and cn0_vs_nominal_db > 3.15
+  training:
+    probability: 0.1202
+    instants: 807
+    variants: 75
+    episodes: 93
+  validation:
+    instants: 1484
+    right: 157
+    precision: 0.1058
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: radar_dev_sigma_max30
+    op: <=
+    value: 2.86564
+    round_to: null
+  - feature: gps_dev_m
+    op: <=
+    value: 14.6413
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: '>'
+    value: 3.15
+    round_to: null
+- id: DS-07
+  state: returning
+  when: radar_dev_sigma_max30 > 2.866 (or missing) and gps_dev_m > 6.413 and wind_est_over_limit > 0.5329
+    and station_wind_over_limit <= 0.4366
+  training:
+    probability: 0.1876
+    instants: 736
+    variants: 102
+    episodes: 216
+  validation:
+    instants: 964
+    right: 152
+    precision: 0.1577
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: radar_dev_sigma_max30
+    op: '>'
+    value: 2.86564
+    round_to: null
+  - feature: gps_dev_m
+    op: '>'
+    value: 6.41279
+    round_to: null
+  - feature: wind_est_over_limit
+    op: '>'
+    value: 0.532944
+    round_to: null
+  - feature: station_wind_over_limit
+    op: <=
+    value: 0.436564
+    round_to: null
+- id: DS-08
+  state: returning
+  when: radar_dev_sigma_max30 > 2.866 (or missing) and gps_dev_m > 6.413 and wind_est_over_limit in (0.387,
+    0.5329] (or missing)
+  training:
+    probability: 0.0918
+    instants: 632
+    variants: 51
+    episodes: 237
+  validation:
+    instants: 1461
+    right: 217
+    precision: 0.1485
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: radar_dev_sigma_max30
+    op: '>'
+    value: 2.86564
+    round_to: null
+  - feature: gps_dev_m
+    op: '>'
+    value: 6.41279
+    round_to: null
+  - feature: wind_est_over_limit
+    op: '>'
+    value: 0.386959
+    round_to: null
+  - feature: wind_est_over_limit
+    op: <=
+    value: 0.532944
+    round_to: null
+- id: DS-09
+  state: on_route
+  when: radar_dev_sigma_max30 > 2.866 (or missing) and gps_dev_m <= 6.413 (or missing) and radar_dev_m
+    <= 19.08 (or missing) and agc_vs_nominal_db > -2.895
+  training:
+    probability: 0.9984
+    instants: 75417
+    variants: 1168
+    episodes: 3639
+  validation:
+    instants: 15116
+    right: 15085
+    precision: 0.9979
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: radar_dev_sigma_max30
+    op: '>'
+    value: 2.86564
+    round_to: null
+  - feature: gps_dev_m
+    op: <=
+    value: 6.41279
+    round_to: null
+  - feature: radar_dev_m
+    op: <=
+    value: 19.075
+    round_to: null
+  - feature: agc_vs_nominal_db
+    op: '>'
+    value: -2.895
+    round_to: null
+- id: DS-10
+  state: on_route
+  when: radar_dev_sigma_max30 <= 2.866 and gps_dev_m > 14.64 (or missing) and radar_dev_m <= 15.46
+  training:
+    probability: 0.9576
+    instants: 22361
+    variants: 903
+    episodes: 2829
+  validation:
+    instants: 4612
+    right: 4415
+    precision: 0.9573
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: radar_dev_sigma_max30
+    op: <=
+    value: 2.86564
+    round_to: null
+  - feature: gps_dev_m
+    op: '>'
+    value: 14.6413
+    round_to: null
+  - feature: radar_dev_m
+    op: <=
+    value: 15.4625
+    round_to: null
+- id: DS-11
+  state: on_route
+  when: everything the rows above do not match
+  training:
+    probability: 0.9997
+    instants: 1183658
+    variants: 1678
+    episodes: 4573
+  validation:
+    instants: 245680
+    right: 245632
+    precision: 0.9998
+  confidence: confirmed
+  reject: false
+  thresholds: []

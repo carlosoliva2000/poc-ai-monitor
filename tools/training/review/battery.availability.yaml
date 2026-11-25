@@ -1,0 +1,38 @@
+facet: battery.availability
+table: battery_availability
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: BA-01
+  state: no_data
+  when: age_battery > 9.5
+  training:
+    probability: 0.5144
+    instants: 4773
+    variants: 109
+    episodes: 111
+  validation:
+    instants: 2211
+    right: 1116
+    precision: 0.5047
+  reject: false
+  thresholds:
+  - feature: age_battery
+    op: '>'
+    value: 9.5
+    round_to: null
+- id: BA-02
+  state: normal
+  when: everything the rows above do not match
+  training:
+    probability: 0.9996
+    instants: 1210567
+    variants: 1680
+    episodes: 2267
+  validation:
+    instants: 256096
+    right: 255977
+    precision: 0.9995
+  reject: false
+  thresholds: []

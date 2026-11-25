@@ -1,0 +1,60 @@
+facet: link.quality
+table: link_quality
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: LQ-01
+  state: degraded
+  when: link_latency_ms > 90.55
+  training:
+    probability: 0.8522
+    instants: 5899
+    variants: 121
+    episodes: 128
+  validation:
+    instants: 1304
+    right: 1150
+    precision: 0.8819
+  reject: false
+  thresholds:
+  - feature: link_latency_ms
+    op: '>'
+    value: 90.55
+    round_to: null
+- id: LQ-02
+  state: degraded
+  when: link_latency_ms <= 90.55 (or missing) and link_rssi_dbm <= -79.15
+  training:
+    probability: 0.4534
+    instants: 1841
+    variants: 42
+    episodes: 54
+  validation:
+    instants: 916
+    right: 551
+    precision: 0.6015
+  reject: false
+  thresholds:
+  - feature: link_latency_ms
+    op: <=
+    value: 90.55
+    round_to: null
+  - feature: link_rssi_dbm
+    op: <=
+    value: -79.15
+    round_to: null
+- id: LQ-03
+  state: good
+  when: everything the rows above do not match
+  training:
+    probability: 0.9998
+    instants: 1209093
+    variants: 1680
+    episodes: 2618
+  validation:
+    instants: 256087
+    right: 256017
+    precision: 0.9997
+  reject: false
+  thresholds: []

@@ -818,7 +818,7 @@ class Simulator:
             link_up=self._ours_link_up(s.x, s.y),
             battery_soc=self._battery.soc_pct,
             gps_sigma_m=sigma,
-            cn0_dbhz=sensors.GNSS_CN0_NOMINAL_DBHZ + self._emitter_state[0],
+            cn0_dbhz=cfg.sensors.gps.cn0_nominal_dbhz + self._emitter_state[0],
             emitters_active=self._emitter_state[2],
             wind_speed_mps=w.speed_mps,
             wind_from_deg=w.from_deg,

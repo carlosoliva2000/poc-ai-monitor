@@ -89,3 +89,18 @@ def test_the_gps_quality_comes_from_the_real_sigma_not_from_the_episode_window()
     run = generate(scenario_config("nominal", sensors=sensors))
     quality = {r.t: r.facets["gps.quality"] for r in run.states}
     assert quality[60.0] == "good" and quality[160.0] == "degraded" and quality[200.0] == "good"
+
+
+def test_notable_wind_is_a_fraction_of_the_wind_limit_of_each_drone() -> None:
+    """«Notable» desde 0,4 × `wind_limit` (v1.2): 6 m/s son notables con un límite de 12 m/s
+    (umbral 4,8) y calma con uno de 20 m/s (umbral 8)."""
+    base = scenario_config("nominal")
+    wind = {"base": {"speed_mps": 6.0, "from_deg": 90.0}, "episodes": []}
+
+    def states(limit: float) -> set[str]:
+        drone = {**base.drone.model_dump(), "wind_limit_mps": limit}
+        run = generate(scenario_config("nominal", wind=wind, drone=drone))
+        return {r.facets["environment.wind"] for r in run.states}
+
+    assert states(12.0) == {"notable"}
+    assert states(20.0) == {"calm"}

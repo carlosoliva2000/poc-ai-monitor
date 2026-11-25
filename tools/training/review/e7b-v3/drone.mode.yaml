@@ -1,0 +1,425 @@
+facet: drone.mode
+table: drone_mode
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: DM-01
+  state: failsafe_hold
+  when: mode_hold > 0.5
+  training:
+    probability: 1.0
+    instants: 70593
+    variants: 89
+    episodes: 115
+  validation:
+    instants: 11990
+    right: 11990
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: '>'
+    value: 0.5
+    round_to: null
+- id: DM-02
+  state: foreign_control
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma > 5.699 (or
+    missing) and age_autopilot_p > 15.75 (or missing) and radar_dev_sigma_max30 > 12.07 (or missing)
+  training:
+    probability: 0.9766
+    instants: 51396
+    variants: 179
+    episodes: 185
+  validation:
+    instants: 12234
+    right: 11916
+    precision: 0.974
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: '>'
+    value: 5.69887
+    round_to: null
+  - feature: age_autopilot_p
+    op: '>'
+    value: 15.75
+    round_to: null
+  - feature: radar_dev_sigma_max30
+    op: '>'
+    value: 12.0668
+    round_to: null
+- id: DM-03
+  state: failsafe_return
+  when: mode_hold <= 0.5 (or missing) and mode_land <= 0.5 and mode_return > 0.5
+  training:
+    probability: 0.9972
+    instants: 41336
+    variants: 324
+    episodes: 332
+  validation:
+    instants: 8143
+    right: 8121
+    precision: 0.9973
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_return
+    op: '>'
+    value: 0.5
+    round_to: null
+- id: DM-04
+  state: foreign_control
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma > 5.699 (or
+    missing) and age_autopilot_p > 60.25 (or missing) and radar_dev_sigma_max30 <= 12.07
+  training:
+    probability: 0.9428
+    instants: 2488
+    variants: 17
+    episodes: 190
+  validation:
+    instants: 694
+    right: 684
+    precision: 0.9856
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: '>'
+    value: 5.69887
+    round_to: null
+  - feature: age_autopilot_p
+    op: '>'
+    value: 60.25
+    round_to: null
+  - feature: radar_dev_sigma_max30
+    op: <=
+    value: 12.0668
+    round_to: null
+- id: DM-05
+  state: foreign_control
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma <= 5.699 and
+    age_autopilot_p > 60.25 and radar_dev_sigma_max30 > 2.135 (or missing)
+  training:
+    probability: 0.8731
+    instants: 1707
+    variants: 13
+    episodes: 184
+  validation:
+    instants: 13
+    right: 0
+    precision: 0.0
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: <=
+    value: 5.69887
+    round_to: null
+  - feature: age_autopilot_p
+    op: '>'
+    value: 60.25
+    round_to: null
+  - feature: radar_dev_sigma_max30
+    op: '>'
+    value: 2.13484
+    round_to: null
+- id: DM-06
+  state: foreign_control
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma > 5.699 (or
+    missing) and age_autopilot_p in (15.75, 60.25] and radar_dev_sigma_max30 <= 12.07
+  training:
+    probability: 0.7205
+    instants: 1418
+    variants: 117
+    episodes: 147
+  validation:
+    instants: 524
+    right: 399
+    precision: 0.7615
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: '>'
+    value: 5.69887
+    round_to: null
+  - feature: age_autopilot_p
+    op: '>'
+    value: 15.75
+    round_to: null
+  - feature: age_autopilot_p
+    op: <=
+    value: 60.25
+    round_to: null
+  - feature: radar_dev_sigma_max30
+    op: <=
+    value: 12.0668
+    round_to: null
+- id: DM-07
+  state: failsafe_land
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma <= 5.699 and
+    age_autopilot_p <= 60.25 (or missing) and mode_return is present
+  training:
+    probability: 0.9915
+    instants: 1172
+    variants: 67
+    episodes: 90
+  validation:
+    instants: 228
+    right: 227
+    precision: 0.9956
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: <=
+    value: 5.69887
+    round_to: null
+  - feature: age_autopilot_p
+    op: <=
+    value: 60.25
+    round_to: null
+- id: DM-08
+  state: foreign_control
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma > 5.699 (or
+    missing) and age_autopilot_p <= 15.75 and radar_dev_slope_cruise > 0.3722 (or missing)
+  training:
+    probability: 0.3197
+    instants: 892
+    variants: 83
+    episodes: 107
+  validation:
+    instants: 636
+    right: 193
+    precision: 0.3035
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: '>'
+    value: 5.69887
+    round_to: null
+  - feature: age_autopilot_p
+    op: <=
+    value: 15.75
+    round_to: null
+  - feature: radar_dev_slope_cruise
+    op: '>'
+    value: 0.372203
+    round_to: null
+- id: DM-09
+  state: foreign_control
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma <= 5.699 and
+    age_autopilot_p <= 5.25 and mode_return is missing
+  training:
+    probability: 0.299
+    instants: 858
+    variants: 157
+    episodes: 199
+  validation:
+    instants: 551
+    right: 187
+    precision: 0.3394
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: <=
+    value: 5.69887
+    round_to: null
+  - feature: age_autopilot_p
+    op: <=
+    value: 5.25
+    round_to: null
+- id: DM-10
+  state: failsafe_land
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma <= 5.699 and
+    age_autopilot_p in (5.25, 60.25] (or missing) and mode_return is missing
+  training:
+    probability: 0.0813
+    instants: 823
+    variants: 46
+    episodes: 49
+  validation:
+    instants: 1554
+    right: 158
+    precision: 0.1017
+  confidence: possible
+  reject: true
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: <=
+    value: 5.69887
+    round_to: null
+  - feature: age_autopilot_p
+    op: '>'
+    value: 5.25
+    round_to: null
+  - feature: age_autopilot_p
+    op: <=
+    value: 60.25
+    round_to: null
+  reason: 'probability 0.08: in its own training the state it gives is wrong more than 9 times out of
+    10 (the row exists because of the class weight)'
+- id: DM-11
+  state: failsafe_hold
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma <= 5.699 and
+    age_autopilot_p > 60.25 and radar_dev_sigma_max30 <= 2.135
+  training:
+    probability: 0.4921
+    instants: 588
+    variants: 29
+    episodes: 30
+  validation:
+    instants: 91
+    right: 50
+    precision: 0.5495
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: <=
+    value: 5.69887
+    round_to: null
+  - feature: age_autopilot_p
+    op: '>'
+    value: 60.25
+    round_to: null
+  - feature: radar_dev_sigma_max30
+    op: <=
+    value: 2.13484
+    round_to: null
+- id: DM-12
+  state: failsafe_land
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma > 5.699 (or
+    missing) and age_autopilot_p <= 15.75 and radar_dev_slope_cruise <= 0.3722
+  training:
+    probability: 0.1876
+    instants: 82
+    variants: 11
+    episodes: 19
+  validation:
+    instants: 51
+    right: 3
+    precision: 0.0588
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: '>'
+    value: 5.69887
+    round_to: null
+  - feature: age_autopilot_p
+    op: <=
+    value: 15.75
+    round_to: null
+  - feature: radar_dev_slope_cruise
+    op: <=
+    value: 0.372203
+    round_to: null
+- id: DM-13
+  state: mission
+  when: everything the rows above do not match
+  training:
+    probability: 0.9998
+    instants: 1242582
+    variants: 1680
+    episodes: 2324
+  validation:
+    instants: 269055
+    right: 268993
+    precision: 0.9998
+  confidence: confirmed
+  reject: false
+  thresholds: []

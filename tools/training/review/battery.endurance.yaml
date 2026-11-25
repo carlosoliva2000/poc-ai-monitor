@@ -1,0 +1,742 @@
+facet: battery.endurance
+table: battery_endurance
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: BE-01
+  state: cannot_reach_home
+  when: mode_return > 0.5 and home_time_ratio > 0.05202 and wind_est_minus_station > -5.55
+  training:
+    probability: 0.7984
+    instants: 17722
+    variants: 193
+    episodes: 203
+  validation:
+    instants: 6011
+    right: 4711
+    precision: 0.7837
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.0520186
+    round_to: null
+  - feature: wind_est_minus_station
+    op: '>'
+    value: -5.55
+    round_to: null
+- id: BE-02
+  state: cannot_reach_home
+  when: mode_return > 0.5 and home_time_ratio <= 0.05202 (or missing) and wind_est_mps > 14.95
+  training:
+    probability: 0.8474
+    instants: 1366
+    variants: 41
+    episodes: 47
+  validation:
+    instants: 488
+    right: 416
+    precision: 0.8525
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.0520186
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 14.95
+    round_to: null
+- id: BE-03
+  state: cannot_reach_home
+  when: mode_return <= 0.5 (or missing) and battery_time_s <= 148.5 and gps_delay_rate is missing
+  training:
+    probability: 0.9577
+    instants: 995
+    variants: 48
+    episodes: 64
+  validation:
+    instants: 271
+    right: 270
+    precision: 0.9963
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: <=
+    value: 148.5
+    round_to: null
+- id: BE-04
+  state: cannot_reach_home
+  when: mode_return <= 0.5 (or missing) and battery_time_s > 241.5 (or missing) and wind_est_mps > 14.05
+    and innovation_max10 in (2.15, 27] (or missing) and gps_delay_rate <= 0.9307 (or missing)
+  training:
+    probability: 0.3048
+    instants: 402
+    variants: 57
+    episodes: 61
+  validation:
+    instants: 279
+    right: 59
+    precision: 0.2115
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 241.5
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 14.05
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 2.15
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 27.0
+    round_to: null
+  - feature: gps_delay_rate
+    op: <=
+    value: 0.930681
+    round_to: null
+- id: BE-05
+  state: cannot_reach_home
+  when: mode_return <= 0.5 (or missing) and battery_time_s <= 148.5 and gps_delay_rate is present and
+    home_time_ratio > 0.2986 (or missing)
+  training:
+    probability: 0.1988
+    instants: 332
+    variants: 65
+    episodes: 68
+  validation:
+    instants: 489
+    right: 100
+    precision: 0.2045
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: <=
+    value: 148.5
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.29862
+    round_to: null
+- id: BE-06
+  state: cannot_reach_home
+  when: mode_return <= 0.5 (or missing) and battery_time_s in (148.5, 241.5] and home_time_ratio > 0.5402
+    and pct_per_km <= 9.183 (or missing)
+  training:
+    probability: 0.4117
+    instants: 212
+    variants: 37
+    episodes: 42
+  validation:
+    instants: 97
+    right: 26
+    precision: 0.268
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 148.5
+    round_to: null
+  - feature: battery_time_s
+    op: <=
+    value: 241.5
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.540246
+    round_to: null
+  - feature: pct_per_km
+    op: <=
+    value: 9.18314
+    round_to: null
+- id: BE-07
+  state: cannot_reach_home
+  when: mode_return <= 0.5 (or missing) and battery_time_s in (148.5, 241.5] and home_time_ratio > 0.5402
+    and pct_per_km > 9.183
+  training:
+    probability: 0.1582
+    instants: 193
+    variants: 37
+    episodes: 43
+  validation:
+    instants: 353
+    right: 44
+    precision: 0.1246
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 148.5
+    round_to: null
+  - feature: battery_time_s
+    op: <=
+    value: 241.5
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.540246
+    round_to: null
+  - feature: pct_per_km
+    op: '>'
+    value: 9.18314
+    round_to: null
+- id: BE-08
+  state: cannot_reach_home
+  when: mode_return <= 0.5 (or missing) and battery_time_s in (241.5, 304.5] (or missing) and wind_est_mps
+    <= 14.05 (or missing) and home_time_ratio > 0.4827 and speed_gap_mps > -0.45 (or missing)
+  training:
+    probability: 0.109
+    instants: 85
+    variants: 15
+    episodes: 18
+  validation:
+    instants: 122
+    right: 23
+    precision: 0.1885
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 241.5
+    round_to: null
+  - feature: battery_time_s
+    op: <=
+    value: 304.5
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 14.05
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.482707
+    round_to: null
+  - feature: speed_gap_mps
+    op: '>'
+    value: -0.45
+    round_to: null
+- id: BE-09
+  state: cannot_reach_home
+  when: mode_return <= 0.5 (or missing) and battery_time_s in (148.5, 241.5] and home_time_ratio in (0.4829,
+    0.5402] and battery_pct <= 21.15
+  training:
+    probability: 0.1518
+    instants: 63
+    variants: 13
+    episodes: 17
+  validation:
+    instants: 137
+    right: 6
+    precision: 0.0438
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 148.5
+    round_to: null
+  - feature: battery_time_s
+    op: <=
+    value: 241.5
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.482852
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.540246
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 21.15
+    round_to: null
+- id: BE-10
+  state: cannot_reach_home
+  when: mode_return <= 0.5 (or missing) and battery_time_s > 241.5 (or missing) and wind_est_mps > 14.05
+    and innovation_max10 <= 2.15 and gps_delay_rate <= 0.9307 (or missing)
+  training:
+    probability: 0.051
+    instants: 58
+    variants: 11
+    episodes: 12
+  validation:
+    instants: 247
+    right: 0
+    precision: 0.0
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 241.5
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 14.05
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 2.15
+    round_to: null
+  - feature: gps_delay_rate
+    op: <=
+    value: 0.930681
+    round_to: null
+- id: BE-11
+  state: cannot_reach_home
+  when: mode_return > 0.5 and home_time_ratio <= 0.05202 (or missing) and wind_est_mps <= 14.95 (or missing)
+    and battery_pct <= 6.55 (or missing) and gps_radar_cusum_m <= 266.2 (or missing)
+  training:
+    probability: 0.1831
+    instants: 54
+    variants: 6
+    episodes: 30
+  validation:
+    instants: 56
+    right: 7
+    precision: 0.125
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.0520186
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 14.95
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 6.55
+    round_to: null
+  - feature: gps_radar_cusum_m
+    op: <=
+    value: 266.221
+    round_to: null
+- id: BE-12
+  state: sufficient
+  when: mode_return > 0.5 and home_time_ratio <= 0.05202 (or missing) and wind_est_mps <= 14.95 (or missing)
+    and battery_pct > 6.55
+  training:
+    probability: 1.0
+    instants: 11232
+    variants: 125
+    episodes: 146
+  validation:
+    instants: 2340
+    right: 2339
+    precision: 0.9996
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.0520186
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 14.95
+    round_to: null
+  - feature: battery_pct
+    op: '>'
+    value: 6.55
+    round_to: null
+- id: BE-13
+  state: sufficient
+  when: mode_return <= 0.5 (or missing) and battery_time_s in (148.5, 241.5] and home_time_ratio <= 0.4829
+    (or missing)
+  training:
+    probability: 0.9974
+    instants: 7007
+    variants: 132
+    episodes: 151
+  validation:
+    instants: 1467
+    right: 1464
+    precision: 0.998
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 148.5
+    round_to: null
+  - feature: battery_time_s
+    op: <=
+    value: 241.5
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.482852
+    round_to: null
+- id: BE-14
+  state: sufficient
+  when: mode_return <= 0.5 (or missing) and battery_time_s > 241.5 (or missing) and wind_est_mps > 14.05
+    and innovation_max10 <= 27 (or missing) and gps_delay_rate > 0.9307
+  training:
+    probability: 0.9886
+    instants: 1304
+    variants: 30
+    episodes: 47
+  validation:
+    instants: 466
+    right: 466
+    precision: 1.0
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 241.5
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 14.05
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 27.0
+    round_to: null
+  - feature: gps_delay_rate
+    op: '>'
+    value: 0.930681
+    round_to: null
+- id: BE-15
+  state: sufficient
+  when: mode_return <= 0.5 (or missing) and battery_time_s > 241.5 (or missing) and wind_est_mps > 14.05
+    and innovation_max10 > 27 and airspeed_mps > 5.05 (or missing)
+  training:
+    probability: 1.0
+    instants: 1209
+    variants: 237
+    episodes: 464
+  validation:
+    instants: 240
+    right: 240
+    precision: 1.0
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 241.5
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 14.05
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 27.0
+    round_to: null
+  - feature: airspeed_mps
+    op: '>'
+    value: 5.05
+    round_to: null
+- id: BE-16
+  state: sufficient
+  when: mode_return <= 0.5 (or missing) and battery_time_s > 241.5 (or missing) and wind_est_mps <= 14.05
+    (or missing) and home_time_ratio > 0.4827 and speed_gap_mps <= -0.45
+  training:
+    probability: 1.0
+    instants: 834
+    variants: 25
+    episodes: 59
+  validation:
+    instants: 369
+    right: 342
+    precision: 0.9268
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 241.5
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 14.05
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.482707
+    round_to: null
+  - feature: speed_gap_mps
+    op: <=
+    value: -0.45
+    round_to: null
+- id: BE-17
+  state: sufficient
+  when: mode_return <= 0.5 (or missing) and battery_time_s in (148.5, 241.5] and home_time_ratio in (0.4829,
+    0.5402] and battery_pct > 21.15 (or missing)
+  training:
+    probability: 0.993
+    instants: 569
+    variants: 54
+    episodes: 67
+  validation:
+    instants: 49
+    right: 49
+    precision: 1.0
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 148.5
+    round_to: null
+  - feature: battery_time_s
+    op: <=
+    value: 241.5
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.482852
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.540246
+    round_to: null
+  - feature: battery_pct
+    op: '>'
+    value: 21.15
+    round_to: null
+- id: BE-18
+  state: sufficient
+  when: mode_return <= 0.5 (or missing) and battery_time_s > 304.5 and wind_est_mps <= 14.05 (or missing)
+    and home_time_ratio > 0.4827 and speed_gap_mps > -0.45 (or missing)
+  training:
+    probability: 1.0
+    instants: 426
+    variants: 15
+    episodes: 37
+  validation:
+    instants: 188
+    right: 180
+    precision: 0.9574
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 304.5
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 14.05
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.482707
+    round_to: null
+  - feature: speed_gap_mps
+    op: '>'
+    value: -0.45
+    round_to: null
+- id: BE-19
+  state: sufficient
+  when: mode_return <= 0.5 (or missing) and battery_time_s <= 148.5 and gps_delay_rate is present and
+    home_time_ratio <= 0.2986
+  training:
+    probability: 1.0
+    instants: 385
+    variants: 21
+    episodes: 21
+  validation:
+    instants: 196
+    right: 196
+    precision: 1.0
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: <=
+    value: 148.5
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.29862
+    round_to: null
+- id: BE-20
+  state: sufficient
+  when: mode_return > 0.5 and home_time_ratio > 0.05202 and wind_est_minus_station <= -5.55 (or missing)
+  training:
+    probability: 1.0
+    instants: 269
+    variants: 17
+    episodes: 30
+  validation:
+    instants: 2
+    right: 2
+    precision: 1.0
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.0520186
+    round_to: null
+  - feature: wind_est_minus_station
+    op: <=
+    value: -5.55
+    round_to: null
+- id: BE-21
+  state: sufficient
+  when: mode_return > 0.5 and home_time_ratio <= 0.05202 (or missing) and wind_est_mps <= 14.95 (or missing)
+    and battery_pct <= 6.55 (or missing) and gps_radar_cusum_m > 266.2
+  training:
+    probability: 0.9911
+    instants: 111
+    variants: 16
+    episodes: 23
+  validation:
+    instants: 16
+    right: 13
+    precision: 0.8125
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.0520186
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 14.95
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 6.55
+    round_to: null
+  - feature: gps_radar_cusum_m
+    op: '>'
+    value: 266.221
+    round_to: null
+- id: BE-22
+  state: sufficient
+  when: mode_return <= 0.5 (or missing) and battery_time_s > 241.5 (or missing) and wind_est_mps > 14.05
+    and innovation_max10 > 27 and airspeed_mps <= 5.05
+  training:
+    probability: 1.0
+    instants: 103
+    variants: 14
+    episodes: 59
+  validation:
+    instants: 18
+    right: 18
+    precision: 1.0
+  reject: false
+  thresholds:
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: battery_time_s
+    op: '>'
+    value: 241.5
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 14.05
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 27.0
+    round_to: null
+  - feature: airspeed_mps
+    op: <=
+    value: 5.05
+    round_to: null
+- id: BE-23
+  state: sufficient
+  when: everything the rows above do not match
+  training:
+    probability: 1.0
+    instants: 1159347
+    variants: 1680
+    episodes: 2786
+  validation:
+    instants: 243171
+    right: 243170
+    precision: 1.0
+  reject: false
+  thresholds: []

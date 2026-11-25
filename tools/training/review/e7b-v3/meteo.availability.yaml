@@ -1,0 +1,40 @@
+facet: meteo.availability
+table: meteo_availability
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: MA-01
+  state: no_data
+  when: age_meteo_p > 0.975
+  training:
+    probability: 0.9085
+    instants: 6233
+    variants: 135
+    episodes: 137
+  validation:
+    instants: 1195
+    right: 1053
+    precision: 0.8812
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: age_meteo_p
+    op: '>'
+    value: 0.975
+    round_to: null
+- id: MA-02
+  state: normal
+  when: everything the rows above do not match
+  training:
+    probability: 0.9996
+    instants: 1425214
+    variants: 1680
+    episodes: 1815
+  validation:
+    instants: 304569
+    right: 304426
+    precision: 0.9995
+  confidence: confirmed
+  reject: false
+  thresholds: []

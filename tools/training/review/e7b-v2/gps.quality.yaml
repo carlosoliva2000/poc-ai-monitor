@@ -1,0 +1,90 @@
+facet: gps.quality
+table: gps_quality
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: GQ-01
+  state: degraded
+  when: gps_hacc_m > 5.925 and gps_hdop > 1.205 (or missing)
+  training:
+    probability: 0.9227
+    instants: 18363
+    variants: 278
+    episodes: 390
+  validation:
+    instants: 4039
+    right: 3675
+    precision: 0.9099
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: gps_hacc_m
+    op: '>'
+    value: 5.925
+    round_to: null
+  - feature: gps_hdop
+    op: '>'
+    value: 1.205
+    round_to: null
+- id: GQ-02
+  state: good
+  when: gps_hacc_m <= 5.925 (or missing) and gps_hdop > 2.295 (or missing)
+  training:
+    probability: 0.9907
+    instants: 4801
+    variants: 266
+    episodes: 2273
+  validation:
+    instants: 814
+    right: 810
+    precision: 0.9951
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: gps_hacc_m
+    op: <=
+    value: 5.925
+    round_to: null
+  - feature: gps_hdop
+    op: '>'
+    value: 2.295
+    round_to: null
+- id: GQ-03
+  state: good
+  when: gps_hacc_m > 5.925 and gps_hdop <= 1.205
+  training:
+    probability: 0.999
+    instants: 985
+    variants: 74
+    episodes: 742
+  validation:
+    instants: 161
+    right: 161
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: gps_hacc_m
+    op: '>'
+    value: 5.925
+    round_to: null
+  - feature: gps_hdop
+    op: <=
+    value: 1.205
+    round_to: null
+- id: GQ-04
+  state: good
+  when: everything the rows above do not match
+  training:
+    probability: 1.0
+    instants: 1298967
+    variants: 1680
+    episodes: 3878
+  validation:
+    instants: 269624
+    right: 269624
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds: []

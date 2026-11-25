@@ -1,0 +1,112 @@
+facet: battery.level
+table: battery_level
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: BL-01
+  state: low
+  when: battery_pct in (7.85, 16.45]
+  training:
+    probability: 0.8874
+    instants: 11827
+    variants: 177
+    episodes: 177
+  validation:
+    instants: 3612
+    right: 3211
+    precision: 0.889
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 7.85
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 16.45
+    round_to: null
+- id: BL-02
+  state: critical
+  when: battery_pct <= 7.35
+  training:
+    probability: 0.9633
+    instants: 3282
+    variants: 164
+    episodes: 167
+  validation:
+    instants: 878
+    right: 856
+    precision: 0.9749
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: <=
+    value: 7.35
+    round_to: null
+- id: BL-03
+  state: critical
+  when: battery_pct in (7.35, 7.85] and age_meteo > 3.5 (or missing)
+  training:
+    probability: 0.6554
+    instants: 291
+    variants: 55
+    episodes: 70
+  validation:
+    instants: 154
+    right: 86
+    precision: 0.5584
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 7.35
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 7.85
+    round_to: null
+  - feature: age_meteo
+    op: '>'
+    value: 3.5
+    round_to: null
+- id: BL-04
+  state: low
+  when: battery_pct in (7.35, 7.85] and age_meteo <= 3.5
+  training:
+    probability: 0.9666
+    instants: 289
+    variants: 72
+    episodes: 75
+  validation:
+    instants: 106
+    right: 105
+    precision: 0.9906
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 7.35
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 7.85
+    round_to: null
+  - feature: age_meteo
+    op: <=
+    value: 3.5
+    round_to: null
+- id: BL-05
+  state: normal
+  when: everything the rows above do not match
+  training:
+    probability: 1.0
+    instants: 1197573
+    variants: 1680
+    episodes: 2143
+  validation:
+    instants: 252322
+    right: 252319
+    precision: 1.0
+  reject: false
+  thresholds: []

@@ -123,3 +123,21 @@ def test_the_station_measures_a_fraction_of_the_wind_with_a_delay() -> None:
     assert speed[90.0] == 0.0
     assert 1.5 < speed[110.0] < 4.0 and 4.0 < speed[120.0] < 6.5  # sube con el retraso
     assert speed[150.0] == pytest.approx(8.0, abs=0.3)  # factor 0,8 · 10 m/s
+
+
+def test_the_nominal_cn0_and_agc_of_the_receiver_are_parameters_and_nothing_else_changes() -> None:
+    """`cn0_nominal_dbhz` y `agc_nominal_db` (contrato v1.2) desplazan lo que lee el receptor y la
+    verdad, con el mismo ruido; lo demás (posiciones, radar, estima) sale idéntico."""
+    base = generate(v2())
+    gps = sensors_with(gps={"cn0_nominal_dbhz": 38.0, "agc_nominal_db": 2.5})
+    shifted = generate(v2(sensors=gps))
+    for a, b in zip(base.events, shifted.events, strict=True):
+        if a.type == "GnssStatus":
+            assert b.payload["cn0_dbhz"] == pytest.approx(a.payload["cn0_dbhz"] - 7.0, abs=0.11)
+            assert b.payload["agc_db"] == pytest.approx(a.payload["agc_db"] + 2.5, abs=0.011)
+            assert b.payload["h_acc_m"] == a.payload["h_acc_m"]
+        else:
+            assert a.payload == b.payload
+    assert shifted.truth.trajectory[0].cn0_dbhz == pytest.approx(
+        base.truth.trajectory[0].cn0_dbhz - 7.0
+    )

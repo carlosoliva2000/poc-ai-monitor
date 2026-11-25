@@ -1,0 +1,95 @@
+facet: gps.integrity
+table: gps_integrity
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: GI-01
+  state: spoofed
+  when: agc_db <= -1.315 (or missing) and cn0_dbhz > 36.85
+  training:
+    probability: 0.9243
+    instants: 15984
+    variants: 232
+    episodes: 274
+  validation:
+    instants: 3311
+    right: 3227
+    precision: 0.9746
+  reject: false
+  thresholds:
+  - feature: agc_db
+    op: <=
+    value: -1.315
+    round_to: null
+  - feature: cn0_dbhz
+    op: '>'
+    value: 36.85
+    round_to: null
+- id: GI-02
+  state: spoofed
+  when: agc_db <= -1.315 (or missing) and cn0_dbhz <= 36.85 (or missing) and gps_radar_avg_m > 34.33
+  training:
+    probability: 0.2201
+    instants: 195
+    variants: 10
+    episodes: 30
+  validation:
+    instants: 225
+    right: 74
+    precision: 0.3289
+  reject: false
+  thresholds:
+  - feature: agc_db
+    op: <=
+    value: -1.315
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 36.85
+    round_to: null
+  - feature: gps_radar_avg_m
+    op: '>'
+    value: 34.328
+    round_to: null
+- id: GI-03
+  state: reliable
+  when: agc_db <= -1.315 (or missing) and cn0_dbhz <= 36.85 (or missing) and gps_radar_avg_m <= 34.33
+    (or missing)
+  training:
+    probability: 0.9922
+    instants: 15624
+    variants: 230
+    episodes: 2595
+  validation:
+    instants: 3605
+    right: 3560
+    precision: 0.9875
+  reject: false
+  thresholds:
+  - feature: agc_db
+    op: <=
+    value: -1.315
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 36.85
+    round_to: null
+  - feature: gps_radar_avg_m
+    op: <=
+    value: 34.328
+    round_to: null
+- id: GI-04
+  state: reliable
+  when: everything the rows above do not match
+  training:
+    probability: 1.0
+    instants: 1168043
+    variants: 1680
+    episodes: 3025
+  validation:
+    instants: 247321
+    right: 247320
+    precision: 1.0
+  reject: false
+  thresholds: []

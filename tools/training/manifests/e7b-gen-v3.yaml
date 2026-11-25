@@ -1,0 +1,66 @@
+# Manifiesto de la prueba de generalización (E7b, paso 2b): drones y sensores **fuera** de los
+# rangos de entrenamiento de e7b-v2 (velocidad máxima de 8 y de 28 m/s, σ de los sensores y
+# periodos por encima y por debajo, C/N0 y AGC nominales por encima y por debajo). Solo para medir; no se usa para decidir nada ni para entrenar. Los parámetros de
+# tipo relativo (límite de viento, crucero) se muestrean como fracción de la velocidad máxima
+# respecto al aire. La física del simulador no se toca; el C/N0 y el AGC nominales del receptor
+# siguen siendo los del simulador (45 dB-Hz, 0 dB) hasta que exista el parámetro (ver el informe).
+dataset: e7b-gen-v3
+seed: 7015
+n_variants: 600
+split: {train: 0.0, validation: 0.0, test: 1.0}
+max_flight_s: 1300
+min_flight_s: 240
+min_episodes: {train: 60, validation: 15, test: 15}
+
+quotas:
+  nominal: 0.04
+  wind: 0.07
+  spoofing: 0.10
+  hijack: 0.08
+  gps_loss: 0.09
+  jamming: 0.07
+  gps_degraded: 0.05
+  link_degraded: 0.07
+  link_mute: 0.12
+  source_mute: 0.18
+  radar_range: 0.05
+  battery: 0.08
+
+combine: {second: 0.40, third: 0.10, overlap: 0.5}
+
+ranges:
+  route: {n_waypoints: [3, 6], radius_m: [500, 3000], min_leg_m: 300}
+  drone:
+    max_airspeed_mps: [[7.5, 8.5], [27, 29]]
+    wind_limit_over_airspeed: [0.6, 0.85]
+    cruise_over_airspeed: [0.5, 0.9]
+    max_accel_mps2: [2.0, 3.0]
+    max_turn_rate_dps: [60, 120]
+    lookahead_m: [15, 40]
+  gps: {gm_sigma_m: [[0.2, 0.4], [3.3, 3.8]], gm_tau_s: [30, 180], white_sigma_m: [0.1, 0.8], sats: [10, 16], hdop: [0.6, 1.2]}
+  radar: {offset_m: [0, 2000], sigma0_m: [[0.5, 1.5], [12, 15]], sigma_per_km_m: [[0.1, 0.4], [6, 8]], max_range_m: [[1500, 2500], [9000, 12000]]}
+  meteo: {factor: [0.7, 0.9], lag_s: [15, 45], sigma_mps: [0.3, 0.8], sigma_deg: [5, 12]}
+  link: {rssi_dbm: [-70, -55], latency_ms: [30, 80], weak_rssi_dbm: [-90, -80]}
+  battery: {capacity_wh: [300, 500], start_pct: [80, 100], low_capacity_wh: [60, 150], low_start_pct: [20, 60]}
+  gnss: {cn0_nominal_dbhz: [[30, 34], [54, 58]], agc_nominal_db: [[-8, -5], [5, 8]]}   # fuera de rango
+  periods_s:            # periodo de cada fuente (el receptor y el autopiloto van con el GPS)
+    gps: [0.2, 3.0]
+    radar: [0.5, 8.0]
+    link: [1.0, 20.0]
+    meteo: [2.0, 40.0]
+    battery: [2.0, 40.0]
+  wind:
+    base_over_limit: [0.0, 0.8]
+    notable_min_over_limit: 0.4        # umbral de «notable» de las etiquetas (relativo al dron)
+    drifting_max_over_airspeed: 1.4
+    bands_relative: {notable: 0.15, beyond_limit: 0.35, drifting: 0.50}
+    loss_change_over_airspeed: [0.4, 0.9]
+    duration_s: [20, 120]
+    ramp_s: [5, 20]
+  spoofing: {drift_rate_mps: [0.3, 3.0], duration_s: [30, 120], emitter_offset_m: [300, 2000], emitter_power_db: [8, 16], no_emitter: 0.2}
+  hijack: {target_offset_m: [300, 1000], duration_s: [30, 120], open_ended: 0.3}
+  jamming: {offset_m: [200, 1200], power_db: [6, 25], duration_s: [60, 160], loss_prob: 0.5, loss_s: [15, 40]}
+  gps_degraded: {duration_s: [20, 90], hdop: [3.5, 8.0], sats: [5, 9]}
+  link_degraded: {duration_s: [20, 90], latency_ms: [150, 400], rssi_dbm: [-92, -84]}
+  fault: {duration_s: [10, 90]}
+  link_loss_action: {continue: 0.25, hold: 0.35, return: 0.2, land: 0.2}

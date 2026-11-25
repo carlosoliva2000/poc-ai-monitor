@@ -1,0 +1,27 @@
+# Lo que el monitor conoce de antemano de sus propios activos (no viaja por el bus): el radar, el
+# dron, los periodos de las fuentes y el receptor. En el despliegue saldrá del inventario de
+# activos. Metros, segundos y m/s; la base está en (0, 0). Solo entra en las características a
+# través de cocientes (la distancia al radar entre su alcance, el viento entre el límite del dron,
+# una desviación entre el error esperado del sensor…), nunca como valores sueltos.
+# Valores de la referencia (dron y sensores de `demo`).
+drone:
+  max_airspeed_mps: 17.0
+  wind_limit_mps: 12.0
+  cruise_mps: 15.0
+periods_s:            # el receptor y el autopiloto publican con el GPS
+  gps: 1.0
+  radar: 2.0
+  link: 5.0
+  meteo: 10.0
+  battery: 10.0
+gps:
+  sigma_m: 1.53       # σ nominal de la posición del receptor
+radar:
+  x: 0.0
+  y: 0.0
+  max_range_m: 6000.0
+  sigma0_m: 5.0
+  sigma_per_km_m: 2.0
+gnss:
+  cn0_nominal_dbhz: 45.0
+  agc_nominal_db: 0.0

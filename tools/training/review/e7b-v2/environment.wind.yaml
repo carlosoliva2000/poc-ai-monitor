@@ -1,0 +1,199 @@
+facet: environment.wind
+table: environment_wind
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: EW-01
+  state: notable
+  when: wind_est_over_limit <= 0.9138 (or missing) and wind_est_mps > 4.95 (or missing) and wind_est_mean5_over_limit
+    <= 0.9251
+  training:
+    probability: 0.9712
+    instants: 701004
+    variants: 1061
+    episodes: 15304
+  validation:
+    instants: 146964
+    right: 140715
+    precision: 0.9575
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: wind_est_over_limit
+    op: <=
+    value: 0.913842
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 4.95
+    round_to: null
+  - feature: wind_est_mean5_over_limit
+    op: <=
+    value: 0.925131
+    round_to: null
+- id: EW-02
+  state: notable
+  when: wind_est_over_limit <= 0.9138 (or missing) and wind_est_mps > 4.95 (or missing) and wind_est_mean5_over_limit
+    > 0.9251 (or missing) and station_wind_mps > 4.45 and station_wind_over_limit <= 0.6956 (or missing)
+  training:
+    probability: 0.9628
+    instants: 31471
+    variants: 404
+    episodes: 1267
+  validation:
+    instants: 3851
+    right: 3684
+    precision: 0.9566
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: wind_est_over_limit
+    op: <=
+    value: 0.913842
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 4.95
+    round_to: null
+  - feature: wind_est_mean5_over_limit
+    op: '>'
+    value: 0.925131
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 4.45
+    round_to: null
+  - feature: station_wind_over_limit
+    op: <=
+    value: 0.695556
+    round_to: null
+- id: EW-03
+  state: beyond_limit
+  when: wind_est_over_limit > 0.9138
+  training:
+    probability: 0.6612
+    instants: 9880
+    variants: 180
+    episodes: 210
+  validation:
+    instants: 2693
+    right: 1788
+    precision: 0.6639
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: wind_est_over_limit
+    op: '>'
+    value: 0.913842
+    round_to: null
+- id: EW-04
+  state: beyond_limit
+  when: wind_est_over_limit <= 0.9138 (or missing) and wind_est_mps > 4.95 (or missing) and wind_est_mean5_over_limit
+    > 0.9251 (or missing) and station_wind_mps > 4.45 and station_wind_over_limit > 0.6956
+  training:
+    probability: 0.1707
+    instants: 549
+    variants: 20
+    episodes: 31
+  validation:
+    instants: 394
+    right: 96
+    precision: 0.2437
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: wind_est_over_limit
+    op: <=
+    value: 0.913842
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 4.95
+    round_to: null
+  - feature: wind_est_mean5_over_limit
+    op: '>'
+    value: 0.925131
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 4.45
+    round_to: null
+  - feature: station_wind_over_limit
+    op: '>'
+    value: 0.695556
+    round_to: null
+- id: EW-05
+  state: calm
+  when: wind_est_over_limit <= 0.9138 (or missing) and wind_est_mps > 4.95 (or missing) and wind_est_mean5_over_limit
+    > 0.9251 (or missing) and station_wind_mps <= 4.45 (or missing)
+  training:
+    probability: 0.783
+    instants: 32308
+    variants: 248
+    episodes: 1129
+  validation:
+    instants: 11176
+    right: 9737
+    precision: 0.8712
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: wind_est_over_limit
+    op: <=
+    value: 0.913842
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 4.95
+    round_to: null
+  - feature: wind_est_mean5_over_limit
+    op: '>'
+    value: 0.925131
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 4.45
+    round_to: null
+- id: EW-06
+  state: calm
+  when: wind_est_over_limit <= 0.9138 (or missing) and wind_est_mps <= 4.95 and station_wind_mps > 4.25
+  training:
+    probability: 0.5539
+    instants: 16007
+    variants: 291
+    episodes: 2770
+  validation:
+    instants: 8414
+    right: 5411
+    precision: 0.6431
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: wind_est_over_limit
+    op: <=
+    value: 0.913842
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 4.95
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 4.25
+    round_to: null
+- id: EW-07
+  state: calm
+  when: everything the rows above do not match
+  training:
+    probability: 0.9761
+    instants: 559348
+    variants: 732
+    episodes: 11048
+  validation:
+    instants: 119897
+    right: 116893
+    precision: 0.9749
+  confidence: confirmed
+  reject: false
+  thresholds: []

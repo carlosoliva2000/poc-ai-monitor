@@ -171,3 +171,17 @@ Lista de Carlos del 25/11/2026, al cerrar la E7a. Nada de esto se hace ahora.
 - El detector y la tabla de la E6 siguen sin adaptarse al contrato v1.0 (`LinkStatus` sin `controller_id`, GPS sin posición sin fix); se rehacen en la E7c.
 - `experiments/e6-variantes/` (cuadrícula de variantes) todavía tiene la racha (`gust_mps`) del viento; hay que revisarla al reactivar los tests de las variantes.
 - `tools/experiments/check_freeze.py` da `CHANGED` en `platform/src/platform_app/tools/metrics.py`: viene de quitar la racha en la E7a (paso 1). La tabla de la E6 sigue congelada; si se vuelve a usar, hay que decidir si se refreza el hash o se rehace la tabla.
+
+
+## Desde la E7b (datos y entrenamiento)
+- **Etiquetador del simulador (`generator/states.py`):** el 13 % de los intentos de muestreo de la E7b (363 de 2763) dan `drone.cause = unexplained` (el dron se desvía de la referencia del modo sin ninguna causa activa), sobre todo con batería baja y `link_mute` con `return`/`land`/`hold`. Se descartan al generar los datos y eso es un sesgo de selección: conviene darles causa (o una etiqueta propia) en la E9.
+- **`failsafe_hold` dura hasta el final del vuelo:** cada variante aporta un solo episodio largo (14 en validación y 13 en prueba). Si se quiere evaluar con más episodios, hace falta un fin del `hold` (p. ej. al volver el enlace).
+- **Energía para volver con el viento:** la característica usa el ritmo de crucero, sin proyectar el viento estimado.
+- **Referencias de C/N0 y AGC:** una referencia que se detenga mientras el GPS no es fiable detecta mejor el engaño (la tabla a mano gana en `gps.integrity`), pero depende de la salida de la tabla; habría que diseñarla sin ese bucle (p. ej. una referencia que se detiene por una característica de entrada, no por la salida).
+- **Exportación a DMN de las tablas aprendidas** (con `tools/decision/export_dmn.py` de la E6 adaptado a las salidas `probability`, `instants`, `variants` y `episodes`).
+- **El monitor sin plan:** arrancar a mitad de vuelo no da incidentes hasta el siguiente reinicio; habría que publicar el plan en un evento que también reciba quien llega tarde, o guardarlo en la caché del bus.
+- **Etiquetador y umbrales operativos absolutos** (E7b, 2b): los 25/15 m de «desviado», los 5 m/s de «notable», los 15/7 % de batería y los 100 ms de «enlace degradado» son absolutos; un dron de 8 m/s y otro de 28 m/s los comparten. Hacerlos relativos al dron (o a la misión) cambia la definición de las etiquetas y exige regenerar y revisar.
+- **Retraso de detección con periodos largos:** una fuente se da por callada a 1,5 periodos, así que con periodos de 40 s tarda 60 s; si importa, hay que decidir cuánto vale «callada» según el uso.
+- **Referencia del modo con un dron rápido y un GPS lento:** el cambio de modo llega a nuestro lado hasta un periodo tarde (error ∝ velocidad × periodo); el punto de espera se ancla ahora donde el dron se para, pero el tramo a casa en `failsafe_return` y el cambio de tramo en misión siguen usando el primer mensaje. Convendría un evento de cambio de modo con su instante.
+- **Los 25/15 m de «desviado» y «en ruta» no escalan con el dron:** a 28 m/s el dron pasa más tiempo cerca del umbral. No se cambia la definición; si se quisiera relativa (p. ej. a la velocidad o al radio de giro), hay que regenerar etiquetas y datos.
+- **Regla de la situación:** la causa activa sale de cuatro facetas aprendidas (su error se arrastra); si se aprende un indicador de «causa activa» propio, se puede medir cuánto se pierde.

@@ -1,0 +1,94 @@
+facet: gps.availability
+table: gps_availability
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: GA-01
+  state: no_fix
+  when: gps_fix_3d <= 0.5
+  training:
+    probability: 0.9937
+    instants: 11618
+    variants: 283
+    episodes: 302
+  validation:
+    instants: 2755
+    right: 2735
+    precision: 0.9927
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: gps_fix_3d
+    op: <=
+    value: 0.5
+    round_to: null
+- id: GA-02
+  state: no_data
+  when: gps_fix_3d > 0.5 (or missing) and age_gnss_p > 0.75 and age_gps_p > 0.75 (or missing)
+  training:
+    probability: 0.8396
+    instants: 6123
+    variants: 129
+    episodes: 130
+  validation:
+    instants: 1422
+    right: 1262
+    precision: 0.8875
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: gps_fix_3d
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: age_gnss_p
+    op: '>'
+    value: 0.75
+    round_to: null
+  - feature: age_gps_p
+    op: '>'
+    value: 0.75
+    round_to: null
+- id: GA-03
+  state: normal
+  when: gps_fix_3d > 0.5 (or missing) and age_gnss_p > 0.75 and age_gps_p <= 0.75
+  training:
+    probability: 1.0
+    instants: 1043
+    variants: 101
+    episodes: 779
+  validation:
+    instants: 136
+    right: 136
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: gps_fix_3d
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: age_gnss_p
+    op: '>'
+    value: 0.75
+    round_to: null
+  - feature: age_gps_p
+    op: <=
+    value: 0.75
+    round_to: null
+- id: GA-04
+  state: normal
+  when: everything the rows above do not match
+  training:
+    probability: 0.9999
+    instants: 1322448
+    variants: 1680
+    episodes: 3378
+  validation:
+    instants: 274349
+    right: 274322
+    precision: 0.9999
+  confidence: confirmed
+  reject: false
+  thresholds: []

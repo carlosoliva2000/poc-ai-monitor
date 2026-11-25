@@ -1,0 +1,320 @@
+facet: drone.mode
+table: drone_mode
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: DM-01
+  state: foreign_control
+  when: gps_delay_s is missing and mode_hold <= 0.5 (or missing) and mode_return <= 0.5 (or missing) and
+    radar_dev_m > 50.45 (or missing)
+  training:
+    probability: 0.8963
+    instants: 58457
+    variants: 193
+    episodes: 219
+  validation:
+    instants: 6899
+    right: 5442
+    precision: 0.7888
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_m
+    op: '>'
+    value: 50.451
+    round_to: null
+- id: DM-02
+  state: failsafe_hold
+  when: gps_delay_s is missing and mode_hold > 0.5
+  training:
+    probability: 0.9999
+    instants: 45916
+    variants: 72
+    episodes: 84
+  validation:
+    instants: 9332
+    right: 9331
+    precision: 0.9999
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: '>'
+    value: 0.5
+    round_to: null
+- id: DM-03
+  state: failsafe_return
+  when: gps_delay_s is missing and mode_hold <= 0.5 (or missing) and mode_return > 0.5
+  training:
+    probability: 0.9982
+    instants: 35755
+    variants: 287
+    episodes: 311
+  validation:
+    instants: 8927
+    right: 8913
+    precision: 0.9984
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_return
+    op: '>'
+    value: 0.5
+    round_to: null
+- id: DM-04
+  state: failsafe_hold
+  when: gps_delay_s is missing and mode_hold <= 0.5 (or missing) and mode_return <= 0.5 (or missing) and
+    radar_dev_m <= 50.45 and age_gnss > 30.5 and radar_speed_mps <= 7.05
+  training:
+    probability: 0.7262
+    instants: 1740
+    variants: 51
+    episodes: 54
+  validation:
+    instants: 814
+    right: 197
+    precision: 0.242
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_m
+    op: <=
+    value: 50.451
+    round_to: null
+  - feature: age_gnss
+    op: '>'
+    value: 30.5
+    round_to: null
+  - feature: radar_speed_mps
+    op: <=
+    value: 7.05
+    round_to: null
+- id: DM-05
+  state: failsafe_land
+  when: gps_delay_s is missing and mode_hold <= 0.5 (or missing) and mode_return <= 0.5 (or missing) and
+    radar_dev_m <= 50.45 and age_gnss <= 30.5 (or missing) and radar_speed_mps <= 7.45
+  training:
+    probability: 0.3652
+    instants: 1549
+    variants: 84
+    episodes: 95
+  validation:
+    instants: 884
+    right: 391
+    precision: 0.4423
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_m
+    op: <=
+    value: 50.451
+    round_to: null
+  - feature: age_gnss
+    op: <=
+    value: 30.5
+    round_to: null
+  - feature: radar_speed_mps
+    op: <=
+    value: 7.45
+    round_to: null
+- id: DM-06
+  state: foreign_control
+  when: gps_delay_s is missing and mode_hold <= 0.5 (or missing) and mode_return <= 0.5 (or missing) and
+    radar_dev_m <= 50.45 and age_gnss <= 30.5 (or missing) and radar_speed_mps > 7.45 (or missing) and
+    home_dist_m > 261.2 (or missing) and tele_gap_s <= 10.5 (or missing)
+  training:
+    probability: 0.0787
+    instants: 1190
+    variants: 175
+    episodes: 235
+  validation:
+    instants: 3319
+    right: 235
+    precision: 0.0708
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_m
+    op: <=
+    value: 50.451
+    round_to: null
+  - feature: age_gnss
+    op: <=
+    value: 30.5
+    round_to: null
+  - feature: radar_speed_mps
+    op: '>'
+    value: 7.45
+    round_to: null
+  - feature: home_dist_m
+    op: '>'
+    value: 261.194
+    round_to: null
+  - feature: tele_gap_s
+    op: <=
+    value: 10.5
+    round_to: null
+- id: DM-07
+  state: failsafe_return
+  when: gps_delay_s is missing and mode_hold <= 0.5 (or missing) and mode_return <= 0.5 (or missing) and
+    radar_dev_m <= 50.45 and age_gnss > 30.5 and radar_speed_mps > 7.05 (or missing)
+  training:
+    probability: 0.1077
+    instants: 447
+    variants: 20
+    episodes: 22
+  validation:
+    instants: 1025
+    right: 167
+    precision: 0.1629
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_m
+    op: <=
+    value: 50.451
+    round_to: null
+  - feature: age_gnss
+    op: '>'
+    value: 30.5
+    round_to: null
+  - feature: radar_speed_mps
+    op: '>'
+    value: 7.05
+    round_to: null
+- id: DM-08
+  state: failsafe_land
+  when: gps_delay_s is missing and mode_hold <= 0.5 (or missing) and mode_return <= 0.5 (or missing) and
+    radar_dev_m <= 50.45 and age_gnss <= 30.5 (or missing) and radar_speed_mps > 7.45 (or missing) and
+    home_dist_m <= 261.2
+  training:
+    probability: 0.2256
+    instants: 111
+    variants: 13
+    episodes: 54
+  validation:
+    instants: 56
+    right: 32
+    precision: 0.5714
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_m
+    op: <=
+    value: 50.451
+    round_to: null
+  - feature: age_gnss
+    op: <=
+    value: 30.5
+    round_to: null
+  - feature: radar_speed_mps
+    op: '>'
+    value: 7.45
+    round_to: null
+  - feature: home_dist_m
+    op: <=
+    value: 261.194
+    round_to: null
+- id: DM-09
+  state: failsafe_land
+  when: gps_delay_s is missing and mode_hold <= 0.5 (or missing) and mode_return <= 0.5 (or missing) and
+    radar_dev_m <= 50.45 and age_gnss <= 30.5 (or missing) and radar_speed_mps > 7.45 (or missing) and
+    home_dist_m > 261.2 (or missing) and tele_gap_s > 10.5
+  training:
+    probability: 0.0224
+    instants: 62
+    variants: 6
+    episodes: 32
+  validation:
+    instants: 596
+    right: 16
+    precision: 0.0268
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_return
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_m
+    op: <=
+    value: 50.451
+    round_to: null
+  - feature: age_gnss
+    op: <=
+    value: 30.5
+    round_to: null
+  - feature: radar_speed_mps
+    op: '>'
+    value: 7.45
+    round_to: null
+  - feature: home_dist_m
+    op: '>'
+    value: 261.194
+    round_to: null
+  - feature: tele_gap_s
+    op: '>'
+    value: 10.5
+    round_to: null
+- id: DM-10
+  state: mission
+  when: everything the rows above do not match
+  training:
+    probability: 0.9998
+    instants: 1117867
+    variants: 1680
+    episodes: 2645
+  validation:
+    instants: 235452
+    right: 235420
+    precision: 0.9999
+  reject: false
+  thresholds: []

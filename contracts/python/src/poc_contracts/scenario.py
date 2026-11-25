@@ -137,6 +137,10 @@ class GpsConfig(Config):
     """Constante de tiempo de ese error (⚠️ 60–120 s)."""
     white_sigma_m: float = Field(default=0.3, ge=0)
     """σ del ruido blanco pequeño que se suma en cada eje ⚠️."""
+    cn0_nominal_dbhz: Positive = 45.0
+    """C/N0 medio de este receptor sin emisores (v1.2; antes era una constante del simulador)."""
+    agc_nominal_db: float = 0.0
+    """AGC de este receptor sin emisores (v1.2; 0 = nominal)."""
 
     @model_validator(mode="after")
     def _check_episodes(self) -> "GpsConfig":
@@ -321,7 +325,9 @@ class LabelingConfig(Config):
     """Umbrales operativos de las etiquetas por faceta (`states.jsonl`). Convención nuestra, no del
     simulador; valores de partida ⚠️."""
 
-    wind_notable_mps: Positive = 5.0  # viento medio por encima del cual es «notable»
+    wind_notable_over_limit: Positive = (
+        0.4  # «notable» desde esta fracción de `wind_limit_mps` (v1.2)
+    )
     gps_sigma_bad_m: Positive = 5.0  # σ real de la posición del GPS: por encima, «degradada»
     link_latency_bad_ms: Positive = 100.0  # latencia del enlace: por encima, «degradada»
     link_loss_bad_pct: Positive = 20.0  # paquetes perdidos: por encima, «degradada»

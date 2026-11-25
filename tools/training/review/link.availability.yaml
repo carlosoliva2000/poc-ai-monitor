@@ -1,0 +1,38 @@
+facet: link.availability
+table: link_availability
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: LA-01
+  state: lost
+  when: tele_gap_s > 0.5
+  training:
+    probability: 0.9886
+    instants: 73869
+    variants: 456
+    episodes: 475
+  validation:
+    instants: 9228
+    right: 8996
+    precision: 0.9749
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: '>'
+    value: 0.5
+    round_to: null
+- id: LA-02
+  state: connected
+  when: everything the rows above do not match
+  training:
+    probability: 1.0
+    instants: 1219466
+    variants: 1680
+    episodes: 2531
+  validation:
+    instants: 258076
+    right: 258075
+    precision: 1.0
+  reject: false
+  thresholds: []

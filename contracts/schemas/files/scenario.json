@@ -273,6 +273,17 @@
           "minimum": 0,
           "title": "White Sigma M",
           "type": "number"
+        },
+        "cn0_nominal_dbhz": {
+          "default": 45.0,
+          "exclusiveMinimum": 0,
+          "title": "Cn0 Nominal Dbhz",
+          "type": "number"
+        },
+        "agc_nominal_db": {
+          "default": 0.0,
+          "title": "Agc Nominal Db",
+          "type": "number"
         }
       },
       "required": [
@@ -428,10 +439,10 @@
       "additionalProperties": false,
       "description": "Umbrales operativos de las etiquetas por faceta (`states.jsonl`). Convención nuestra, no del\nsimulador; valores de partida ⚠️.",
       "properties": {
-        "wind_notable_mps": {
-          "default": 5.0,
+        "wind_notable_over_limit": {
+          "default": 0.4,
           "exclusiveMinimum": 0,
-          "title": "Wind Notable Mps",
+          "title": "Wind Notable Over Limit",
           "type": "number"
         },
         "gps_sigma_bad_m": {

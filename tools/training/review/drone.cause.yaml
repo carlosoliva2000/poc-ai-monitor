@@ -1,0 +1,846 @@
+facet: drone.cause
+table: drone_cause
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: DC-01
+  state: wind
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps > 3.95 (or missing) and agc_db > -24.85
+  training:
+    probability: 0.9578
+    instants: 10715
+    variants: 361
+    episodes: 506
+  validation:
+    instants: 2746
+    right: 2497
+    precision: 0.9093
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 3.95
+    round_to: null
+  - feature: agc_db
+    op: '>'
+    value: -24.845
+    round_to: null
+- id: DC-02
+  state: spoofed_position
+  when: tele_gap_s <= 23.5 and cn0_dbhz > 47.85
+  training:
+    probability: 0.9987
+    instants: 8518
+    variants: 176
+    episodes: 199
+  validation:
+    instants: 1377
+    right: 1377
+    precision: 1.0
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: '>'
+    value: 47.85
+    round_to: null
+- id: DC-03
+  state: foreign_control
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps <= 3.95 and gps_radar_cusum_m <= 810.7 (or missing) and innovation_max10 <= 12.3
+    (or missing) and wind_est_mean5 <= 4.97 (or missing) and pct_per_km > 3.966 (or missing)
+  training:
+    probability: 0.9466
+    instants: 3992
+    variants: 126
+    episodes: 198
+  validation:
+    instants: 821
+    right: 693
+    precision: 0.8441
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 3.95
+    round_to: null
+  - feature: gps_radar_cusum_m
+    op: <=
+    value: 810.724
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 12.3
+    round_to: null
+  - feature: wind_est_mean5
+    op: <=
+    value: 4.97
+    round_to: null
+  - feature: pct_per_km
+    op: '>'
+    value: 3.96628
+    round_to: null
+- id: DC-04
+  state: dead_reckoning
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m > 73.6
+  training:
+    probability: 0.9861
+    instants: 3960
+    variants: 147
+    episodes: 170
+  validation:
+    instants: 877
+    right: 875
+    precision: 0.9977
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: '>'
+    value: 73.595
+    round_to: null
+- id: DC-05
+  state: spoofed_position
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps <= 3.45 and gps_radar_cusum_m > 810.7 and gps_dev_max30 <= 267 (or missing)
+  training:
+    probability: 0.859
+    instants: 981
+    variants: 72
+    episodes: 81
+  validation:
+    instants: 169
+    right: 169
+    precision: 1.0
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 3.45
+    round_to: null
+  - feature: gps_radar_cusum_m
+    op: '>'
+    value: 810.724
+    round_to: null
+  - feature: gps_dev_max30
+    op: <=
+    value: 266.988
+    round_to: null
+- id: DC-06
+  state: foreign_control
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps > 3.95 (or missing) and agc_db <= -24.85 (or missing) and radar_dev_slope > 0.9011
+    (or missing) and gps_dev_max30 <= 2.929
+  training:
+    probability: 0.9109
+    instants: 869
+    variants: 69
+    episodes: 77
+  validation:
+    instants: 190
+    right: 180
+    precision: 0.9474
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 3.95
+    round_to: null
+  - feature: agc_db
+    op: <=
+    value: -24.845
+    round_to: null
+  - feature: radar_dev_slope
+    op: '>'
+    value: 0.901095
+    round_to: null
+  - feature: gps_dev_max30
+    op: <=
+    value: 2.92862
+    round_to: null
+- id: DC-07
+  state: foreign_control
+  when: tele_gap_s > 23.5 (or missing) and radar_dev_max30 <= 77.55 and station_wind_mps <= 4.75 (or missing)
+  training:
+    probability: 0.9347
+    instants: 844
+    variants: 20
+    episodes: 34
+  validation:
+    instants: 238
+    right: 227
+    precision: 0.9538
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: '>'
+    value: 23.5
+    round_to: null
+  - feature: radar_dev_max30
+    op: <=
+    value: 77.5466
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 4.75
+    round_to: null
+- id: DC-08
+  state: wind
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps <= 3.95 and gps_radar_cusum_m <= 810.7 (or missing) and innovation_max10 <= 12.3
+    (or missing) and wind_est_mean5 > 4.97
+  training:
+    probability: 0.9061
+    instants: 685
+    variants: 58
+    episodes: 92
+  validation:
+    instants: 130
+    right: 130
+    precision: 1.0
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 3.95
+    round_to: null
+  - feature: gps_radar_cusum_m
+    op: <=
+    value: 810.724
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 12.3
+    round_to: null
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.97
+    round_to: null
+- id: DC-09
+  state: wind
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps > 3.95 (or missing) and agc_db <= -24.85 (or missing) and radar_dev_slope <= 0.9011
+    and radar_delay_s > 4.753
+  training:
+    probability: 0.89
+    instants: 356
+    variants: 45
+    episodes: 80
+  validation:
+    instants: 77
+    right: 42
+    precision: 0.5455
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 3.95
+    round_to: null
+  - feature: agc_db
+    op: <=
+    value: -24.845
+    round_to: null
+  - feature: radar_dev_slope
+    op: <=
+    value: 0.901095
+    round_to: null
+  - feature: radar_delay_s
+    op: '>'
+    value: 4.75283
+    round_to: null
+- id: DC-10
+  state: wind
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps <= 3.95 and gps_radar_cusum_m <= 810.7 (or missing) and innovation_max10 <= 12.3
+    (or missing) and wind_est_mean5 <= 4.97 (or missing) and pct_per_km <= 3.966
+  training:
+    probability: 0.3588
+    instants: 348
+    variants: 16
+    episodes: 20
+  validation:
+    instants: 148
+    right: 44
+    precision: 0.2973
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 3.95
+    round_to: null
+  - feature: gps_radar_cusum_m
+    op: <=
+    value: 810.724
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 12.3
+    round_to: null
+  - feature: wind_est_mean5
+    op: <=
+    value: 4.97
+    round_to: null
+  - feature: pct_per_km
+    op: <=
+    value: 3.96628
+    round_to: null
+- id: DC-11
+  state: dead_reckoning
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps <= 3.95 and gps_radar_cusum_m <= 810.7 (or missing) and innovation_max10 > 12.3 and
+    gps_dev_slope <= 1.278 (or missing) and radar_dev_slope <= 3.76 (or missing)
+  training:
+    probability: 0.6358
+    instants: 288
+    variants: 34
+    episodes: 35
+  validation:
+    instants: 113
+    right: 80
+    precision: 0.708
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 3.95
+    round_to: null
+  - feature: gps_radar_cusum_m
+    op: <=
+    value: 810.724
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 12.3
+    round_to: null
+  - feature: gps_dev_slope
+    op: <=
+    value: 1.2783
+    round_to: null
+  - feature: radar_dev_slope
+    op: <=
+    value: 3.75959
+    round_to: null
+- id: DC-12
+  state: foreign_control
+  when: tele_gap_s > 23.5 (or missing) and radar_dev_max30 > 77.55 (or missing) and station_wind_mps >
+    8.35 and home_dist_m > 1455 (or missing)
+  training:
+    probability: 1.0
+    instants: 254
+    variants: 6
+    episodes: 6
+  validation:
+    instants: 11
+    right: 0
+    precision: 0.0
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: '>'
+    value: 23.5
+    round_to: null
+  - feature: radar_dev_max30
+    op: '>'
+    value: 77.5466
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 8.35
+    round_to: null
+  - feature: home_dist_m
+    op: '>'
+    value: 1455.07
+    round_to: null
+- id: DC-13
+  state: wind
+  when: tele_gap_s > 23.5 (or missing) and radar_dev_max30 <= 77.55 and station_wind_mps > 4.75
+  training:
+    probability: 0.4071
+    instants: 230
+    variants: 18
+    episodes: 22
+  validation:
+    instants: 354
+    right: 13
+    precision: 0.0367
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: '>'
+    value: 23.5
+    round_to: null
+  - feature: radar_dev_max30
+    op: <=
+    value: 77.5466
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 4.75
+    round_to: null
+- id: DC-14
+  state: wind
+  when: tele_gap_s > 23.5 (or missing) and radar_dev_max30 > 77.55 (or missing) and station_wind_mps >
+    8.35 and home_dist_m <= 1455
+  training:
+    probability: 0.5299
+    instants: 133
+    variants: 6
+    episodes: 6
+  validation:
+    instants: 0
+    right: 0
+    precision: null
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: '>'
+    value: 23.5
+    round_to: null
+  - feature: radar_dev_max30
+    op: '>'
+    value: 77.5466
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 8.35
+    round_to: null
+  - feature: home_dist_m
+    op: <=
+    value: 1455.07
+    round_to: null
+- id: DC-15
+  state: spoofed_position
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps <= 3.95 and gps_radar_cusum_m <= 810.7 (or missing) and innovation_max10 > 12.3 and
+    gps_dev_slope > 1.278
+  training:
+    probability: 0.8552
+    instants: 124
+    variants: 17
+    episodes: 20
+  validation:
+    instants: 38
+    right: 38
+    precision: 1.0
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 3.95
+    round_to: null
+  - feature: gps_radar_cusum_m
+    op: <=
+    value: 810.724
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 12.3
+    round_to: null
+  - feature: gps_dev_slope
+    op: '>'
+    value: 1.2783
+    round_to: null
+- id: DC-16
+  state: spoofed_position
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps in (3.45, 3.95] and gps_radar_cusum_m > 810.7 and gps_dev_max30 <= 267 (or missing)
+  training:
+    probability: 0.5354
+    instants: 106
+    variants: 14
+    episodes: 15
+  validation:
+    instants: 25
+    right: 20
+    precision: 0.8
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 3.45
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 3.95
+    round_to: null
+  - feature: gps_radar_cusum_m
+    op: '>'
+    value: 810.724
+    round_to: null
+  - feature: gps_dev_max30
+    op: <=
+    value: 266.988
+    round_to: null
+- id: DC-17
+  state: wind
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps <= 3.95 and gps_radar_cusum_m <= 810.7 (or missing) and innovation_max10 > 12.3 and
+    gps_dev_slope <= 1.278 (or missing) and radar_dev_slope > 3.76
+  training:
+    probability: 0.9038
+    instants: 94
+    variants: 11
+    episodes: 17
+  validation:
+    instants: 13
+    right: 7
+    precision: 0.5385
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 3.95
+    round_to: null
+  - feature: gps_radar_cusum_m
+    op: <=
+    value: 810.724
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 12.3
+    round_to: null
+  - feature: gps_dev_slope
+    op: <=
+    value: 1.2783
+    round_to: null
+  - feature: radar_dev_slope
+    op: '>'
+    value: 3.75959
+    round_to: null
+- id: DC-18
+  state: wind
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps > 3.95 (or missing) and agc_db <= -24.85 (or missing) and radar_dev_slope > 0.9011
+    (or missing) and gps_dev_max30 > 2.929 (or missing) and radar_delay_s > 12.01 (or missing)
+  training:
+    probability: 0.2324
+    instants: 66
+    variants: 8
+    episodes: 22
+  validation:
+    instants: 129
+    right: 90
+    precision: 0.6977
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 3.95
+    round_to: null
+  - feature: agc_db
+    op: <=
+    value: -24.845
+    round_to: null
+  - feature: radar_dev_slope
+    op: '>'
+    value: 0.901095
+    round_to: null
+  - feature: gps_dev_max30
+    op: '>'
+    value: 2.92862
+    round_to: null
+  - feature: radar_delay_s
+    op: '>'
+    value: 12.0139
+    round_to: null
+- id: DC-19
+  state: dead_reckoning
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps > 3.95 (or missing) and agc_db <= -24.85 (or missing) and radar_dev_slope > 0.9011
+    (or missing) and gps_dev_max30 > 2.929 (or missing) and radar_delay_s <= 12.01
+  training:
+    probability: 0.2899
+    instants: 60
+    variants: 7
+    episodes: 12
+  validation:
+    instants: 27
+    right: 22
+    precision: 0.8148
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 3.95
+    round_to: null
+  - feature: agc_db
+    op: <=
+    value: -24.845
+    round_to: null
+  - feature: radar_dev_slope
+    op: '>'
+    value: 0.901095
+    round_to: null
+  - feature: gps_dev_max30
+    op: '>'
+    value: 2.92862
+    round_to: null
+  - feature: radar_delay_s
+    op: <=
+    value: 12.0139
+    round_to: null
+- id: DC-20
+  state: wind
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps > 3.95 (or missing) and agc_db <= -24.85 (or missing) and radar_dev_slope <= 0.9011
+    and radar_delay_s <= 4.753 (or missing)
+  training:
+    probability: 0.59
+    instants: 59
+    variants: 9
+    episodes: 25
+  validation:
+    instants: 52
+    right: 44
+    precision: 0.8462
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 3.95
+    round_to: null
+  - feature: agc_db
+    op: <=
+    value: -24.845
+    round_to: null
+  - feature: radar_dev_slope
+    op: <=
+    value: 0.901095
+    round_to: null
+  - feature: radar_delay_s
+    op: <=
+    value: 4.75283
+    round_to: null
+- id: DC-21
+  state: wind
+  when: tele_gap_s <= 23.5 and cn0_dbhz <= 47.85 (or missing) and gps_hacc_m <= 73.6 (or missing) and
+    station_wind_mps <= 3.95 and gps_radar_cusum_m > 810.7 and gps_dev_max30 > 267
+  training:
+    probability: 0.1792
+    instants: 55
+    variants: 7
+    episodes: 7
+  validation:
+    instants: 56
+    right: 10
+    precision: 0.1786
+  reject: false
+  thresholds:
+  - feature: tele_gap_s
+    op: <=
+    value: 23.5
+    round_to: null
+  - feature: cn0_dbhz
+    op: <=
+    value: 47.85
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 73.595
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 3.95
+    round_to: null
+  - feature: gps_radar_cusum_m
+    op: '>'
+    value: 810.724
+    round_to: null
+  - feature: gps_dev_max30
+    op: '>'
+    value: 266.988
+    round_to: null
+- id: DC-22
+  state: foreign_control
+  when: everything the rows above do not match
+  training:
+    probability: 0.9967
+    instants: 55508
+    variants: 185
+    episodes: 193
+  validation:
+    instants: 5132
+    right: 5071
+    precision: 0.9881
+  reject: false
+  thresholds: []

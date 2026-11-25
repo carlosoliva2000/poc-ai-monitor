@@ -1,0 +1,64 @@
+facet: radar.availability
+table: radar_availability
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: RA-01
+  state: out_of_range
+  when: age_radar > 1.5 and radar_range_ratio > 0.9964 (or missing)
+  training:
+    probability: 0.9924
+    instants: 38630
+    variants: 145
+    episodes: 234
+  validation:
+    instants: 8060
+    right: 8020
+    precision: 0.995
+  reject: false
+  thresholds:
+  - feature: age_radar
+    op: '>'
+    value: 1.5
+    round_to: null
+  - feature: radar_range_ratio
+    op: '>'
+    value: 0.996398
+    round_to: null
+- id: RA-02
+  state: no_data
+  when: age_radar > 1.5 and radar_range_ratio <= 0.9964
+  training:
+    probability: 0.983
+    instants: 6633
+    variants: 137
+    episodes: 137
+  validation:
+    instants: 1616
+    right: 1573
+    precision: 0.9734
+  reject: false
+  thresholds:
+  - feature: age_radar
+    op: '>'
+    value: 1.5
+    round_to: null
+  - feature: radar_range_ratio
+    op: <=
+    value: 0.996398
+    round_to: null
+- id: RA-03
+  state: normal
+  when: everything the rows above do not match
+  training:
+    probability: 0.9998
+    instants: 1248318
+    variants: 1678
+    episodes: 2019
+  validation:
+    instants: 257628
+    right: 257578
+    precision: 0.9998
+  reject: false
+  thresholds: []

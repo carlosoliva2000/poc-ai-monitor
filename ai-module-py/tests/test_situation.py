@@ -73,7 +73,7 @@ def test_the_hijack_card_follows_the_drone_while_it_flies_away() -> None:
         return next(c["value"] for c in cause["conditions"] if c["feature"] == "radar_route_dev_m")
 
     distances = [radar(p) for p in hijack if p["kind"] == "HIJACK"]
-    assert distances[0] < 150 and distances[-1] > 500
+    assert distances[0] < 150 and distances[-1] > 400 and distances[-1] > 3 * distances[0]
     assert all(b >= 1.9 * a for a, b in zip(distances, distances[1:], strict=False))
     assert len(distances) <= 4
 

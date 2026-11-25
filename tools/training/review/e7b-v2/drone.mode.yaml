@@ -1,0 +1,195 @@
+facet: drone.mode
+table: drone_mode
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: DM-01
+  state: failsafe_hold
+  when: mode_hold > 0.5
+  training:
+    probability: 0.9999
+    instants: 60114
+    variants: 83
+    episodes: 88
+  validation:
+    instants: 7730
+    right: 7727
+    precision: 0.9996
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: '>'
+    value: 0.5
+    round_to: null
+- id: DM-02
+  state: foreign_control
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma > 7.377 (or
+    missing) and age_autopilot_p > 1 (or missing)
+  training:
+    probability: 0.9624
+    instants: 53979
+    variants: 189
+    episodes: 250
+  validation:
+    instants: 9756
+    right: 9381
+    precision: 0.9616
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: '>'
+    value: 7.37741
+    round_to: null
+  - feature: age_autopilot_p
+    op: '>'
+    value: 1.0
+    round_to: null
+- id: DM-03
+  state: failsafe_return
+  when: mode_hold <= 0.5 (or missing) and mode_land <= 0.5 and mode_return > 0.5
+  training:
+    probability: 0.9978
+    instants: 36989
+    variants: 296
+    episodes: 309
+  validation:
+    instants: 7300
+    right: 7282
+    precision: 0.9975
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_return
+    op: '>'
+    value: 0.5
+    round_to: null
+- id: DM-04
+  state: foreign_control
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma <= 7.377 and
+    age_autopilot_p > 60.5
+  training:
+    probability: 0.597
+    instants: 2317
+    variants: 20
+    episodes: 64
+  validation:
+    instants: 2175
+    right: 1958
+    precision: 0.9002
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: <=
+    value: 7.37741
+    round_to: null
+  - feature: age_autopilot_p
+    op: '>'
+    value: 60.5
+    round_to: null
+- id: DM-05
+  state: failsafe_land
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma <= 7.377 and
+    age_autopilot_p <= 60.5 (or missing)
+  training:
+    probability: 0.142
+    instants: 2205
+    variants: 117
+    episodes: 132
+  validation:
+    instants: 3214
+    right: 544
+    precision: 0.1693
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: <=
+    value: 7.37741
+    round_to: null
+  - feature: age_autopilot_p
+    op: <=
+    value: 60.5
+    round_to: null
+- id: DM-06
+  state: failsafe_land
+  when: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma > 7.377 (or
+    missing) and age_autopilot_p <= 1
+  training:
+    probability: 0.0442
+    instants: 74
+    variants: 8
+    episodes: 10
+  validation:
+    instants: 319
+    right: 17
+    precision: 0.0533
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: mode_hold
+    op: <=
+    value: 0.5
+    round_to: null
+  - feature: mode_land
+    op: '>'
+    value: 0.5
+    round_to: null
+  - feature: radar_dev_sigma
+    op: '>'
+    value: 7.37741
+    round_to: null
+  - feature: age_autopilot_p
+    op: <=
+    value: 1.0
+    round_to: null
+- id: DM-07
+  state: mission
+  when: everything the rows above do not match
+  training:
+    probability: 0.9998
+    instants: 1241219
+    variants: 1680
+    episodes: 2373
+  validation:
+    instants: 262895
+    right: 262838
+    precision: 0.9998
+  confidence: confirmed
+  reject: false
+  thresholds: []

@@ -1,0 +1,89 @@
+# Filas rechazadas en la revisión de e7b-v3 (completas, para poder restaurarlas: volver a
+# ponerlas en su tabla de `tables_learned.yaml` y recalcular `tables_freeze.json`).
+dataset: e7b-v3
+date: '2026-11-25'
+tolerance_macro_f1: 0.005
+rows:
+- id: BE-06
+  facet: battery.endurance
+  table: battery_endurance
+  reason: 'probability 0.06: in its own training the state it gives is wrong more than 9 times out of
+    10 (the row exists because of the class weight)'
+  when:
+    battery_pct: '> 32.64999961853027, null'
+    home_time_ratio: '> 0.3642898052930832'
+    wind_est_over_airspeed: <= 0.8454915285110474, null
+  then:
+    state: cannot_reach_home
+    probability: 0.0632
+    confidence: possible
+    instants: 105
+    variants: 6
+    episodes: 6
+  note: 6 variants, 6 episodes, 105 training instants
+  readable: battery_pct > 32.65 (or missing) and wind_est_over_airspeed <= 0.8455 (or missing) and home_time_ratio
+    > 0.3643
+  validation:
+    instants: 796
+    right: 37
+    precision: 0.0465
+  effect_in_validation:
+    macro_f1_before: 0.8583
+    macro_f1_after: 0.8761
+    instants_changed: 796
+- id: DM-10
+  facet: drone.mode
+  table: drone_mode
+  reason: 'probability 0.08: in its own training the state it gives is wrong more than 9 times out of
+    10 (the row exists because of the class weight)'
+  when:
+    mode_hold: <= 0.5, null
+    mode_return: 'null'
+    mode_land: '> 0.5, null'
+    age_autopilot_p: (5.25..60.25], null
+    radar_dev_sigma: <= 5.698874235153198
+  then:
+    state: failsafe_land
+    probability: 0.0813
+    confidence: possible
+    instants: 823
+    variants: 46
+    episodes: 49
+  note: 46 variants, 49 episodes, 823 training instants
+  readable: mode_hold <= 0.5 (or missing) and mode_land > 0.5 (or missing) and radar_dev_sigma <= 5.699
+    and age_autopilot_p in (5.25, 60.25] (or missing) and mode_return is missing
+  validation:
+    instants: 1554
+    right: 158
+    precision: 0.1017
+  effect_in_validation:
+    macro_f1_before: 0.8477
+    macro_f1_after: 0.9121
+    instants_changed: 1554
+- id: LQ-03
+  facet: link.quality
+  table: link_quality
+  reason: 'probability 0.04: in its own training the state it gives is wrong more than 9 times out of
+    10 (the row exists because of the class weight)'
+  when:
+    link_loss_pct: '> 97.70000076293945'
+    link_rssi_dbm: '> -81.64999771118164, null'
+    link_latency_vs_base: <= 1.4065226912498474, null
+  then:
+    state: degraded
+    probability: 0.0375
+    confidence: possible
+    instants: 31
+    variants: 8
+    episodes: 11
+  note: 8 variants, 11 episodes, 31 training instants
+  readable: link_latency_vs_base <= 1.407 (or missing) and link_rssi_dbm > -81.65 (or missing) and link_loss_pct
+    > 97.7
+  validation:
+    instants: 200
+    right: 7
+    precision: 0.035
+  effect_in_validation:
+    macro_f1_before: 0.9167
+    macro_f1_after: 0.9404
+    instants_changed: 200

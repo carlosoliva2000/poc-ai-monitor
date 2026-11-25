@@ -1,0 +1,842 @@
+facet: environment.wind
+table: environment_wind
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: EW-01
+  state: notable
+  when: wind_est_mean5 > 5.045 (or missing) and wind_est_mps in (4.45, 10.25] and innovation_max10 <=
+    93.75 and agc_db > -1.56 (or missing)
+  training:
+    probability: 0.9938
+    instants: 480219
+    variants: 849
+    episodes: 6699
+  validation:
+    instants: 100400
+    right: 99764
+    precision: 0.9937
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 5.045
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 4.45
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 10.25
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 93.75
+    round_to: null
+  - feature: agc_db
+    op: '>'
+    value: -1.56
+    round_to: null
+- id: EW-02
+  state: notable
+  when: wind_est_mean5 > 4.923 (or missing) and wind_est_mps > 10.25 (or missing) and age_gnss > 76.5
+    (or missing) and station_wind_mps > 4.05
+  training:
+    probability: 0.9215
+    instants: 19523
+    variants: 64
+    episodes: 144
+  validation:
+    instants: 1305
+    right: 1115
+    precision: 0.8544
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 10.25
+    round_to: null
+  - feature: age_gnss
+    op: '>'
+    value: 76.5
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 4.05
+    round_to: null
+- id: EW-03
+  state: notable
+  when: wind_est_mean5 in (4.923, 5.045] and wind_est_mps <= 10.25 and innovation_max10 <= 93.75
+  training:
+    probability: 0.6647
+    instants: 13725
+    variants: 139
+    episodes: 6658
+  validation:
+    instants: 5044
+    right: 3266
+    precision: 0.6475
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mean5
+    op: <=
+    value: 5.045
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 10.25
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 93.75
+    round_to: null
+- id: EW-04
+  state: notable
+  when: wind_est_mean5 > 4.923 (or missing) and wind_est_mps in (10.25, 11.15] (or missing) and age_gnss
+    <= 76.5 and station_wind_mps in (3.65, 6.75] (or missing)
+  training:
+    probability: 0.8022
+    instants: 10786
+    variants: 284
+    episodes: 1426
+  validation:
+    instants: 2788
+    right: 2109
+    precision: 0.7565
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 10.25
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 11.15
+    round_to: null
+  - feature: age_gnss
+    op: <=
+    value: 76.5
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 3.65
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 6.75
+    round_to: null
+- id: EW-05
+  state: notable
+  when: wind_est_mean5 > 5.045 (or missing) and wind_est_mps in (4.45, 10.25] and innovation_max10 <=
+    93.75 and agc_db <= -1.56
+  training:
+    probability: 0.8466
+    instants: 10365
+    variants: 160
+    episodes: 912
+  validation:
+    instants: 3207
+    right: 2863
+    precision: 0.8927
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 5.045
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 4.45
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 10.25
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 93.75
+    round_to: null
+  - feature: agc_db
+    op: <=
+    value: -1.56
+    round_to: null
+- id: EW-06
+  state: beyond_limit
+  when: wind_est_mean5 > 4.923 (or missing) and wind_est_mps > 11.15 and age_gnss <= 76.5
+  training:
+    probability: 0.785
+    instants: 8596
+    variants: 173
+    episodes: 216
+  validation:
+    instants: 2369
+    right: 1830
+    precision: 0.7725
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 11.15
+    round_to: null
+  - feature: age_gnss
+    op: <=
+    value: 76.5
+    round_to: null
+- id: EW-07
+  state: notable
+  when: wind_est_mean5 > 4.923 (or missing) and wind_est_mps <= 10.25 and innovation_max10 > 93.75 (or
+    missing) and radar_dev_slope <= 1.326 and station_wind_mps > 3.25 (or missing)
+  training:
+    probability: 0.9404
+    instants: 2273
+    variants: 138
+    episodes: 280
+  validation:
+    instants: 713
+    right: 623
+    precision: 0.8738
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 10.25
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 93.75
+    round_to: null
+  - feature: radar_dev_slope
+    op: <=
+    value: 1.32612
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 3.25
+    round_to: null
+- id: EW-08
+  state: notable
+  when: wind_est_mean5 <= 4.79 and innovation_max10 <= 310.4 and innovation_m > 4.05 and station_wind_mps
+    > 3.85 (or missing)
+  training:
+    probability: 0.651
+    instants: 1259
+    variants: 62
+    episodes: 858
+  validation:
+    instants: 410
+    right: 272
+    precision: 0.6634
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: <=
+    value: 4.79
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 310.35
+    round_to: null
+  - feature: innovation_m
+    op: '>'
+    value: 4.05
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 3.85
+    round_to: null
+- id: EW-09
+  state: notable
+  when: wind_est_mean5 > 5.045 (or missing) and wind_est_mps <= 4.45 and innovation_max10 <= 93.75
+  training:
+    probability: 0.5727
+    instants: 1178
+    variants: 120
+    episodes: 974
+  validation:
+    instants: 374
+    right: 235
+    precision: 0.6283
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 5.045
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 4.45
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 93.75
+    round_to: null
+- id: EW-10
+  state: beyond_limit
+  when: wind_est_mean5 > 4.923 (or missing) and wind_est_mps in (10.25, 11.15] (or missing) and age_gnss
+    <= 76.5 and station_wind_mps > 6.75 and innovation_max10 > 8.95 (or missing)
+  training:
+    probability: 0.4421
+    instants: 722
+    variants: 25
+    episodes: 42
+  validation:
+    instants: 277
+    right: 81
+    precision: 0.2924
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 10.25
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 11.15
+    round_to: null
+  - feature: age_gnss
+    op: <=
+    value: 76.5
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 6.75
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 8.95
+    round_to: null
+- id: EW-11
+  state: beyond_limit
+  when: wind_est_mean5 > 4.923 (or missing) and wind_est_mps <= 10.25 and innovation_max10 > 93.75 (or
+    missing) and radar_dev_slope > 1.326 (or missing) and speed_gap_mps <= 6.35 (or missing)
+  training:
+    probability: 0.2329
+    instants: 411
+    variants: 17
+    episodes: 26
+  validation:
+    instants: 347
+    right: 39
+    precision: 0.1124
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 10.25
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 93.75
+    round_to: null
+  - feature: radar_dev_slope
+    op: '>'
+    value: 1.32612
+    round_to: null
+  - feature: speed_gap_mps
+    op: <=
+    value: 6.35
+    round_to: null
+- id: EW-12
+  state: notable
+  when: wind_est_mean5 <= 4.79 and innovation_max10 <= 310.4 and innovation_m <= 4.05 (or missing) and
+    wind_est_mps > 5.55
+  training:
+    probability: 0.5188
+    instants: 387
+    variants: 26
+    episodes: 292
+  validation:
+    instants: 142
+    right: 86
+    precision: 0.6056
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: <=
+    value: 4.79
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 310.35
+    round_to: null
+  - feature: innovation_m
+    op: <=
+    value: 4.05
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 5.55
+    round_to: null
+- id: EW-13
+  state: notable
+  when: wind_est_mean5 > 4.923 (or missing) and wind_est_mps in (10.25, 11.15] (or missing) and age_gnss
+    <= 76.5 and station_wind_mps > 6.75 and innovation_max10 <= 8.95
+  training:
+    probability: 1.0
+    instants: 333
+    variants: 15
+    episodes: 155
+  validation:
+    instants: 30
+    right: 30
+    precision: 1.0
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 10.25
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 11.15
+    round_to: null
+  - feature: age_gnss
+    op: <=
+    value: 76.5
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 6.75
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 8.95
+    round_to: null
+- id: EW-14
+  state: beyond_limit
+  when: wind_est_mean5 <= 4.923 and innovation_max10 > 310.4 (or missing) and radar_dev_slope > 1.338
+    and ground_speed_mps <= 14.45 (or missing) and cn0_vs_slow_db > -2.35
+  training:
+    probability: 0.2626
+    instants: 302
+    variants: 15
+    episodes: 16
+  validation:
+    instants: 372
+    right: 81
+    precision: 0.2177
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: <=
+    value: 4.9225
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 310.35
+    round_to: null
+  - feature: radar_dev_slope
+    op: '>'
+    value: 1.33847
+    round_to: null
+  - feature: ground_speed_mps
+    op: <=
+    value: 14.45
+    round_to: null
+  - feature: cn0_vs_slow_db
+    op: '>'
+    value: -2.35
+    round_to: null
+- id: EW-15
+  state: notable
+  when: wind_est_mean5 > 4.923 (or missing) and wind_est_mps <= 10.25 and innovation_max10 > 93.75 (or
+    missing) and radar_dev_slope > 1.326 (or missing) and speed_gap_mps > 6.35
+  training:
+    probability: 0.9924
+    instants: 261
+    variants: 14
+    episodes: 41
+  validation:
+    instants: 47
+    right: 46
+    precision: 0.9787
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 10.25
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 93.75
+    round_to: null
+  - feature: radar_dev_slope
+    op: '>'
+    value: 1.32612
+    round_to: null
+  - feature: speed_gap_mps
+    op: '>'
+    value: 6.35
+    round_to: null
+- id: EW-16
+  state: notable
+  when: wind_est_mean5 <= 4.923 and innovation_max10 > 310.4 (or missing) and radar_dev_slope > 1.338
+    and ground_speed_mps > 14.45
+  training:
+    probability: 0.9105
+    instants: 234
+    variants: 9
+    episodes: 14
+  validation:
+    instants: 8
+    right: 0
+    precision: 0.0
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: <=
+    value: 4.9225
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 310.35
+    round_to: null
+  - feature: radar_dev_slope
+    op: '>'
+    value: 1.33847
+    round_to: null
+  - feature: ground_speed_mps
+    op: '>'
+    value: 14.45
+    round_to: null
+- id: EW-17
+  state: calm
+  when: wind_est_mean5 > 4.923 (or missing) and wind_est_mps > 10.25 (or missing) and age_gnss > 76.5
+    (or missing) and station_wind_mps <= 2.95
+  training:
+    probability: 0.9935
+    instants: 19938
+    variants: 79
+    episodes: 232
+  validation:
+    instants: 1917
+    right: 1904
+    precision: 0.9932
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 10.25
+    round_to: null
+  - feature: age_gnss
+    op: '>'
+    value: 76.5
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 2.95
+    round_to: null
+- id: EW-18
+  state: calm
+  when: wind_est_mean5 > 4.923 (or missing) and wind_est_mps in (10.25, 11.15] (or missing) and age_gnss
+    <= 76.5 and station_wind_mps <= 3.65
+  training:
+    probability: 0.9279
+    instants: 12232
+    variants: 260
+    episodes: 473
+  validation:
+    instants: 2484
+    right: 2346
+    precision: 0.9444
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 10.25
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 11.15
+    round_to: null
+  - feature: age_gnss
+    op: <=
+    value: 76.5
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 3.65
+    round_to: null
+- id: EW-19
+  state: calm
+  when: wind_est_mean5 in (4.79, 4.923] and innovation_max10 <= 310.4 and gps_hacc_m > 1.565 (or missing)
+  training:
+    probability: 0.6734
+    instants: 12196
+    variants: 132
+    episodes: 5610
+  validation:
+    instants: 4191
+    right: 2586
+    precision: 0.617
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.79
+    round_to: null
+  - feature: wind_est_mean5
+    op: <=
+    value: 4.9225
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 310.35
+    round_to: null
+  - feature: gps_hacc_m
+    op: '>'
+    value: 1.565
+    round_to: null
+- id: EW-20
+  state: calm
+  when: wind_est_mean5 > 4.923 (or missing) and wind_est_mps > 10.25 (or missing) and age_gnss > 76.5
+    (or missing) and station_wind_mps in (2.95, 4.05] (or missing)
+  training:
+    probability: 0.8507
+    instants: 6398
+    variants: 42
+    episodes: 274
+  validation:
+    instants: 933
+    right: 547
+    precision: 0.5863
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mps
+    op: '>'
+    value: 10.25
+    round_to: null
+  - feature: age_gnss
+    op: '>'
+    value: 76.5
+    round_to: null
+  - feature: station_wind_mps
+    op: '>'
+    value: 2.95
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 4.05
+    round_to: null
+- id: EW-21
+  state: calm
+  when: wind_est_mean5 in (4.79, 4.923] and innovation_max10 <= 310.4 and gps_hacc_m <= 1.565
+  training:
+    probability: 0.9029
+    instants: 3776
+    variants: 39
+    episodes: 1380
+  validation:
+    instants: 1376
+    right: 1341
+    precision: 0.9746
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.79
+    round_to: null
+  - feature: wind_est_mean5
+    op: <=
+    value: 4.9225
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 310.35
+    round_to: null
+  - feature: gps_hacc_m
+    op: <=
+    value: 1.565
+    round_to: null
+- id: EW-22
+  state: calm
+  when: wind_est_mean5 <= 4.923 and innovation_max10 > 310.4 (or missing) and radar_dev_slope <= 1.338
+    (or missing)
+  training:
+    probability: 0.8687
+    instants: 3373
+    variants: 127
+    episodes: 203
+  validation:
+    instants: 638
+    right: 509
+    precision: 0.7978
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: <=
+    value: 4.9225
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 310.35
+    round_to: null
+  - feature: radar_dev_slope
+    op: <=
+    value: 1.33847
+    round_to: null
+- id: EW-23
+  state: calm
+  when: wind_est_mean5 <= 4.79 and innovation_max10 <= 310.4 and innovation_m > 4.05 and station_wind_mps
+    <= 3.85
+  training:
+    probability: 0.951
+    instants: 2696
+    variants: 135
+    episodes: 1494
+  validation:
+    instants: 671
+    right: 649
+    precision: 0.9672
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: <=
+    value: 4.79
+    round_to: null
+  - feature: innovation_max10
+    op: <=
+    value: 310.35
+    round_to: null
+  - feature: innovation_m
+    op: '>'
+    value: 4.05
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 3.85
+    round_to: null
+- id: EW-24
+  state: calm
+  when: wind_est_mean5 > 4.923 (or missing) and wind_est_mps <= 10.25 and innovation_max10 > 93.75 (or
+    missing) and radar_dev_slope <= 1.326 and station_wind_mps <= 3.25
+  training:
+    probability: 0.8471
+    instants: 399
+    variants: 72
+    episodes: 114
+  validation:
+    instants: 77
+    right: 61
+    precision: 0.7922
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: '>'
+    value: 4.9225
+    round_to: null
+  - feature: wind_est_mps
+    op: <=
+    value: 10.25
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 93.75
+    round_to: null
+  - feature: radar_dev_slope
+    op: <=
+    value: 1.32612
+    round_to: null
+  - feature: station_wind_mps
+    op: <=
+    value: 3.25
+    round_to: null
+- id: EW-25
+  state: calm
+  when: wind_est_mean5 <= 4.923 and innovation_max10 > 310.4 (or missing) and radar_dev_slope > 1.338
+    and ground_speed_mps <= 14.45 (or missing) and cn0_vs_slow_db <= -2.35 (or missing)
+  training:
+    probability: 0.766
+    instants: 216
+    variants: 18
+    episodes: 40
+  validation:
+    instants: 59
+    right: 45
+    precision: 0.7627
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5
+    op: <=
+    value: 4.9225
+    round_to: null
+  - feature: innovation_max10
+    op: '>'
+    value: 310.35
+    round_to: null
+  - feature: radar_dev_slope
+    op: '>'
+    value: 1.33847
+    round_to: null
+  - feature: ground_speed_mps
+    op: <=
+    value: 14.45
+    round_to: null
+  - feature: cn0_vs_slow_db
+    op: <=
+    value: -2.35
+    round_to: null
+- id: EW-26
+  state: calm
+  when: everything the rows above do not match
+  training:
+    probability: 0.9954
+    instants: 646429
+    variants: 956
+    episodes: 7054
+  validation:
+    instants: 137125
+    right: 136493
+    precision: 0.9954
+  reject: false
+  thresholds: []

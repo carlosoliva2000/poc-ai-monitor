@@ -1,0 +1,223 @@
+facet: environment.wind
+table: environment_wind
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: EW-01
+  state: notable
+  when: wind_est_mean5_over_limit > 0.4038 (or missing) and wind_est_over_limit <= 0.9247 and station_wind_over_limit
+    <= 0.8013 (or missing)
+  training:
+    probability: 0.9846
+    instants: 747666
+    variants: 1052
+    episodes: 6785
+  validation:
+    instants: 148683
+    right: 145865
+    precision: 0.981
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5_over_limit
+    op: '>'
+    value: 0.403817
+    round_to: null
+  - feature: wind_est_over_limit
+    op: <=
+    value: 0.924707
+    round_to: null
+  - feature: station_wind_over_limit
+    op: <=
+    value: 0.801312
+    round_to: null
+- id: EW-02
+  state: notable
+  when: wind_est_mean5_over_limit > 0.4038 (or missing) and wind_est_over_limit in (0.9247, 0.9324] (or
+    missing) and station_wind_over_limit in (0.3405, 0.6785]
+  training:
+    probability: 0.9522
+    instants: 33380
+    variants: 318
+    episodes: 1103
+  validation:
+    instants: 5422
+    right: 4582
+    precision: 0.8451
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5_over_limit
+    op: '>'
+    value: 0.403817
+    round_to: null
+  - feature: wind_est_over_limit
+    op: '>'
+    value: 0.924707
+    round_to: null
+  - feature: wind_est_over_limit
+    op: <=
+    value: 0.93243
+    round_to: null
+  - feature: station_wind_over_limit
+    op: '>'
+    value: 0.340463
+    round_to: null
+  - feature: station_wind_over_limit
+    op: <=
+    value: 0.678483
+    round_to: null
+- id: EW-03
+  state: beyond_limit
+  when: wind_est_mean5_over_limit > 0.4038 (or missing) and wind_est_over_limit > 0.9324
+  training:
+    probability: 0.6669
+    instants: 9467
+    variants: 190
+    episodes: 240
+  validation:
+    instants: 2616
+    right: 1744
+    precision: 0.6667
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5_over_limit
+    op: '>'
+    value: 0.403817
+    round_to: null
+  - feature: wind_est_over_limit
+    op: '>'
+    value: 0.93243
+    round_to: null
+- id: EW-04
+  state: beyond_limit
+  when: wind_est_mean5_over_limit > 0.4038 (or missing) and wind_est_over_limit in (0.9247, 0.9324] (or
+    missing) and station_wind_over_limit > 0.6785
+  training:
+    probability: 0.2336
+    instants: 638
+    variants: 21
+    episodes: 29
+  validation:
+    instants: 294
+    right: 195
+    precision: 0.6633
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5_over_limit
+    op: '>'
+    value: 0.403817
+    round_to: null
+  - feature: wind_est_over_limit
+    op: '>'
+    value: 0.924707
+    round_to: null
+  - feature: wind_est_over_limit
+    op: <=
+    value: 0.93243
+    round_to: null
+  - feature: station_wind_over_limit
+    op: '>'
+    value: 0.678483
+    round_to: null
+- id: EW-05
+  state: beyond_limit
+  when: wind_est_mean5_over_limit > 0.4038 (or missing) and wind_est_over_limit <= 0.9247 and station_wind_over_limit
+    > 0.8013
+  training:
+    probability: 0.1121
+    instants: 269
+    variants: 15
+    episodes: 25
+  validation:
+    instants: 744
+    right: 19
+    precision: 0.0255
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5_over_limit
+    op: '>'
+    value: 0.403817
+    round_to: null
+  - feature: wind_est_over_limit
+    op: <=
+    value: 0.924707
+    round_to: null
+  - feature: station_wind_over_limit
+    op: '>'
+    value: 0.801312
+    round_to: null
+- id: EW-06
+  state: beyond_limit
+  when: wind_est_mean5_over_limit <= 0.4038 and station_wind_over_limit > 0.4809
+  training:
+    probability: 0.108
+    instants: 253
+    variants: 13
+    episodes: 14
+  validation:
+    instants: 385
+    right: 10
+    precision: 0.026
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5_over_limit
+    op: <=
+    value: 0.403817
+    round_to: null
+  - feature: station_wind_over_limit
+    op: '>'
+    value: 0.480858
+    round_to: null
+- id: EW-07
+  state: calm
+  when: wind_est_mean5_over_limit > 0.4038 (or missing) and wind_est_over_limit in (0.9247, 0.9324] (or
+    missing) and station_wind_over_limit <= 0.3405 (or missing)
+  training:
+    probability: 0.8109
+    instants: 31636
+    variants: 217
+    episodes: 938
+  validation:
+    instants: 10648
+    right: 9646
+    precision: 0.9059
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: wind_est_mean5_over_limit
+    op: '>'
+    value: 0.403817
+    round_to: null
+  - feature: wind_est_over_limit
+    op: '>'
+    value: 0.924707
+    round_to: null
+  - feature: wind_est_over_limit
+    op: <=
+    value: 0.93243
+    round_to: null
+  - feature: station_wind_over_limit
+    op: <=
+    value: 0.340463
+    round_to: null
+- id: EW-08
+  state: calm
+  when: everything the rows above do not match
+  training:
+    probability: 0.9718
+    instants: 561319
+    variants: 711
+    episodes: 3994
+  validation:
+    instants: 136972
+    right: 134124
+    precision: 0.9792
+  confidence: confirmed
+  reject: false
+  thresholds: []

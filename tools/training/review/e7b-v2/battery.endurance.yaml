@@ -1,0 +1,482 @@
+facet: battery.endurance
+table: battery_endurance
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: BE-01
+  state: cannot_reach_home
+  when: battery_pct <= 17.75 and home_time_ratio > 0.3306 (or missing)
+  training:
+    probability: 0.8425
+    instants: 11833
+    variants: 171
+    episodes: 251
+  validation:
+    instants: 2734
+    right: 2300
+    precision: 0.8413
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: <=
+    value: 17.75
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.330633
+    round_to: null
+- id: BE-02
+  state: cannot_reach_home
+  when: battery_pct > 34.85 (or missing) and wind_est_over_airspeed > 0.8378 and ground_speed_over_cruise
+    <= 1.634 (or missing)
+  training:
+    probability: 0.4156
+    instants: 3486
+    variants: 71
+    episodes: 89
+  validation:
+    instants: 1535
+    right: 541
+    precision: 0.3524
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 34.85
+    round_to: null
+  - feature: wind_est_over_airspeed
+    op: '>'
+    value: 0.837767
+    round_to: null
+  - feature: ground_speed_over_cruise
+    op: <=
+    value: 1.6337
+    round_to: null
+- id: BE-03
+  state: cannot_reach_home
+  when: battery_pct <= 12.95 and home_time_ratio <= 0.3306
+  training:
+    probability: 0.6877
+    instants: 3237
+    variants: 133
+    episodes: 196
+  validation:
+    instants: 1005
+    right: 666
+    precision: 0.6627
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: <=
+    value: 12.95
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.330633
+    round_to: null
+- id: BE-04
+  state: cannot_reach_home
+  when: battery_pct in (17.75, 24.85] and home_time_ratio > 0.4925 (or missing)
+  training:
+    probability: 0.7008
+    instants: 3104
+    variants: 84
+    episodes: 92
+  validation:
+    instants: 1107
+    right: 906
+    precision: 0.8184
+  confidence: probable
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 17.75
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 24.85
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.492463
+    round_to: null
+- id: BE-05
+  state: cannot_reach_home
+  when: battery_pct in (24.85, 34.85] and home_time_ratio > 0.5181
+  training:
+    probability: 0.4438
+    instants: 813
+    variants: 30
+    episodes: 32
+  validation:
+    instants: 634
+    right: 138
+    precision: 0.2177
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 24.85
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 34.85
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.518114
+    round_to: null
+- id: BE-06
+  state: cannot_reach_home
+  when: battery_pct in (17.75, 24.85] and home_time_ratio in (0.3141, 0.4925] and wind_est_over_airspeed
+    > 0.419
+  training:
+    probability: 0.2893
+    instants: 361
+    variants: 14
+    episodes: 21
+  validation:
+    instants: 137
+    right: 26
+    precision: 0.1898
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 17.75
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 24.85
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.314111
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.492463
+    round_to: null
+  - feature: wind_est_over_airspeed
+    op: '>'
+    value: 0.418983
+    round_to: null
+- id: BE-07
+  state: cannot_reach_home
+  when: battery_pct in (24.85, 34.85] and home_time_ratio in (0.1782, 0.5181] (or missing) and wind_est_over_airspeed
+    > 0.4709 (or missing) and ground_speed_over_cruise <= 0.5995 (or missing)
+  training:
+    probability: 0.5165
+    instants: 250
+    variants: 5
+    episodes: 7
+  validation:
+    instants: 214
+    right: 27
+    precision: 0.1262
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 24.85
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 34.85
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.178234
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.518114
+    round_to: null
+  - feature: wind_est_over_airspeed
+    op: '>'
+    value: 0.470944
+    round_to: null
+  - feature: ground_speed_over_cruise
+    op: <=
+    value: 0.59951
+    round_to: null
+- id: BE-08
+  state: cannot_reach_home
+  when: battery_pct in (12.95, 17.75] and home_time_ratio <= 0.3306 and ground_speed_over_cruise <= 0.7725
+  training:
+    probability: 0.1784
+    instants: 122
+    variants: 7
+    episodes: 9
+  validation:
+    instants: 62
+    right: 60
+    precision: 0.9677
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 12.95
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 17.75
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.330633
+    round_to: null
+  - feature: ground_speed_over_cruise
+    op: <=
+    value: 0.772476
+    round_to: null
+- id: BE-09
+  state: cannot_reach_home
+  when: battery_pct in (24.85, 34.85] and home_time_ratio in (0.1782, 0.5181] (or missing) and wind_est_over_airspeed
+    > 0.4709 (or missing) and ground_speed_over_cruise > 0.5995
+  training:
+    probability: 0.0257
+    instants: 51
+    variants: 6
+    episodes: 12
+  validation:
+    instants: 248
+    right: 8
+    precision: 0.0323
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 24.85
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 34.85
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.178234
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.518114
+    round_to: null
+  - feature: wind_est_over_airspeed
+    op: '>'
+    value: 0.470944
+    round_to: null
+  - feature: ground_speed_over_cruise
+    op: '>'
+    value: 0.59951
+    round_to: null
+- id: BE-10
+  state: sufficient
+  when: battery_pct in (24.85, 34.85] and home_time_ratio in (0.1782, 0.5181] (or missing) and wind_est_over_airspeed
+    <= 0.4709
+  training:
+    probability: 0.9993
+    instants: 5858
+    variants: 117
+    episodes: 290
+  validation:
+    instants: 1213
+    right: 1213
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 24.85
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 34.85
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.178234
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.518114
+    round_to: null
+  - feature: wind_est_over_airspeed
+    op: <=
+    value: 0.470944
+    round_to: null
+- id: BE-11
+  state: sufficient
+  when: battery_pct in (24.85, 34.85] and home_time_ratio <= 0.1782
+  training:
+    probability: 1.0
+    instants: 4954
+    variants: 113
+    episodes: 128
+  validation:
+    instants: 911
+    right: 911
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 24.85
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 34.85
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.178234
+    round_to: null
+- id: BE-12
+  state: sufficient
+  when: battery_pct in (17.75, 24.85] and home_time_ratio <= 0.3141
+  training:
+    probability: 0.9976
+    instants: 4603
+    variants: 101
+    episodes: 114
+  validation:
+    instants: 809
+    right: 804
+    precision: 0.9938
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 17.75
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 24.85
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.314111
+    round_to: null
+- id: BE-13
+  state: sufficient
+  when: battery_pct in (17.75, 24.85] and home_time_ratio in (0.3141, 0.4925] and wind_est_over_airspeed
+    <= 0.419 (or missing)
+  training:
+    probability: 0.9938
+    instants: 1608
+    variants: 62
+    episodes: 130
+  validation:
+    instants: 191
+    right: 191
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 17.75
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 24.85
+    round_to: null
+  - feature: home_time_ratio
+    op: '>'
+    value: 0.314111
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.492463
+    round_to: null
+  - feature: wind_est_over_airspeed
+    op: <=
+    value: 0.418983
+    round_to: null
+- id: BE-14
+  state: sufficient
+  when: battery_pct in (12.95, 17.75] and home_time_ratio <= 0.3306 and ground_speed_over_cruise > 0.7725
+    (or missing)
+  training:
+    probability: 1.0
+    instants: 1298
+    variants: 46
+    episodes: 71
+  validation:
+    instants: 198
+    right: 198
+    precision: 1.0
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 12.95
+    round_to: null
+  - feature: battery_pct
+    op: <=
+    value: 17.75
+    round_to: null
+  - feature: home_time_ratio
+    op: <=
+    value: 0.330633
+    round_to: null
+  - feature: ground_speed_over_cruise
+    op: '>'
+    value: 0.772476
+    round_to: null
+- id: BE-15
+  state: sufficient
+  when: battery_pct > 34.85 (or missing) and wind_est_over_airspeed > 0.8378 and ground_speed_over_cruise
+    > 1.634
+  training:
+    probability: 0.9825
+    instants: 1238
+    variants: 213
+    episodes: 432
+  validation:
+    instants: 306
+    right: 300
+    precision: 0.9804
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: battery_pct
+    op: '>'
+    value: 34.85
+    round_to: null
+  - feature: wind_est_over_airspeed
+    op: '>'
+    value: 0.837767
+    round_to: null
+  - feature: ground_speed_over_cruise
+    op: '>'
+    value: 1.6337
+    round_to: null
+- id: BE-16
+  state: sufficient
+  when: everything the rows above do not match
+  training:
+    probability: 0.9999
+    instants: 1279010
+    variants: 1680
+    episodes: 3068
+  validation:
+    instants: 266242
+    right: 266205
+    precision: 0.9999
+  confidence: confirmed
+  reject: false
+  thresholds: []

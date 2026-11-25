@@ -6,6 +6,7 @@ Los umbrales están en las tablas (`tables.yaml`), nunca en el código, y no hay
 ni por el nombre del escenario.
 """
 
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -13,11 +14,14 @@ from poc_contracts.enums import DecidedBy, IncidentChange, IncidentKind, Inciden
 
 from ..decision.table import DecisionTables, Rule, load_tables
 from ..ids import IdAllocator
-from .features import WIND_LIMIT_MPS, FeatureExtractor, FeatureRow, GnssReference
+from .features import FeatureExtractor, FeatureRow
 from .policy import HERE, Policy, evidence_item, load_policy
 from .tracker import Incident, Tracker
 
 TABLE_NAME = "handwritten-video"
+# Provisional (tablas a mano del vídeo; la E7c lo sustituye por las tablas aprendidas):
+WIND_LIMIT_MPS = 12.0  # viento por encima del cual el dron no garantiza la ruta
+REFERENCE_WINDOW = 60  # mediana de 60 s para la referencia de C/N0 y AGC
 FACET_TABLES = {
     "gps.integrity": "gps_integrity",
     "link.availability": "link_availability",
@@ -35,6 +39,41 @@ FACET_EVIDENCE = {
     "link.availability": "link",
     "environment.wind": "autopilot",
 }
+
+
+def _median(values: deque[float]) -> float:
+    return sorted(values)[len(values) // 2]
+
+
+class GnssReference:
+    """Referencia de C/N0 y AGC de las tablas a mano: la mediana de los últimos 60 s, **congelada
+    mientras el GPS no es fiable** (una mediana que siguiera actualizándose subiría con el engaño y
+    lo dejaría de ver). Es un apaño del vídeo: depende de la salida de la tabla, así que no sirve
+    para entrenar; los árboles usan las referencias de `features.py`."""
+
+    def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
+        self._cn0: deque[float] = deque(maxlen=REFERENCE_WINDOW)
+        self._agc: deque[float] = deque(maxlen=REFERENCE_WINDOW)
+        self.cn0: float | None = None
+        self.agc: float | None = None
+
+    def deltas(self, row: FeatureRow) -> tuple[float | None, float | None]:
+        """C/N0 y AGC menos su referencia (la primera lectura es su propia referencia)."""
+        if row.cn0_dbhz is None or row.agc_db is None:
+            return None, None
+        if self.cn0 is None or self.agc is None:
+            self.cn0, self.agc = row.cn0_dbhz, row.agc_db
+        return row.cn0_dbhz - self.cn0, row.agc_db - self.agc
+
+    def update(self, row: FeatureRow, reliable: bool) -> None:
+        if not reliable or row.cn0_dbhz is None or row.agc_db is None:
+            return
+        self._cn0.append(row.cn0_dbhz)
+        self._agc.append(row.agc_db)
+        self.cn0, self.agc = _median(self._cn0), _median(self._agc)
 
 
 @dataclass

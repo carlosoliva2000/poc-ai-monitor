@@ -2,7 +2,9 @@
 
     uv run --project ai-module-py python -m ai_module.situation --platform http://127.0.0.1:8100
 
-La plataforma se arranca sin el módulo anterior (con `--no-ai`). Se reinicia con
+La plataforma se arranca sin el módulo anterior (con `--no-ai`). El monitor lee solo del bus: el
+plan de la misión lo toma de `MissionPlanned`, así que si arranca a mitad de un vuelo no lo tiene
+y no publica nada hasta el siguiente reinicio (limitación conocida). Se reinicia con
 `SimulationStarted` y `SimulationReset`; con `SimulationFinished` cierra el último segundo y, con
 el asistente preparado, publica el informe del escenario si tiene uno.
 """
@@ -19,7 +21,7 @@ from poc_contracts.enums import EventType
 from poc_contracts.envelope import Envelope
 from poc_contracts.ws import EventMessage, StateMessage
 
-from ..bus_client import DEFAULT_PLATFORM, BusClient, fetch_mission_plan
+from ..bus_client import DEFAULT_PLATFORM, BusClient
 from ..ids import IdAllocator
 from ..outbox import EventFactory, format_t
 from .monitor import SituationMonitor
@@ -37,7 +39,7 @@ class SituationProcess:
         self.ids = IdAllocator()
         self.factory = EventFactory(self.ids)
         self.monitor = SituationMonitor(self.ids)
-        self.bus = BusClient(platform_url, on_connected=self._on_connected)
+        self.bus = BusClient(platform_url)
         self.now = 0.0
         self.scenario: str | None = None
         self.run_id = ""
@@ -46,12 +48,6 @@ class SituationProcess:
             if assistant == "scripted"
             else None
         )
-
-    async def _on_connected(self) -> None:
-        """Si la simulación ya estaba en marcha, el plan se pide por HTTP."""
-        plan = await fetch_mission_plan(self.platform_url)
-        if plan and not self.monitor.features.waypoints:
-            self.monitor.set_plan(plan["waypoints"])
 
     def _reset(self) -> None:
         self.ids.reset()

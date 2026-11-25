@@ -1,0 +1,169 @@
+facet: gps.integrity
+table: gps_integrity
+how_to_review: Per row you can only change `reject` (true removes the row; its region goes to the default
+  row) and, in each threshold, `round_to` (the rounded value that replaces it). The default row cannot
+  be rejected.
+rows:
+- id: GI-01
+  state: spoofed
+  when: agc_vs_nominal_db <= -1.205 (or missing) and cn0_vs_nominal_db > -13.35 and cn0_vs_base_db > -3.45
+    (or missing)
+  training:
+    probability: 0.99
+    instants: 15779
+    variants: 229
+    episodes: 272
+  validation:
+    instants: 3534
+    right: 3508
+    precision: 0.9926
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: agc_vs_nominal_db
+    op: <=
+    value: -1.205
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: '>'
+    value: -13.35
+    round_to: null
+  - feature: cn0_vs_base_db
+    op: '>'
+    value: -3.45
+    round_to: null
+- id: GI-02
+  state: spoofed
+  when: agc_vs_nominal_db <= -1.205 (or missing) and cn0_vs_nominal_db > -13.35 and cn0_vs_base_db <=
+    -3.45 and agc_vs_slow_db <= -14.97
+  training:
+    probability: 0.9885
+    instants: 172
+    variants: 5
+    episodes: 12
+  validation:
+    instants: 41
+    right: 40
+    precision: 0.9756
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: agc_vs_nominal_db
+    op: <=
+    value: -1.205
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: '>'
+    value: -13.35
+    round_to: null
+  - feature: cn0_vs_base_db
+    op: <=
+    value: -3.45
+    round_to: null
+  - feature: agc_vs_slow_db
+    op: <=
+    value: -14.97
+    round_to: null
+- id: GI-03
+  state: spoofed
+  when: agc_vs_nominal_db <= -1.205 (or missing) and cn0_vs_nominal_db <= -13.35 (or missing) and gps_radar_cusum_sigma
+    > 0.2949 (or missing)
+  training:
+    probability: 0.0287
+    instants: 62
+    variants: 5
+    episodes: 28
+  validation:
+    instants: 421
+    right: 45
+    precision: 0.1069
+  confidence: possible
+  reject: false
+  thresholds:
+  - feature: agc_vs_nominal_db
+    op: <=
+    value: -1.205
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: <=
+    value: -13.35
+    round_to: null
+  - feature: gps_radar_cusum_sigma
+    op: '>'
+    value: 0.294938
+    round_to: null
+- id: GI-04
+  state: reliable
+  when: agc_vs_nominal_db <= -1.205 (or missing) and cn0_vs_nominal_db <= -13.35 (or missing) and gps_radar_cusum_sigma
+    <= 0.2949
+  training:
+    probability: 0.9981
+    instants: 11441
+    variants: 211
+    episodes: 2177
+  validation:
+    instants: 2279
+    right: 2273
+    precision: 0.9974
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: agc_vs_nominal_db
+    op: <=
+    value: -1.205
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: <=
+    value: -13.35
+    round_to: null
+  - feature: gps_radar_cusum_sigma
+    op: <=
+    value: 0.294938
+    round_to: null
+- id: GI-05
+  state: reliable
+  when: agc_vs_nominal_db <= -1.205 (or missing) and cn0_vs_nominal_db > -13.35 and cn0_vs_base_db <=
+    -3.45 and agc_vs_slow_db > -14.97 (or missing)
+  training:
+    probability: 1.0
+    instants: 4304
+    variants: 79
+    episodes: 297
+  validation:
+    instants: 908
+    right: 872
+    precision: 0.9604
+  confidence: confirmed
+  reject: false
+  thresholds:
+  - feature: agc_vs_nominal_db
+    op: <=
+    value: -1.205
+    round_to: null
+  - feature: cn0_vs_nominal_db
+    op: '>'
+    value: -13.35
+    round_to: null
+  - feature: cn0_vs_base_db
+    op: <=
+    value: -3.45
+    round_to: null
+  - feature: agc_vs_slow_db
+    op: '>'
+    value: -14.97
+    round_to: null
+- id: GI-06
+  state: reliable
+  when: everything the rows above do not match
+  training:
+    probability: 1.0
+    instants: 1290615
+    variants: 1680
+    episodes: 3151
+  validation:
+    instants: 267455
+    right: 267423
+    precision: 0.9999
+  confidence: confirmed
+  reject: false
+  thresholds: []
