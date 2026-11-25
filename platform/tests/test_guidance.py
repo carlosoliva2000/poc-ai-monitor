@@ -1,4 +1,4 @@
-"""Guiado de multirrotor (`simulator.multirotor_guidance`): lo que importa del lazo de velocidad."""
+"""Guiado de multirrotor: lo que importa del lazo de velocidad."""
 
 import math
 
@@ -16,11 +16,11 @@ NO_WIND = {"base": {"speed_mps": 0.0, "from_deg": 0.0}, "episodes": []}
 def multirotor(
     name: str = "nominal", wind: dict | None = None, **mission: object
 ) -> ScenarioConfig:
-    """Escenario con el guiado de multirrotor y los valores de un multirrotor (radio 5 m, giro
+    """Escenario con los valores de un multirrotor (radio 5 m, giro
     100 °/s, el yaw máximo del Matrice 300 RTK)."""
     base = scenario_config(name)
     drone = {**base.drone.model_dump(), "acceptance_radius_m": 5.0, "max_turn_rate_dps": 100.0}
-    over: dict = {"drone": drone, "simulator": {"multirotor_guidance": True}}
+    over: dict = {"drone": drone}
     if wind is not None:
         over["wind"] = wind
     if mission:

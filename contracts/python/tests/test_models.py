@@ -409,7 +409,6 @@ def test_sensor_episodes_are_optional_in_the_scenario() -> None:
     link = LinkConfig.model_validate(
         {
             "period_s": 5.0,
-            "controller_id": "GCS-1",
             "rssi_dbm": -62.0,
             "latency_ms": 45.0,
             "episodes": [{"start_s": 1.0, "end_s": 9.0, "ramp_s": 2.0, "latency_ms": 200.0}],

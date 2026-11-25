@@ -25,6 +25,7 @@ PENDING_E7C = {
     "test_guardrails.py": "payloads v0.19 (viento con racha)",
     "test_instructor.py": "importa `MAX_WIND_GUST_MPS` (quitado en v1.0)",
     "test_link_fill.py": "payloads v0.19",
+    "test_link_back_time.py": "`LinkStatus` sin `controller_id` (v1.0, paso 7b)",
     "test_link_recovery.py": "payloads v0.19",
     "test_main.py": "importa el módulo con la racha del instructor",
     "test_model_check.py": "importa el módulo con la racha del instructor",

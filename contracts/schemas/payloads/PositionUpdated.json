@@ -11,7 +11,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Posición del GPS. Con `simulator.gps_receiver`, **sin fix** (`fix: none`, `sats: 0`) el\nreceptor no da posición, altitud, velocidad ni rumbo: van a `null` (la estima del dron va en\n`AutopilotStatus`). Sin ese interruptor, sin fix publica su posición estimada (v0.19).",
+  "description": "Posición del GPS. **Sin fix** (`fix: none`, `sats: 0`) el receptor no da posición,\naltitud, velocidad ni rumbo: van a `null` (la estima del dron va en `AutopilotStatus`).",
   "properties": {
     "x": {
       "anyOf": [

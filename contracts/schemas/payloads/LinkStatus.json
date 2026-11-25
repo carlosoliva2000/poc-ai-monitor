@@ -1,19 +1,7 @@
 {
   "additionalProperties": false,
-  "description": "Enlace de mando medido por **nuestra estación** (v1.0). Con `simulator.link_physics`:\n`rssi_dbm` y `latency_ms` (`null` si no llega nada) y `packet_loss_pct` (paquetes de telemetría\nperdidos en los últimos 10 s; 100 con el enlace caído). `controller_id` es de antes de la\nv1.0: se retira al cerrar la E7a (paso 7b) y no lo publica el enlace con física (desde tierra\nel controlador ajeno no se ve: queda solo en la verdad).",
+  "description": "Enlace de mando medido por **nuestra estación** (v1.0): `rssi_dbm` y `latency_ms` (`null` si\nno llega nada) y `packet_loss_pct` (paquetes de telemetría perdidos en los últimos 10 s; 100 con\nel enlace caído). Desde tierra no se ve quién manda al dron: el controlador ajeno queda solo en\nla verdad.",
   "properties": {
-    "controller_id": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Controller Id"
-    },
     "rssi_dbm": {
       "anyOf": [
         {

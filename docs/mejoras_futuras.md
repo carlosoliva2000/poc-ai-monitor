@@ -146,3 +146,28 @@ La tabla de la E6 está congelada (`experiments/e6/table_freeze.json`): nada de 
 - **`recovery_misses` con la tabla:** sus motivos (`window_without_jump`, `no_metrics`) están pensados para el LLM; con la tabla convendría el motivo de la fila.
 - **`test_run_matrix.py` escribe en `runs/nominal/`:** cada pasada de la suite del módulo deja ejecuciones falsas nuevas (carpetas `runs/nominal/<run_id>/` con perfiles qwen3). Debería escribir en una carpeta temporal (`POC_RUNS_DIR`, que existe desde la E6).
 - **Rechazos que el modelo corrige:** la regla de la E6 los cuenta como errores de ciclo de vida (39 por repetición en L). Separar en las métricas los que acaban bien de los que acaban en fallback.
+
+## Después de la E8 (E9 y siguientes)
+Lista de Carlos del 25/11/2026, al cerrar la E7a. Nada de esto se hace ahora.
+
+**Simulador y escenarios**
+- **Altura del dron** (subir y bajar, con su consumo) y **acciones del plan**: pasar por un punto, descender, esperar X s y reanudar.
+- **Emisores de engaño e interferencia con efecto solo dentro de un radio** (hoy el efecto cae con la distancia en todo el mapa).
+- **Anomalía fuera de catálogo** (por ejemplo, un fallo de motor) para entrenar el «sin determinar».
+- **Facetas nuevas:** interferencia del GPS (con C/N0 y AGC), estación incoherente y consumo anómalo de la batería; **indicadores de integridad del receptor imperfectos** (hoy el receptor dice la verdad sobre su precisión).
+- **Generador:** dos fallos solapados de la misma fuente (el segundo se omite, pero se etiqueta).
+
+**Operador y asistente**
+- **Controles del operador sobre el dron** y **edición del plan desde la web**; **cursos de acción con interruptor de autonomía**; **ralentizar en vez de pausar**.
+- **DSPy con MLflow** para los prompts del asistente.
+- **Evidencias «en contra»** en la tarjeta de incidente; **otras señales reales del engaño** (saltos del reloj del receptor, incoherencias entre constelaciones); **LLM fuera de línea proponiendo filas** de la tabla para su revisión; **otros injects del instructor por texto**.
+
+**Arquitectura**
+- **Monitor de situación reducido a bordo del dron**: funciona sin enlace, con los sensores propios.
+- **API REST del simulador y dockerización:** el simulador como plataforma externa, un worker y un mediador por asset (SDK de CITADEL), y la IA como worker en el bus (el monitor y el traductor de órdenes del instructor, por separado).
+- **Decidir la actualización de Next.js 16.4.1** (`pnpm dev` avisa de un problema de seguridad y propone `next upgrade`; no se ha actualizado).
+
+**Restos del 7b (E7a)**
+- El detector y la tabla de la E6 siguen sin adaptarse al contrato v1.0 (`LinkStatus` sin `controller_id`, GPS sin posición sin fix); se rehacen en la E7c.
+- `experiments/e6-variantes/` (cuadrícula de variantes) todavía tiene la racha (`gust_mps`) del viento; hay que revisarla al reactivar los tests de las variantes.
+- `tools/experiments/check_freeze.py` da `CHANGED` en `platform/src/platform_app/tools/metrics.py`: viene de quitar la racha en la E7a (paso 1). La tabla de la E6 sigue congelada; si se vuelve a usar, hay que decidir si se refreza el hash o se rehace la tabla.

@@ -4,7 +4,7 @@ Modelos sencillos y documentados (valores ⚠️ salvo que se diga lo contrario)
 - **RSSI**: pérdidas en espacio libre, `RSSI = RSSI(1 km) − 20·log10(d_km)` con la distancia a la
   base, menos la atenuación de un episodio de degradación del enlace.
 - **Pérdida de paquetes**: logística en el RSSI (50 % con `loss_rssi50_dbm`).
-- **Emisores** (`simulator.emitters`): a la distancia `d` un emisor de potencia `P` (dB a 1 km,
+- **Emisores** : a la distancia `d` un emisor de potencia `P` (dB a 1 km,
   sobre el ruido) llega con `L = P − 20·log10(d_km)`. Interferencia: el C/N0 baja
   `10·log10(1 + 10^(L/10))` y el AGC baja lo mismo. Engaño: la señal falsa es más fuerte que la
   real: el C/N0 **sube** (como mucho `MAX_SPOOF_CN0_GAIN_DB`) y el AGC **baja** la mitad de esa

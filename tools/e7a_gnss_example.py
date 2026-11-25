@@ -19,22 +19,9 @@ from poc_contracts.scenario import ScenarioConfig  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "experiments" / "e7a"
-SWITCHES = {
-    "multirotor_guidance": True,
-    "onboard_estimator": True,
-    "gps_receiver": True,
-    "radar_geometry": True,
-    "ground_station": True,
-    "link_physics": True,
-    "battery_model": True,
-    "emitters": True,
-}
-
-
 def demo_with_spoofer() -> ScenarioConfig:
-    """`demo` con el simulador v2 (acto 1 con 18 m/s) y el emisor de engaño con posición."""
+    """`demo` (acto 1 con 18 m/s) y el emisor de engaño con posición."""
     raw = yaml.safe_load((ROOT / "scenarios" / "demo.yaml").read_text(encoding="utf-8"))
-    raw["simulator"] = SWITCHES
     raw["drone"].update({"acceptance_radius_m": 5.0, "max_turn_rate_dps": 100.0})
     raw["wind"]["episodes"][0]["speed_mps"] = 18.0
     raw["spoofing"]["emitter"] = {"x": 1400.0, "y": 1900.0, "power_db": 12.0}

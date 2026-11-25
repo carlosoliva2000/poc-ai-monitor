@@ -44,7 +44,7 @@ export type Position = {
 export type Track = { x: number; y: number; speed_mps: number; course_deg: number }
 export type Wind = { speed_mps: number; from_deg: number }
 /** Enlace medido por nuestra estación (v1.0): con el enlace caído, `rssi_dbm` y `latency_ms` son `null`. */
-export type Link = { controller_id?: string | null; rssi_dbm: number | null; latency_ms: number | null; packet_loss_pct?: number | null }
+export type Link = { rssi_dbm: number | null; latency_ms: number | null; packet_loss_pct?: number | null }
 export type Battery = { battery_pct: number; power_w?: number | null; time_remaining_s?: number | null }
 export type GnssStatus = { h_acc_m: number; cn0_dbhz: number; agc_db: number }
 export type AutopilotStatus = {
@@ -217,7 +217,7 @@ export type PlanFile = {
   duration_s: number
   waypoints: Waypoint[]
   trajectory: { t: number; x: number; y: number; speed_mps: number; heading_deg: number }[]
-  /** Posición y alcance del radar (solo con `simulator.radar_geometry`). */
+  /** Posición y alcance del radar. */
   radar?: { x: number; y: number; max_range_m: number }
 }
 /** Emisor o estación ajena con posición (solo en la verdad y en la vista del instructor). */

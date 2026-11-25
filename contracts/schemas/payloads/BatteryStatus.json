@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "Batería. Con `simulator.battery_model` lleva además la potencia consumida y el tiempo\nrestante al ritmo actual.",
+  "description": "Batería: carga, potencia consumida y tiempo restante al ritmo actual.",
   "properties": {
     "battery_pct": {
       "title": "Battery Pct",

@@ -1,6 +1,6 @@
 # E7a · Simulador v2
 
-Informe de la fase, **actualizado paso a paso**. Referencia: especificación del núcleo v2 (v1.0, 18/11/2026) y las dos consultas del 18/11. Estado: **pasos 1 a 6 y 7a hechos (parada del paso 7a para revisar)**; queda el 7b (borrar el camino antiguo y los interruptores, tras tu commit y con tu aviso previo).
+Informe de la fase, **actualizado paso a paso**. Referencia: especificación del núcleo v2 (v1.0, 18/11/2026) y las dos consultas del 18/11. Estado: **pasos 1 a 7b hechos (25/11/2026); parada del 7b para revisar**.
 
 ## Decisiones de Carlos (18/11/2026)
 1. `runs/` se regenera en el paso 1 solo por el contrato, con la prueba de la proyección.
@@ -293,3 +293,48 @@ El 7a está revisado y con su commit. **El 7b queda pendiente** por decisión de
 - Cierre: reglas 13 y 15 (`snapshots/e7a/`, `snapshots-limpias/e7a/` con sus `grep`), copia a `results/`, puertos 8000 y 8100 libres y mensaje de commit propuesto sin aplicar.
 
 **Decisión pendiente: Next.js 16.4.1.** `pnpm dev` mostró un aviso de seguridad y propuso `next upgrade`. No se ha actualizado. Carlos decide si se actualiza y cuándo.
+
+## Paso 7b · borrado del camino antiguo y documentación final (25/11/2026)
+Copia previa en `~/poc-backups/e7a/7b/`. La lista de lo que se borraba la aprobaste antes de empezar, con tres decisiones tuyas: `mission.controller_id` (por defecto `GCS-1`) para `mission_controller_id`, fuera `drain_pct_per_min` y la lista de «después de la E8» que me diste.
+
+### Qué se ha quitado
+- **`Simulator`** (`generator/simulator.py`): `_advance_legacy` y la rama de `_advance`; los ocho interruptores (`_multirotor`, `_link_phys`, `_emitters_on`, `_radar_geometry`, `_ground_station` y los `if` de `_gnss`, `_filter` y `_battery`); el `raise` de `set_mode`; la estima antigua `_est` (ahora `_gps_lost`, un booleano: la posición a estima ya era la del estimador) y `_speed`; `_battery` y `_filter` ya no son opcionales. `aim_point` **se queda**: lo usa el guiado de multirrotor. `perturbed` y `events` se quedan (el plan no lleva ruido del receptor).
+- **`sensors.py`**, **`build.py`**: fuera `link_payload` (el antiguo, con `link_hint`), el parámetro `geometry` del radar, la ruta de `battery_payload` sin modelo (y `drain_pct_per_min`) y la de `gps_payload` sin receptor; `plan.json` lleva siempre `radar`.
+- **Contratos** (`contracts/python`): `SimulatorConfig`, `ScenarioConfig.simulator`, `LinkHint`, `HijackConfig.link_hint`, `LinkConfig.controller_id`, `LinkStatus.controller_id` y `BatteryConfig.drain_pct_per_min`. **Nuevo:** `MissionConfig.controller_id` (opcional, `GCS-1`). `contracts/schemas/` regenerado (66 esquemas; cambian `scenario.json`, `LinkStatus.json` y las docstrings de `PositionUpdated`, `BatteryStatus` y `plan.json`).
+- **Escenarios:** fuera el bloque `simulator:`, `controller_id` del enlace y `drain_pct_per_min` en los 11 YAML (y en `platform/tests/data/degradations-example.yaml`).
+- **Tests de plataforma:** borrados `test_scenarios_without_episodes_are_byte_identical_to_runs` (11 casos; lo cubre `test_the_committed_runs_are_what_the_scenarios_generate`, que además compara `states.jsonl`) y `test_loss_is_navigation_on_estimate_it_ignores_the_wind` (probaba `_est`); quitados los overrides `simulator:` de `test_guidance`, `test_link_battery` y `test_receiver`. Pasan **348** (antes 360: −12). Contratos: 200 pasan y 1 se salta; en `test_doc_examples` desaparecen dos ejemplos en línea del documento (el `LinkStatus` con `controller_id` y `{ "battery_pct": 87.5 }` solo).
+- **Herramientas y web:** borrado `tools/e7a_guidance_compare.py` (comparaba con el camino antiguo; `experiments/e7a/` no se toca); `tools/e7a_gnss_example.py` sin `SWITCHES`; `link_hint` fuera de `tools/experiments/variants.py` y de `experiments/e6-variantes/grid.yaml`; `web/lib/contracts.ts` y `web/lib/format.ts` sin `controller_id` (typecheck y 65 pruebas de la web, bien).
+
+### `runs/` idéntico
+`git status runs/` limpio. Los once escenarios regenerados en un directorio temporal dan **los cinco ficheros** (`plan`, `truth`, `labels`, `events`, `states`) idénticos byte a byte a `runs/<escenario>/` (`test_the_committed_runs_are_what_the_scenarios_generate`, 11 casos; comprobado además a mano con `demo` y `endurance`). **No hay ficheros de `runs/` que cambien**; los PNG no se regeneran porque sus entradas son las mismas.
+
+### Módulo de IA (congelado)
+No se ha tocado el código. Quitar `LinkStatus.controller_id` rompe `detector.py` (`link.controller_id`, regla `LINK_ANOMALY`): ya estaba en la lista de pendientes de la E7c. Efecto en los tests: **`test_link_back_time.py` pasa a `PENDING_E7C`** (`tests/conftest.py`, «`LinkStatus` sin `controller_id`»). Comparado con la base de antes del 7b: **los mismos 15 fallos** que ya había (`test_evaluate*`, por los `runs/` nuevos de la E7a; no son del 7b) y 364 pasan (370 − 6 de `test_link_back_time`).
+
+### `check_freeze`
+`tools/experiments/check_freeze.py` da `CHANGED` en `platform/src/platform_app/tools/metrics.py`. **Viene de quitar la racha en la E7a (paso 1)**, no del 7b: no he tocado ninguno de los 15 ficheros congelados. La tabla de la E6 sigue sin cambios; si se vuelve a usar con el módulo adaptado, hay que decidir entre refrezar el hash o rehacer la tabla (apuntado en `docs/mejoras_futuras.md`).
+
+### Documentación final
+- `contracts/eventos.md`: **v1.0 completo** (cabecera reescrita sin «pasos pendientes»; sin `simulator:`, `link_hint`, `controller_id` del enlace ni `drain_pct_per_min` en el YAML; `mission.controller_id` documentado; el ejemplo del YAML valida con `test_doc_examples`).
+- `docs/quien_decide_que.md` (nota de cabecera: qué decide ahora el simulador, los failsafes y el generador; las filas del módulo de IA se rehacen en la E7c), `docs/01_definicion.md` (nota de que el §4 queda superado por el simulador v2; `LinkStatus` sin `controller_id`), `CLAUDE.md` raíz, `platform/CLAUDE.md`, `web/CLAUDE.md`, `ai-module-py/CLAUDE.md` y `scenarios/README.md` (el giro del morro es **100 °/s**, no 90).
+- `docs/mejoras_futuras.md`: sección «Después de la E8 (E9 y siguientes)» con tu lista, más los restos del 7b.
+- **Aviso:** la especificación del núcleo v2 debe actualizarse: giro del morro **100 °/s** en lugar de 90 (así está en los YAML y en los tests desde el 7a; solo el README decía 90).
+
+### Decisión pendiente
+Next.js 16.4.1 (aviso de seguridad de `pnpm dev`): sin actualizar, anotado en `docs/mejoras_futuras.md`.
+
+### Mensaje de commit propuesto (paso 7b)
+```
+feat: E7a step 7b - drop the old simulator path and the v2 switches
+
+Remove Simulator._advance_legacy, the old dead-reckoning estimate and
+every simulator: switch (YAML, SimulatorConfig and its validators,
+eventos.md). Remove HijackConfig.link_hint, LinkConfig.controller_id,
+LinkStatus.controller_id and BatteryConfig.drain_pct_per_min; the mission
+controller now comes from mission.controller_id (GCS-1 by default).
+runs/ is byte for byte identical. Drop the per-scenario sha256 test, the
+legacy-path tests and tools/e7a_guidance_compare.py. Final documentation:
+eventos.md v1.0, quien_decide_que, CLAUDE.md files, scenarios README and
+the post-E8 list in mejoras_futuras.
+```
+Recuerda hacer el commit antes de seguir con la E7b/E7c.

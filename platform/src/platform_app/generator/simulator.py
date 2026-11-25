@@ -171,40 +171,31 @@ class Simulator:
 
         self.n = 0
         self._i = 1  # índice del waypoint pendiente en la ruta
-        self._x = self._y = self._speed = 0.0
+        self._x = self._y = 0.0
         self._heading = bearing_deg(self.route[1][0], self.route[1][1])
-        self._est: Point | None = None  # estima del dron mientras no tiene GPS
-        # Guiado de multirrotor (`simulator.multirotor_guidance`): velocidad respecto al aire como
-        # vector, integral del error lateral y modo del autopiloto.
-        self._multirotor = config.simulator.multirotor_guidance
+        self._gps_lost = False  # `loss` activo: el dron navega sin GPS, a estima
+        # Guiado de multirrotor: velocidad respecto al aire como vector, integral del error
+        # lateral y modo del autopiloto.
         self._va: Point = (0.0, 0.0)
         self._int = 0.0
         self._mode = "mission"  # `mission` | `failsafe_hold` | `failsafe_return`
-        sim = config.simulator
-        # Receptor GPS realista y estimador a bordo (pasos 3 y 4): el ruido sale de generadores
-        # propios y se saca también en los vuelos sin eventos (la trayectoria depende de él).
-        self._gnss = GnssModel(config) if sim.gps_receiver and perturbed else None
+        # Receptor GPS realista y estimador a bordo: el ruido sale de generadores propios y se saca
+        # también en los vuelos sin eventos (la trayectoria depende de él). El plan (sin
+        # perturbaciones) no lleva ruido del receptor.
+        self._gnss = GnssModel(config) if perturbed else None
         self._gnss_last: GnssEpoch | None = None
-        self._filter = (
-            Estimator(
-                (0.0, 0.0), config.drone.estimator_position_gain, config.drone.estimator_wind_gain
-            )
-            if sim.onboard_estimator
-            else None
+        self._filter = Estimator(
+            (0.0, 0.0), config.drone.estimator_position_gain, config.drone.estimator_wind_gain
         )
         self._innovation: float | None = None
-        # Enlace con física, batería con consumo y emisores (pasos 5 y 6).
-        self._link_phys = sim.link_physics
-        self._emitters_on = sim.emitters
+        # Enlace con física, batería con consumo y emisores.
         self._link_rng = stable_rng(config.seed, "link_loss")
         self._pkt_history: deque[tuple[float, bool]] = deque()  # (instante, perdido) por paquete
         self._link_down_s = 0.0  # segundos seguidos sin enlace con nuestra estación (en el dron)
-        self._battery = Battery(config.sensors.battery) if sim.battery_model else None
+        self._battery = Battery(config.sensors.battery)
         self._emitter_state: tuple[float, float, tuple[str, ...]] = (0.0, 0.0, ())
         self._land_end: float | None = None  # instante en que acaba el aterrizaje
         self._cannot_reach_s = 0.0  # segundos seguidos en que la estima dice que no llega a casa
-        self._radar_geometry = sim.radar_geometry
-        self._ground_station = sim.ground_station
         self._hold: Point | None = None  # punto de espera en `failsafe_hold`
         self._leg_start: Point | None = None  # origen del tramo a casa en `failsafe_return`
         self.samples = [Sample(0, 0.0, 0.0, 0.0, 0.0, self._heading, (0.0, 0.0))]
@@ -238,11 +229,8 @@ class Simulator:
         return self.flight()
 
     def _believed(self) -> Point:
-        """Posición que cree tener el dron: la del estimador a bordo; si no, la estima sin GPS y, si
-        no, el GPS sin ruido."""
-        if self._filter is not None:
-            return self._filter.p
-        return self._est if self._est is not None else self.samples[self.n].gps
+        """Posición que cree tener el dron: la del estimador a bordo."""
+        return self._filter.p
 
     def _distance_to_waypoint(self) -> float:
         b, (gx, gy) = self.route[self._i], self._believed()
@@ -261,8 +249,6 @@ class Simulator:
         perpendicular del final del tramo (regla de PX4 y ArduPilot para no volver atrás)."""
         if self._distance_to_waypoint() < self.config.drone.acceptance_radius_m:
             return True
-        if not self._multirotor:
-            return False
         a, b = self._leg()
         u = unit(b[0] - a[0], b[1] - a[1])
         p = self._believed()
@@ -270,11 +256,9 @@ class Simulator:
 
     def set_mode(self, mode: str) -> None:
         """Cambia el modo del autopiloto (`mission`, `failsafe_hold`, `failsafe_return`,
-        `failsafe_land`); solo con el guiado de multirrotor. `failsafe_hold` mantiene la posición
+        `failsafe_land`). `failsafe_hold` mantiene la posición
         donde cree estar; `failsafe_return` va en línea recta a casa desde ahí y `failsafe_land` se
         mantiene y aterriza (`drone.land_duration_s`: termina el vuelo con `reason: landed`)."""
-        if not self._multirotor:
-            raise ValueError("the autopilot modes need simulator.multirotor_guidance")
         p = self._believed()
         self._hold = p if mode in ("failsafe_hold", "failsafe_land") else None
         if mode == "failsafe_land":
@@ -325,12 +309,12 @@ class Simulator:
     def _start_fault(self, source: SensorSource, fault: ActiveFault) -> None:
         self._faults[(source, fault.mode)] = fault
         if fault.mode == FaultMode.LOSS:
-            self._est = self.samples[self.n].gps  # arranca la estima donde cree estar
+            self._gps_lost = True  # sin GPS: el estimador solo predice
 
     def _end_fault(self, source: SensorSource, mode: FaultMode) -> None:
         fault = self._faults.pop((source, mode))
         if fault.mode == FaultMode.LOSS:
-            self._est = None  # el GPS vuelve: la posición salta a la real
+            self._gps_lost = False  # el GPS vuelve: el estimador vuelve a corregir
 
     def _fault_event(self, source: SensorSource, fault: ActiveFault, injected: bool) -> EventDraft:
         self._ids["sim"] += 1
@@ -443,7 +427,7 @@ class Simulator:
             "cruise_speed_mps": d.cruise_speed_mps,
             "altitude_m": d.altitude_m,
             "acceptance_radius_m": d.acceptance_radius_m,
-            "mission_controller_id": self.config.sensors.link.controller_id,
+            "mission_controller_id": m.controller_id,
             "waypoints": waypoints,
         }
         return [
@@ -510,13 +494,10 @@ class Simulator:
         if self._gnss is None or self.n == 0 or self.n % self._periods["gps"] != 0:
             return
         s = self.samples[self.n]
-        if self._emitters_on:
-            self._emitter_state = radio.emitter_effects(self.config, self.t, s.x, s.y)
+        self._emitter_state = radio.emitter_effects(self.config, self.t, s.x, s.y)
         ep = self._gnss.epoch(self.config, self.t, self._emitter_state[0], self._emitter_state[1])
         self._gnss_last = ep
-        if self._filter is None:
-            return
-        if self._est is not None:  # sin GPS: no hay medida que corrija
+        if self._gps_lost:  # sin GPS: no hay medida que corrija
             self._innovation = None
             return
         gx, gy = self.samples[self.n].gps
@@ -527,9 +508,7 @@ class Simulator:
     def _delivered(self) -> bool:
         """Llega el paquete de telemetría (la del dron: GPS, receptor, autopiloto, batería y
         puntos de paso). Siempre saca su número aleatorio, esté el enlace como esté, para que el
-        resto no cambie. Sin `link_physics` todo llega. Cuenta los perdidos para `LinkStatus`."""
-        if not self._link_phys:
-            return True
+        resto no cambie. Cuenta los perdidos para `LinkStatus`."""
         u = self._link_rng.random()
         s = self.samples[self.n]
         up = self._ours_link_up(s.x, s.y)
@@ -553,24 +532,23 @@ class Simulator:
     def _check_failsafes(self) -> None:
         """Failsafe del enlace (tras `link_loss_timeout_s` sin enlace) y de la batería (niveles de
         PX4 o «no llega a casa»). Con el dron secuestrado no obedece: manda el otro."""
-        if not self._multirotor or not self.perturbed:
+        if not self.perturbed:
             return
         if is_hijacked(self.t, self._hijack):
             self._link_down_s = 0.0
             return
         d, s = self.config.drone, self.samples[self.n]
-        if self._link_phys:
-            down = self._link_down_physical(s.x, s.y)
-            self._link_down_s = self._link_down_s + STEP_S if down else 0.0
-            action = {"hold": "failsafe_hold", "return": "failsafe_return", "land": "failsafe_land"}
-            if (
-                self._link_down_s >= d.link_loss_timeout_s
-                and self._mode == "mission"
-                and d.link_loss_action in action
-            ):
-                self.set_mode(action[d.link_loss_action])
+        down = self._link_down_physical(s.x, s.y)
+        self._link_down_s = self._link_down_s + STEP_S if down else 0.0
+        action = {"hold": "failsafe_hold", "return": "failsafe_return", "land": "failsafe_land"}
+        if (
+            self._link_down_s >= d.link_loss_timeout_s
+            and self._mode == "mission"
+            and d.link_loss_action in action
+        ):
+            self.set_mode(action[d.link_loss_action])
         b = self._battery
-        if b is None or self._mode == "failsafe_land":
+        if self._mode == "failsafe_land":
             return
         cfg = self.config.sensors.battery
         if b.soc_pct < cfg.failsafe_land_pct:
@@ -580,11 +558,8 @@ class Simulator:
         elif cfg.endurance_action == "return" and self._mode == "mission":
             # «No llega a casa»: la estimación depende mucho del viento estimado (al acercarse a la
             # velocidad máxima respecto al aire), así que tiene que mantenerse unos segundos.
-            wind = self._filter.wind if self._filter else None
-            if self._filter is not None:  # lo que cree: su velocidad estimada y un margen de viento
-                velocity = (self._va[0] + wind[0], self._va[1] + wind[1])
-            else:
-                velocity = (s.vx, s.vy)
+            wind = self._filter.wind  # lo que cree: su velocidad estimada y un margen de viento
+            velocity = (self._va[0] + wind[0], self._va[1] + wind[1])
             if self._can_reach_home(self._believed(), wind, velocity, ENDURANCE_WIND_MARGIN_MPS):
                 self._cannot_reach_s = 0.0
             else:
@@ -597,7 +572,6 @@ class Simulator:
     ) -> bool:
         """Con la energía que queda, ¿llega a casa con ese viento (el estimado a bordo o, sin
         estimador, el real) y con la reserva?"""
-        assert self._battery is not None
         d = self.config.drone
         w = wind if wind is not None else self._wind(self.t).vector()
         return self._battery.can_reach_home(
@@ -606,8 +580,6 @@ class Simulator:
 
     def _loss_pct(self, x: float, y: float) -> float:
         """Paquetes que se pierden de verdad (modelo, sin azar); 100 con el enlace caído."""
-        if not self._link_phys:
-            return 0.0
         if not self._ours_link_up(x, y):
             return 100.0
         return 100.0 * radio.loss_probability(
@@ -616,8 +588,6 @@ class Simulator:
 
     def _truth_can_reach_home(self, s: Sample) -> bool:
         """Verdad: con la energía que queda, la posición real y el viento real, ¿llega a casa?"""
-        if self._battery is None:
-            return True
         return self._can_reach_home((s.x, s.y), None, (s.vx, s.vy), ENDURANCE_WIND_MARGIN_MPS)
 
     def _station_wind(self, t: float) -> Wind:
@@ -631,8 +601,6 @@ class Simulator:
         return Wind(m.factor * speed, from_deg)
 
     def _radar_in_range(self, x: float, y: float) -> bool:
-        if not self._radar_geometry:
-            return True
         return sensors.radar_range_m(self.config, x, y) <= self.config.sensors.radar.max_range_m
 
     def _link_payload(self, rng: random.Random) -> dict:
@@ -703,29 +671,21 @@ class Simulator:
                 out.append(make_event(cfg, et, t, n // self._periods[name], payload))
 
         if n % self._periods["gps"] == 0:
-            loss = self._est is not None
-            if loss:
-                rad = math.radians(s.heading_deg)
-                vel = (self._speed * math.sin(rad), self._speed * math.cos(rad))
-                pos = self._est
-                if self._multirotor:
-                    vel = self._va  # a estima solo conoce su velocidad respecto al aire
-                if self._filter is not None:  # y, con el estimador, su viento estimado
-                    pos = self._filter.p
-                    vel = (self._va[0] + self._filter.wind[0], self._va[1] + self._filter.wind[1])
+            loss = self._gps_lost
+            if loss:  # a estima: la posición y la velocidad (con su viento estimado) del estimador
+                pos = self._filter.p
+                vel = (self._va[0] + self._filter.wind[0], self._va[1] + self._filter.wind[1])
             else:
                 dvx, dvy = spoof_offset_rate(t, self._spoofing)
                 pos, vel = s.gps, (s.vx + dvx, s.vy + dvy)
             payload = sensors.gps_payload(cfg, rng, pos, vel, loss, t, self._gnss_last)
             emit("gps", EventType.POSITION_UPDATED, SensorSource.GPS, payload, telemetry=True)
-            if self._gnss_last is not None:
-                payload = self._gnss_payload(loss)
-                emit("gps", EventType.GNSS_STATUS, SensorSource.GPS, payload, telemetry=True)
-            if self._filter is not None:
-                payload = self._autopilot_payload()
-                emit("gps", EventType.AUTOPILOT_STATUS, None, payload, telemetry=True)
+            payload = self._gnss_payload(loss)
+            emit("gps", EventType.GNSS_STATUS, SensorSource.GPS, payload, telemetry=True)
+            payload = self._autopilot_payload()
+            emit("gps", EventType.AUTOPILOT_STATUS, None, payload, telemetry=True)
         if n % self._periods["radar"] == 0:
-            payload = sensors.radar_payload(cfg, rng, s, self._radar_geometry)
+            payload = sensors.radar_payload(cfg, rng, s)
             if self._radar_in_range(s.x, s.y):  # fuera de alcance no hay traza (el ruido se gasta)
                 emit("radar", EventType.TRACK_UPDATED, SensorSource.RADAR, payload)
         if n % self._periods["meteo"] == 0:
@@ -733,22 +693,13 @@ class Simulator:
                 "meteo",
                 EventType.WIND_REPORTED,
                 SensorSource.METEO,
-                sensors.meteo_payload(
-                    cfg, rng, self._station_wind(t) if self._ground_station else self._wind(t)
-                ),
+                sensors.meteo_payload(cfg, rng, self._station_wind(t)),
             )
         if n % self._periods["link"] == 0:
-            if self._link_phys:
-                emit("link", EventType.LINK_STATUS, None, self._link_payload(rng))
-            else:
-                payload = sensors.link_payload(cfg, rng, t)
-                emit("link", EventType.LINK_STATUS, SensorSource.LINK, payload)
+            emit("link", EventType.LINK_STATUS, None, self._link_payload(rng))
         if n % self._periods["battery"] == 0:
-            model = None
-            if self._battery is not None:
-                b = self._battery
-                model = (b.soc_pct, b.power_w, b.time_remaining_s())
-            payload = sensors.battery_payload(cfg, rng, t, model)
+            b = self._battery
+            payload = sensors.battery_payload(rng, (b.soc_pct, b.power_w, b.time_remaining_s()))
             emit("battery", EventType.BATTERY_STATUS, SensorSource.BATTERY, payload, telemetry=True)
         return out
 
@@ -811,17 +762,14 @@ class Simulator:
         p = self._believed()
         hijacked = is_hijacked(t, self._hijack)
         wind = self._wind(t).vector() if self.perturbed else (0.0, 0.0)
-        known = (0.0, 0.0) if self._est is not None else wind
-        if self._filter is not None:  # el lazo de velocidad usa el viento que estima a bordo
-            known = self._filter.wind
+        known = self._filter.wind  # el lazo de velocidad usa el viento que estima a bordo
         cmd = limit_air_velocity(self._ground_command(p, hijacked), known, d.max_airspeed_mps)
         dvx, dvy = cmd[0] - self._va[0], cmd[1] - self._va[1]
         m, step_a = math.hypot(dvx, dvy), d.max_accel_mps2 * STEP_S
         if m > step_a:
             dvx, dvy = dvx * step_a / m, dvy * step_a / m
         self._va = (self._va[0] + dvx, self._va[1] + dvy)
-        if self._filter is not None:
-            self._filter.predict(self._va, STEP_S)
+        self._filter.predict(self._va, STEP_S)
         vx, vy = self._va[0] + wind[0], self._va[1] + wind[1]
         # el morro mira al siguiente punto (en espera se queda como está)
         target = self._target if hijacked else self.route[min(self._i, len(self.route) - 1)]
@@ -835,45 +783,14 @@ class Simulator:
                 self._heading = (self._heading + max(-step, min(step, err))) % 360.0
         self._x += vx * STEP_S
         self._y += vy * STEP_S
-        if self._est is not None:
-            self._est = (self._est[0] + self._va[0] * STEP_S, self._est[1] + self._va[1] * STEP_S)
         self.n += 1
         offset = spoof_offset(self.t, self._spoofing)
         self.samples.append(Sample(self.n, self._x, self._y, vx, vy, self._heading, offset))
 
     def _advance(self) -> None:
-        """Guiado, giro, aceleración, viento e integración: de `t` a `t + 0,1 s`."""
-        if self._multirotor:
-            self._advance_multirotor()
-        else:
-            self._advance_legacy()
-        if self._battery is not None:
-            air = math.hypot(*self._va) if self._multirotor else self._speed
-            self._battery.step(air, STEP_S)
-
-    def _advance_legacy(self) -> None:
-        d, t = self.config.drone, self.t
-        believed = self._believed()
-        if is_hijacked(t, self._hijack):
-            assert self._target is not None
-            aim = self._target
-        else:
-            aim = aim_point(self.route[self._i - 1], self.route[self._i], believed, d.lookahead_m)
-        err = angle_diff_deg(bearing_deg(aim[0] - believed[0], aim[1] - believed[1]), self._heading)
-        step = d.max_turn_rate_dps * STEP_S
-        self._heading = (self._heading + max(-step, min(step, err))) % 360.0
-        self._speed = min(d.cruise_speed_mps, self._speed + d.max_accel_mps2 * STEP_S)
-        wx, wy = self._wind(t).vector() if self.perturbed else (0.0, 0.0)
-        ax = self._speed * math.sin(math.radians(self._heading))
-        ay = self._speed * math.cos(math.radians(self._heading))
-        vx, vy = ax + wx, ay + wy
-        self._x += vx * STEP_S
-        self._y += vy * STEP_S
-        if self._est is not None:  # a estima: solo la velocidad respecto al aire
-            self._est = (self._est[0] + ax * STEP_S, self._est[1] + ay * STEP_S)
-        self.n += 1
-        offset = spoof_offset(self.t, self._spoofing)
-        self.samples.append(Sample(self.n, self._x, self._y, vx, vy, self._heading, offset))
+        """Guiado, lazo de velocidad, viento e integración: de `t` a `t + 0,1 s`."""
+        self._advance_multirotor()
+        self._battery.step(math.hypot(*self._va), STEP_S)
 
     # --- Verdad -------------------------------------------------------------------------------
 
@@ -885,7 +802,7 @@ class Simulator:
         hijack = is_hijacked(t, self._hijack)
         a, b = (self._hold, self._hold) if self._hold and not hijack else self._leg()
         _, ref = project_on_segment((s.x, s.y), a, b)
-        g, b = cfg.sensors.gps, cfg.sensors.battery
+        g = cfg.sensors.gps
         _, hdop = sensors.gps_quality(cfg, t)
         sigma = g.sigma_m * hdop / g.hdop
         if self._gnss_last is not None:
@@ -898,12 +815,8 @@ class Simulator:
             ref_dist_m=ref,
             est=self._believed(),
             mode="foreign_control" if hijack else self._mode,
-            link_up=self._ours_link_up(s.x, s.y)
-            if self._link_phys
-            else not (hijack or down[SensorSource.LINK]),
-            battery_soc=self._battery.soc_pct
-            if self._battery is not None
-            else max(0.0, min(100.0, b.start_pct - b.drain_pct_per_min * t / 60)),
+            link_up=self._ours_link_up(s.x, s.y),
+            battery_soc=self._battery.soc_pct,
             gps_sigma_m=sigma,
             cn0_dbhz=sensors.GNSS_CN0_NOMINAL_DBHZ + self._emitter_state[0],
             emitters_active=self._emitter_state[2],
@@ -959,7 +872,7 @@ class Simulator:
                 )
                 for s in chosen
             ],
-            emitters=radio.truth_emitters(self.config) if self._emitters_on else [],
+            emitters=radio.truth_emitters(self.config),
         )
 
 

@@ -27,7 +27,7 @@ class PlanSample(RunFile):
 
 
 class PlanRadar(RunFile):
-    """Posición y alcance del radar (solo con `simulator.radar_geometry`): para pintarlo."""
+    """Posición y alcance del radar: para pintarlo."""
 
     x: float
     y: float

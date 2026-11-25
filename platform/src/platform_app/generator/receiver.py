@@ -75,7 +75,7 @@ class GnssEpoch:
 
 
 class GnssModel:
-    """Receptor GPS realista (`simulator.gps_receiver`): ruido de posición con memoria más un ruido
+    """Receptor GPS realista : ruido de posición con memoria más un ruido
     blanco pequeño, σ proporcional al `hdop`, y `sats`/`hdop` con variación lenta y acotada."""
 
     def __init__(self, config: ScenarioConfig) -> None:

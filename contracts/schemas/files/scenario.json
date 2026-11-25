@@ -14,11 +14,6 @@
           "title": "Start Pct",
           "type": "number"
         },
-        "drain_pct_per_min": {
-          "minimum": 0,
-          "title": "Drain Pct Per Min",
-          "type": "number"
-        },
         "capacity_wh": {
           "default": 450.0,
           "exclusiveMinimum": 0,
@@ -68,8 +63,7 @@
       },
       "required": [
         "period_s",
-        "start_pct",
-        "drain_pct_per_min"
+        "start_pct"
       ],
       "title": "BatteryConfig",
       "type": "object"
@@ -370,17 +364,6 @@
         },
         "target": {
           "$ref": "#/$defs/Point"
-        },
-        "link_hint": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LinkHint"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
         }
       },
       "required": [
@@ -402,7 +385,7 @@
     },
     "JammerConfig": {
       "additionalProperties": false,
-      "description": "Emisor de interferencia con posición (`simulator.emitters`): baja el C/N0 y el AGC del\nreceptor según su distancia. Solo en la verdad y en la vista del instructor.",
+      "description": "Emisor de interferencia con posición: baja el C/N0 y el AGC del\nreceptor según su distancia. Solo en la verdad y en la vista del instructor.",
       "properties": {
         "id": {
           "title": "Id",
@@ -505,10 +488,6 @@
           "title": "Period S",
           "type": "number"
         },
-        "controller_id": {
-          "title": "Controller Id",
-          "type": "string"
-        },
         "rssi_dbm": {
           "title": "Rssi Dbm",
           "type": "number"
@@ -543,7 +522,6 @@
       },
       "required": [
         "period_s",
-        "controller_id",
         "rssi_dbm",
         "latency_ms"
       ],
@@ -607,30 +585,6 @@
       "title": "LinkEpisode",
       "type": "object"
     },
-    "LinkHint": {
-      "additionalProperties": false,
-      "properties": {
-        "controller_id": {
-          "title": "Controller Id",
-          "type": "string"
-        },
-        "rssi_dbm": {
-          "title": "Rssi Dbm",
-          "type": "number"
-        },
-        "latency_ms": {
-          "title": "Latency Ms",
-          "type": "number"
-        }
-      },
-      "required": [
-        "controller_id",
-        "rssi_dbm",
-        "latency_ms"
-      ],
-      "title": "LinkHint",
-      "type": "object"
-    },
     "MeteoConfig": {
       "additionalProperties": false,
       "properties": {
@@ -675,6 +629,11 @@
       "properties": {
         "id": {
           "title": "Id",
+          "type": "string"
+        },
+        "controller_id": {
+          "default": "GCS-1",
+          "title": "Controller Id",
           "type": "string"
         },
         "waypoints": {
@@ -831,54 +790,6 @@
         "battery"
       ],
       "title": "SensorsConfig",
-      "type": "object"
-    },
-    "SimulatorConfig": {
-      "additionalProperties": false,
-      "description": "Interruptores del simulador v2 (E7a): apagados, el comportamiento es el anterior, byte a\nbyte. Se eliminan al cerrar la E7a (paso 7b).",
-      "properties": {
-        "multirotor_guidance": {
-          "default": false,
-          "title": "Multirotor Guidance",
-          "type": "boolean"
-        },
-        "onboard_estimator": {
-          "default": false,
-          "title": "Onboard Estimator",
-          "type": "boolean"
-        },
-        "gps_receiver": {
-          "default": false,
-          "title": "Gps Receiver",
-          "type": "boolean"
-        },
-        "radar_geometry": {
-          "default": false,
-          "title": "Radar Geometry",
-          "type": "boolean"
-        },
-        "ground_station": {
-          "default": false,
-          "title": "Ground Station",
-          "type": "boolean"
-        },
-        "link_physics": {
-          "default": false,
-          "title": "Link Physics",
-          "type": "boolean"
-        },
-        "battery_model": {
-          "default": false,
-          "title": "Battery Model",
-          "type": "boolean"
-        },
-        "emitters": {
-          "default": false,
-          "title": "Emitters",
-          "type": "boolean"
-        }
-      },
-      "title": "SimulatorConfig",
       "type": "object"
     },
     "SpoofingConfig": {
@@ -1145,9 +1056,6 @@
     },
     "labeling": {
       "$ref": "#/$defs/LabelingConfig"
-    },
-    "simulator": {
-      "$ref": "#/$defs/SimulatorConfig"
     },
     "commands": {
       "default": [],

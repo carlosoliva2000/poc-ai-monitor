@@ -10,23 +10,12 @@ from platform_app.generator.energy import power_w
 from platform_app.generator.scenario_io import load_scenario
 from poc_contracts.scenario import ScenarioConfig
 
-FULL = {
-    "multirotor_guidance": True,
-    "onboard_estimator": True,
-    "gps_receiver": True,
-    "radar_geometry": True,
-    "ground_station": True,
-    "link_physics": True,
-    "battery_model": True,
-    "emitters": True,
-}
-
 
 def full(name: str = "nominal", drone: dict | None = None, **over: object) -> ScenarioConfig:
     base = scenario_config(name)
     d = {**base.drone.model_dump(), "acceptance_radius_m": 5.0, "max_turn_rate_dps": 100.0}
     d.update(drone or {})
-    return scenario_config(name, **{"drone": d, "simulator": FULL, **over})
+    return scenario_config(name, **{"drone": d, **over})
 
 
 def of_type(run, event_type: str) -> list:

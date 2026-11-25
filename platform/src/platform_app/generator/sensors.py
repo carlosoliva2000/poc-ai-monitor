@@ -19,7 +19,7 @@ from poc_contracts.scenario import ScenarioConfig
 
 from ..geometry import bearing_deg
 from .controller import STEP_S, Sample
-from .disturbances import Wind, is_hijacked
+from .disturbances import Wind
 
 if TYPE_CHECKING:
     from .receiver import GnssEpoch
@@ -76,23 +76,17 @@ def gps_payload(
     vel: tuple[float, float],
     loss: bool,
     t: float,
-    receiver: "GnssEpoch | None" = None,
+    receiver: "GnssEpoch",
 ) -> dict:
     """`PositionUpdated`. `pos` y `vel` son lo que cree el dron: con el engaño, la posición y la
     velocidad falsas; en pérdida, la estima y su velocidad respecto al aire (sin fix). La pérdida
     manda sobre un episodio de degradación."""
-    g = config.sensors.gps
-    if receiver is None:
-        sats, hdop = (0, GPS_LOSS_HDOP) if loss else gps_quality(config, t)
-        x, y = (
-            round(pos[0] + rng.gauss(0, g.sigma_m), 1),
-            round(pos[1] + rng.gauss(0, g.sigma_m), 1),
-        )
-    else:  # receptor realista: el ruido de posición viene del modelo; el del generador único
-        rng.gauss(0, 1)  # se sigue sacando (y se descarta) para no cambiar el de lo demás
-        rng.gauss(0, 1)
-        sats, hdop = (0, GPS_LOSS_HDOP) if loss else (receiver.sats, receiver.hdop)
-        x, y = round(pos[0] + receiver.noise[0], 1), round(pos[1] + receiver.noise[1], 1)
+    # El ruido de posición viene del receptor; el del generador único se saca igualmente (y se
+    # descarta) para no cambiar el de lo demás.
+    rng.gauss(0, 1)
+    rng.gauss(0, 1)
+    sats, hdop = (0, GPS_LOSS_HDOP) if loss else (receiver.sats, receiver.hdop)
+    x, y = round(pos[0] + receiver.noise[0], 1), round(pos[1] + receiver.noise[1], 1)
     payload: dict = {
         "x": x,
         "y": y,
@@ -103,7 +97,7 @@ def gps_payload(
         "sats": sats,
         "hdop": hdop,
     }
-    if loss and receiver is not None:  # un receptor sin fix no da posición, velocidad ni rumbo
+    if loss:  # un receptor sin fix no da posición, velocidad ni rumbo
         payload.update(x=None, y=None, alt_m=None, speed_mps=None, course_deg=None)
     return payload
 
@@ -114,19 +108,14 @@ def radar_range_m(config: ScenarioConfig, x: float, y: float) -> float:
     return math.hypot(x - r.x, y - r.y)
 
 
-def radar_sigma_m(config: ScenarioConfig, x: float, y: float, geometry: bool) -> float:
-    """σ de la posición del radar: la del YAML o, con `radar_geometry`, creciente con la
-    distancia."""
+def radar_sigma_m(config: ScenarioConfig, x: float, y: float) -> float:
+    """σ de la posición del radar: la del YAML más un término creciente con la distancia."""
     r = config.sensors.radar
-    if not geometry:
-        return r.sigma_m
     return r.sigma_m + r.sigma_per_km_m * radar_range_m(config, x, y) / 1000.0
 
 
-def radar_payload(
-    config: ScenarioConfig, rng: random.Random, s: Sample, geometry: bool = False
-) -> dict:
-    sigma = radar_sigma_m(config, s.x, s.y, geometry)
+def radar_payload(config: ScenarioConfig, rng: random.Random, s: Sample) -> dict:
+    sigma = radar_sigma_m(config, s.x, s.y)
     payload = {
         "x": round(s.x + rng.gauss(0, sigma), 1),
         "y": round(s.y + rng.gauss(0, sigma), 1),
@@ -159,22 +148,6 @@ def link_quality(config: ScenarioConfig, t: float) -> tuple[float, float]:
     return lk.rssi_dbm, lk.latency_ms
 
 
-def link_payload(config: ScenarioConfig, rng: random.Random, t: float) -> dict:
-    """`LinkStatus`. Durante un secuestro manda el enlace del secuestro (`link_hint`) sobre un
-    episodio de degradación."""
-    if is_hijacked(t, config.hijack):
-        hint = config.hijack.link_hint
-        controller, rssi, latency = hint.controller_id, hint.rssi_dbm, hint.latency_ms
-    else:
-        controller = config.sensors.link.controller_id
-        rssi, latency = link_quality(config, t)
-    return {
-        "controller_id": controller,
-        "rssi_dbm": round(rssi + rng.gauss(0, LINK_RSSI_SIGMA_DB), 1),
-        "latency_ms": round(max(1.0, latency + rng.gauss(0, LINK_LATENCY_SIGMA_MS)), 1),
-    }
-
-
 def link_payload_physics(
     config: ScenarioConfig,
     rng: random.Random,
@@ -196,22 +169,13 @@ def link_payload_physics(
     }
 
 
-def battery_payload(
-    config: ScenarioConfig,
-    rng: random.Random,
-    t: float,
-    model: tuple[float, float, float] | None = None,
-) -> dict:
-    """`BatteryStatus`. Con `battery_model`, `model` = (carga %, potencia W, tiempo restante s)."""
-    b = config.sensors.battery
+def battery_payload(rng: random.Random, model: tuple[float, float, float]) -> dict:
+    """`BatteryStatus`; `model` = (carga %, potencia W, tiempo restante s)."""
     noise = rng.gauss(0, BATTERY_PCT_SIGMA)
     rng.gauss(0, BATTERY_VOLTAGE_SIGMA_V)  # `voltage_v` ya no existe: se gasta y se descarta
-    if model is not None:
-        pct = min(100.0, max(0.0, model[0] + noise))
-        return {
-            "battery_pct": round(pct, 1),
-            "power_w": round(model[1], 0),
-            "time_remaining_s": round(model[2], 0),
-        }
-    pct = min(100.0, max(0.0, b.start_pct - b.drain_pct_per_min * t / 60 + noise))
-    return {"battery_pct": round(pct, 1)}
+    pct = min(100.0, max(0.0, model[0] + noise))
+    return {
+        "battery_pct": round(pct, 1),
+        "power_w": round(model[1], 0),
+        "time_remaining_s": round(model[2], 0),
+    }

@@ -1,6 +1,8 @@
 # PoC `poc-ai-monitor`: definición
 
 > Creado el 16/10/2026 (proyecto CITADEL). Es la referencia de diseño de la PoC. Si algo de aquí contradice a `contracts/eventos.md`, mandan los contratos.
+>
+> **E7a (simulador v2):** la física del §4 (controlador, secuestro, enlace, batería) quedó superada por la del simulador v2 (multirrotor, estimador a bordo, receptor GNSS, enlace con física, batería con consumo): ver `contracts/eventos.md` y `scenarios/README.md`. En particular, `LinkStatus` ya no lleva `controller_id`.
 
 ## 1. Para qué es
 
@@ -77,7 +79,7 @@ Reparto: la plataforma es el «mundo» (simulación, bus, historial y servicios 
 - Límites: velocidad de crucero ~15 m/s (para poder reutilizar el Isolation Forest del spike 2 en el futuro, que se entrenó con 12–18 m/s a 1 Hz), aceleración máxima, velocidad de giro máxima (deg/s).
 - **Controlador (guiado con punto de mira sobre el tramo):** proyecta la **posición que cree tener** (la del GPS) sobre el tramo pendiente y apunta a un punto `lookahead_m` por delante, con el giro limitado; cambia al siguiente waypoint cuando el GPS dice que está dentro del radio de aceptación. No compensa el viento de forma integral: con viento lateral queda un error estacionario de `lookahead · tan(asin(w/v))`, que es justo lo que hace visible el viento (≈ 8 m con 2 m/s; ≈ 50 m con 12 m/s). Perseguir directamente el waypoint **no vale**: con 3 m/s de viento ya da desviaciones de 100 m (comprobado).
 - **Viento:** vector que se suma a la velocidad (deriva). El controlador corrige solo, porque sigue el tramo.
-- **Secuestro:** desde `t_inicio`, el objetivo del controlador pasa a ser un punto que no está en el plan. Si el escenario lo indica, en `t_fin` se recupera el control y el dron **vuelve a seguir el tramo pendiente** (se reincorpora a la ruta). Pista: el `LinkStatus` cambia (otro `controller_id`, RSSI distinto).
+- **Secuestro:** desde `t_inicio`, el objetivo del controlador pasa a ser un punto que no está en el plan. Si el escenario lo indica, en `t_fin` se recupera el control y el dron **vuelve a seguir el tramo pendiente** (se reincorpora a la ruta). Pista (v1.0): nuestro enlace cae y la telemetría del dron deja de llegar.
 - **Referencia comprobada:** `ref/simcheck_controlador.py` implementa esta física sin sensores ni eventos. Con los YAML del paquete da: nominal ≤ 13 m; viento ≈ 52 m; spoofing con la verdad a ≈ 75 m y el GPS < 10 m hasta el fin del engaño; secuestro ≈ 700 m y reincorporación. El generador debe reproducir esa física (con su ruido encima).
 - **Spoofing:** desde `t_inicio`, el GPS reportado = posición real + un desfase que crece despacio en una dirección. Como el controlador se guía por el GPS, **el dron cree ir bien y se desvía de verdad**; el radar ve la posición real. En `t_fin` el desfase desaparece de golpe (el GPS «salta» a la verdad) y el controlador corrige.
 
@@ -88,7 +90,7 @@ Reparto: la plataforma es el «mundo» (simulación, bus, historial y servicios 
 | GPS del dron (`d1-gps`) | `PositionUpdated` | 1 s | σ ≈ 1,5 m; lleva velocidad y rumbo de navegación |
 | Radar de tierra (`radar-1`) | `TrackUpdated` | 2 s | σ ≈ 5 m; sin sesgo; ve la posición real |
 | Estación meteo (`meteo-1`) | `WindReported` | 10 s | velocidad media, racha y dirección **de procedencia** (convención meteorológica) |
-| Enlace de mando (`d1-link`) | `LinkStatus` | 5 s | `controller_id`, RSSI, latencia |
+| Enlace de mando (`d1-link`) | `LinkStatus` | 5 s | RSSI, latencia, pérdida de paquetes |
 | Batería (`d1-bat`) | `BatteryStatus` | 10 s | ruido de fondo: el agente debería ignorarla |
 | Misión (`d1-mission`) | `MissionPlanned`, `MissionStarted`, `WaypointReached`, `MissionCompleted` | por suceso | `WaypointReached` lo decide el dron con **su** GPS (bajo spoofing «alcanza» puntos que no ha alcanzado) |
 

@@ -10,20 +10,12 @@ from platform_app.generator.build import generate
 from platform_app.generator.simulator import Simulator
 from poc_contracts.scenario import ScenarioConfig
 
-ALL = {
-    "multirotor_guidance": True,
-    "onboard_estimator": True,
-    "gps_receiver": True,
-    "radar_geometry": True,
-    "ground_station": True,
-}
-
 
 def v2(name: str = "nominal", **over: object) -> ScenarioConfig:
-    """Escenario con todos los interruptores del simulador v2 y los valores de un multirrotor."""
+    """Escenario con los valores de un multirrotor."""
     base = scenario_config(name)
     drone = {**base.drone.model_dump(), "acceptance_radius_m": 5.0, "max_turn_rate_dps": 100.0}
-    return scenario_config(name, **{"drone": drone, "simulator": ALL, **over})
+    return scenario_config(name, **{"drone": drone, **over})
 
 
 def sensors_with(name: str = "nominal", **blocks: dict) -> dict:

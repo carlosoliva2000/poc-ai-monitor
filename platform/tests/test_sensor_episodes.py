@@ -1,10 +1,9 @@
 """E6: episodios de degradación del GPS y del enlace en el generador.
 
 Un episodio solo cambia el valor nominal sobre el que se publica la medida (sin números aleatorios
-nuevos): los escenarios sin episodios salen idénticos a los de `runs/`, byte a byte.
+nuevos): los escenarios sin episodios salen idénticos a los de `runs/` (`test_determinism`).
 """
 
-import hashlib
 import json
 from pathlib import Path
 
@@ -14,13 +13,11 @@ from pydantic import ValidationError
 
 from helpers import scenario_config
 from platform_app.generator.build import UNLABELED_FILE, generate, write_run
-from platform_app.paths import SCENARIOS_DIR
 from poc_contracts.run_files import LabelsFile, UnlabeledEpisodesFile
 from poc_contracts.scenario import ScenarioConfig
 
 EXAMPLE = Path(__file__).parent / "data" / "degradations-example.yaml"
 FILES = ["events.jsonl", "labels.json", "plan.json", "truth.json"]
-SCENARIOS = sorted(p.stem for p in SCENARIOS_DIR.glob("*.yaml"))
 
 
 def example_raw() -> dict:
@@ -40,20 +37,6 @@ def readings(config: ScenarioConfig, event_type: str) -> dict[float, dict]:
         for e in generate(config).events
         if e.type == event_type
     }
-
-
-def sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-@pytest.mark.parametrize("name", SCENARIOS)
-def test_scenarios_without_episodes_are_byte_identical_to_runs(
-    tmp_path: Path, runs_dir: Path, name: str
-) -> None:
-    out = write_run(generate(scenario_config(name)), tmp_path / name)
-    for f in FILES:
-        assert sha(out / f) == sha(runs_dir / name / f), f
-    assert not (out / UNLABELED_FILE).exists()
 
 
 def test_the_example_is_deterministic(tmp_path: Path) -> None:

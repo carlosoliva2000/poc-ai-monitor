@@ -31,12 +31,11 @@ class DroneConfig(Config):
     max_airspeed_mps: Positive = 17.0
     """Velocidad máxima respecto al aire con posicionamiento: modo P del Matrice 300 RTK, 17 m/s
     (en modo S, 23 m/s; https://www.dji.com/matrice-300/info). Separada de la de crucero: si el
-    viento la supera, el dron deriva. Solo con `simulator.multirotor_guidance`."""
+    viento la supera, el dron deriva."""
     lateral_ki_per_s: float = Field(default=0.05, ge=0)
     """Ganancia integral del error lateral (1/s) del guiado de multirrotor ⚠️."""
     link_loss_timeout_s: Positive = 10.0
-    """Failsafe de enlace: segundos sin enlace antes de actuar (PX4 `COM_DL_LOSS_T`: 10 s). Solo
-    con `simulator.link_physics`."""
+    """Failsafe de enlace: segundos sin enlace antes de actuar (PX4 `COM_DL_LOSS_T`: 10 s)."""
     link_loss_action: Literal["continue", "hold", "return", "land"] = "continue"
     """Qué hace al saltar el failsafe del enlace: seguir el plan (por defecto, como `NAV_DLL_ACT`
     = 0 de PX4), mantener la posición, volver a casa o aterrizar."""
@@ -57,6 +56,8 @@ class WaypointConfig(Config):
 
 class MissionConfig(Config):
     id: str
+    controller_id: str = "GCS-1"
+    """Controlador de la misión (`MissionPlanned.mission_controller_id`)."""
     waypoints: list[WaypointConfig] = Field(min_length=1)
     return_to_base: Literal[True]  # por ahora solo se admiten misiones con vuelta a la base
 
@@ -130,7 +131,7 @@ class GpsConfig(Config):
     hdop: float
     episodes: list[GpsEpisode] = Field(default_factory=list)
     gm_sigma_m: float = Field(default=1.5, ge=0)
-    """Receptor realista (`simulator.gps_receiver`): σ del error de posición con memoria
+    """Receptor realista: σ del error de posición con memoria
     (Gauss-Markov de primer orden) en cada eje ⚠️."""
     gm_tau_s: Positive = 90.0
     """Constante de tiempo de ese error (⚠️ 60–120 s)."""
@@ -148,7 +149,7 @@ class RadarConfig(Config):
     sigma_m: float = Field(ge=0)
     x: float = 0.0
     y: float = 0.0
-    """Posición del radar (`simulator.radar_geometry`; en el mapa)."""
+    """Posición del radar (en el mapa)."""
     sigma_per_km_m: float = Field(default=2.0, ge=0)
     """σ(distancia) = `sigma_m` + `sigma_per_km_m` · distancia en km ⚠️."""
     max_range_m: Positive = 6000.0
@@ -160,7 +161,7 @@ class MeteoConfig(Config):
     sigma_mps: float = Field(ge=0)
     sigma_deg: float = Field(ge=0)
     factor: Positive = 0.8
-    """Estación en tierra (`simulator.ground_station`): viento medido = viento en el dron ×
+    """Estación en tierra: viento medido = viento en el dron ×
     `factor` ⚠️ (0,7–0,9)."""
     lag_s: float = Field(default=30.0, ge=0)
     """Retraso: media móvil del viento de los últimos `lag_s` segundos ⚠️."""
@@ -168,9 +169,8 @@ class MeteoConfig(Config):
 
 class LinkConfig(Config):
     period_s: Positive
-    controller_id: str
     rssi_dbm: float
-    """RSSI nominal. Con `simulator.link_physics`, el de 1 km de la base (cae 20·log10(d))."""
+    """RSSI nominal: el de 1 km de la base (cae 20·log10(d))."""
     latency_ms: float
     rssi_floor_dbm: float = -95.0
     """Por debajo de esta señal no hay enlace (el failsafe empieza a contar) ⚠️."""
@@ -188,9 +188,8 @@ class LinkConfig(Config):
 class BatteryConfig(Config):
     period_s: Positive
     start_pct: float = Field(ge=0, le=100)
-    drain_pct_per_min: float = Field(ge=0)
     capacity_wh: Positive = 450.0
-    """`simulator.battery_model`: energía de la batería (⚠️, un cuadricóptero de ~5 kg)."""
+    """Energía de la batería (⚠️, un cuadricóptero de ~5 kg)."""
     hover_power_w: Positive = 400.0
     """Potencia en estacionario (⚠️); la curva en U del resto sale de Zeng et al."""
     efficiency: float = Field(default=0.75, gt=0, le=1)
@@ -246,7 +245,7 @@ class EmitterPosition(Config):
 
 
 class JammerConfig(Config):
-    """Emisor de interferencia con posición (`simulator.emitters`): baja el C/N0 y el AGC del
+    """Emisor de interferencia con posición: baja el C/N0 y el AGC del
     receptor según su distancia. Solo en la verdad y en la vista del instructor."""
 
     id: str
@@ -286,21 +285,13 @@ class Point(Config):
     y: float
 
 
-class LinkHint(Config):
-    controller_id: str
-    rssi_dbm: float
-    latency_ms: float
-
-
 class HijackConfig(Config):
     """Desde `start_s` el objetivo pasa a `target`; en `end_s` (`null`: nunca) vuelve el mando."""
 
     start_s: float = Field(ge=0)
     end_s: float | None
     target: Point
-    link_hint: LinkHint | None = None
-    """Pista del enlace de antes de la v1.0 (el controlador ajeno ya no se ve desde tierra); se
-    retira al cerrar la E7a. `target` es la posición de la estación del secuestrador."""
+    """`target` es la posición de la estación del secuestrador."""
 
     @model_validator(mode="after")
     def _check_window(self) -> "HijackConfig":
@@ -340,44 +331,6 @@ class LabelingConfig(Config):
     battery_critical_pct: Positive = 7.0
 
 
-class SimulatorConfig(Config):
-    """Interruptores del simulador v2 (E7a): apagados, el comportamiento es el anterior, byte a
-    byte. Se eliminan al cerrar la E7a (paso 7b)."""
-
-    multirotor_guidance: bool = False
-    """Guiado de multirrotor: control de velocidad con frenado, lazo de velocidad respecto al aire
-    con límite, integral lateral, radio de aceptación con la regla de la perpendicular y modos."""
-    onboard_estimator: bool = False
-    """El dron navega con su estima (GPS con ruido filtrado con la velocidad respecto al aire y el
-    viento estimado), publica `AutopilotStatus` y, sin GPS, sigue con el último viento estimado.
-    Necesita `multirotor_guidance` y `gps_receiver`."""
-    gps_receiver: bool = False
-    """Receptor GPS realista: ruido de posición con memoria más un ruido blanco pequeño, σ ∝ `hdop`,
-    `sats` y `hdop` con variación lenta y acotada, y `GnssStatus`."""
-    radar_geometry: bool = False
-    """Radar con posición: σ que crece con la distancia y alcance máximo."""
-    ground_station: bool = False
-    """Estación en tierra: viento del dron por un factor, con retraso."""
-    link_physics: bool = False
-    """Enlace con física: RSSI según la distancia a la base, pérdida de paquetes, telemetría que
-    solo llega si llega el paquete, y failsafe tras `drone.link_loss_timeout_s` sin enlace. El
-    secuestro y el `mute` del enlace son enlace caído; `LinkStatus` lo mide nuestra estación."""
-    battery_model: bool = False
-    """Batería con consumo (potencia de multirrotor), tiempo restante, energía para volver a casa y
-    failsafe por niveles o «no llega a casa»."""
-    emitters: bool = False
-    """C/N0 y AGC del receptor según la distancia a los emisores (engaño e interferencia).
-    Necesita `gps_receiver`."""
-
-    @model_validator(mode="after")
-    def _check_dependencies(self) -> "SimulatorConfig":
-        if self.onboard_estimator and not (self.multirotor_guidance and self.gps_receiver):
-            raise ValueError("onboard_estimator needs multirotor_guidance and gps_receiver")
-        if self.emitters and not self.gps_receiver:
-            raise ValueError("emitters needs gps_receiver")
-        return self
-
-
 class ScenarioConfig(Config):
     name: str
     description: str
@@ -393,5 +346,4 @@ class ScenarioConfig(Config):
     faults: list[FaultConfig]
     emitters: list[JammerConfig] = Field(default_factory=list)
     labeling: LabelingConfig = Field(default_factory=LabelingConfig)
-    simulator: SimulatorConfig = Field(default_factory=SimulatorConfig)
     commands: list[ScheduledCommand] = []  # opcional (v0.18): comandos del instructor programados

@@ -26,7 +26,6 @@ families:
   hijack:                     # 3 destinos × con y sin radar callado
     start_s: 335.0
     end_s: 380.0
-    link_hint: {controller_id: UNK-4F2A, rssi_dbm: -79.0, latency_ms: 120.0}
     target:
       south: {x: 1500.0, y: -1400.0}
       north: {x: 1800.0, y: 900.0}
@@ -71,14 +70,12 @@ families:
       spoofing: {start_s: 120.0, end_s: 175.0, drift_rate_mps: 1.5, direction_deg: 45.0}
     hijack-after-spoofing:
       spoofing: {start_s: 280.0, end_s: 330.0, drift_rate_mps: 1.5, direction_deg: 45.0}
-      hijack: {start_s: 333.0, end_s: 380.0, target: {x: 1500.0, y: -1400.0},
-               link_hint: {controller_id: UNK-4F2A, rssi_dbm: -79.0, latency_ms: 120.0}}
+      hijack: {start_s: 333.0, end_s: 380.0, target: {x: 1500.0, y: -1400.0}}
     gps-degraded-during-spoofing:
       spoofing: {start_s: 168.0, end_s: 222.0, drift_rate_mps: 1.5, direction_deg: 45.0}
       gps_episodes: [{start_s: 180.0, end_s: 210.0, ramp_s: 0.0, sats: 5, hdop: 6.0}]
     link-degraded-during-hijack:
-      hijack: {start_s: 335.0, end_s: 380.0, target: {x: 1500.0, y: -1400.0},
-               link_hint: {controller_id: UNK-4F2A, rssi_dbm: -79.0, latency_ms: 120.0}}
+      hijack: {start_s: 335.0, end_s: 380.0, target: {x: 1500.0, y: -1400.0}}
       link_episodes: [{start_s: 320.0, end_s: 400.0, ramp_s: 0.0, latency_ms: 200.0, rssi_dbm: -80.0}]
     loss-during-wind:
       wind: {start_s: 245.0, end_s: 300.0, ramp_s: 10.0, speed_mps: 12.0, gust_mps: 16.0, from_deg: 0.0}

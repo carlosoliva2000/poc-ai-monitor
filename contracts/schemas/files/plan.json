@@ -2,7 +2,7 @@
   "$defs": {
     "PlanRadar": {
       "additionalProperties": false,
-      "description": "Posición y alcance del radar (solo con `simulator.radar_geometry`): para pintarlo.",
+      "description": "Posición y alcance del radar: para pintarlo.",
       "properties": {
         "x": {
           "title": "X",

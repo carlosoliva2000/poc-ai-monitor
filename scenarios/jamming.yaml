@@ -33,8 +33,8 @@ sensors:
     episodes: [{start_s: 120.0, end_s: 260.0, ramp_s: 25.0, sats: 7, hdop: 3.0}]
   radar: {period_s: 2.0, sigma_m: 5.0}
   meteo: {period_s: 10.0, sigma_mps: 0.5, sigma_deg: 8.0}
-  link: {period_s: 5.0, controller_id: GCS-1, rssi_dbm: -62.0, latency_ms: 45.0}
-  battery: {period_s: 10.0, start_pct: 100.0, drain_pct_per_min: 1.2}
+  link: {period_s: 5.0, rssi_dbm: -62.0, latency_ms: 45.0}
+  battery: {period_s: 10.0, start_pct: 100.0}
 
 wind:
   base: {speed_mps: 2.0, from_deg: 300.0}
@@ -49,13 +49,3 @@ faults:
 
 emitters:
   - {id: jammer-1, x: 900.0, y: 1500.0, power_db: 8.0, start_s: 110.0, end_s: 270.0}
-
-simulator:
-  multirotor_guidance: true
-  onboard_estimator: true
-  gps_receiver: true
-  radar_geometry: true
-  ground_station: true
-  link_physics: true
-  battery_model: true
-  emitters: true

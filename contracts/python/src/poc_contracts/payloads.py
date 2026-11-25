@@ -73,9 +73,8 @@ class MissionCompleted(Payload):
 
 
 class PositionUpdated(Payload):
-    """Posición del GPS. Con `simulator.gps_receiver`, **sin fix** (`fix: none`, `sats: 0`) el
-    receptor no da posición, altitud, velocidad ni rumbo: van a `null` (la estima del dron va en
-    `AutopilotStatus`). Sin ese interruptor, sin fix publica su posición estimada (v0.19)."""
+    """Posición del GPS. **Sin fix** (`fix: none`, `sats: 0`) el receptor no da posición,
+    altitud, velocidad ni rumbo: van a `null` (la estima del dron va en `AutopilotStatus`)."""
 
     x: float | None
     y: float | None
@@ -100,21 +99,18 @@ class WindReported(Payload):
 
 
 class LinkStatus(Payload):
-    """Enlace de mando medido por **nuestra estación** (v1.0). Con `simulator.link_physics`:
-    `rssi_dbm` y `latency_ms` (`null` si no llega nada) y `packet_loss_pct` (paquetes de telemetría
-    perdidos en los últimos 10 s; 100 con el enlace caído). `controller_id` es de antes de la
-    v1.0: se retira al cerrar la E7a (paso 7b) y no lo publica el enlace con física (desde tierra
-    el controlador ajeno no se ve: queda solo en la verdad)."""
+    """Enlace de mando medido por **nuestra estación** (v1.0): `rssi_dbm` y `latency_ms` (`null` si
+    no llega nada) y `packet_loss_pct` (paquetes de telemetría perdidos en los últimos 10 s; 100 con
+    el enlace caído). Desde tierra no se ve quién manda al dron: el controlador ajeno queda solo en
+    la verdad."""
 
-    controller_id: str | None = None
     rssi_dbm: float | None
     latency_ms: float | None
     packet_loss_pct: float | None = None
 
 
 class BatteryStatus(Payload):
-    """Batería. Con `simulator.battery_model` lleva además la potencia consumida y el tiempo
-    restante al ritmo actual."""
+    """Batería: carga, potencia consumida y tiempo restante al ritmo actual."""
 
     battery_pct: float
     power_w: float | None = None

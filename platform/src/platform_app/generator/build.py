@@ -181,7 +181,7 @@ def _blockers(
     config: ScenarioConfig, episode: GpsEpisode | LinkEpisode
 ) -> list[tuple[float, float]]:
     """Ventanas en que el generador anula un episodio: la pérdida del GPS (sin fix) para uno del
-    GPS y el secuestro (manda su `link_hint`) para uno del enlace."""
+    GPS y el secuestro (enlace caído) para uno del enlace."""
     if isinstance(episode, GpsEpisode):
         return [(f.start_s, f.end_s) for f in config.faults if f.mode == FaultMode.LOSS]
     h = config.hijack
@@ -277,10 +277,8 @@ def _plan_file(config: ScenarioConfig, plan: Flight, etas: list[float]) -> PlanF
     )
 
 
-def _plan_radar(config: ScenarioConfig) -> PlanRadar | None:
-    """Posición y alcance del radar, solo con `simulator.radar_geometry` (para pintarlo)."""
-    if not config.simulator.radar_geometry:
-        return None
+def _plan_radar(config: ScenarioConfig) -> PlanRadar:
+    """Posición y alcance del radar (para pintarlo)."""
     r = config.sensors.radar
     return PlanRadar(x=r.x, y=r.y, max_range_m=r.max_range_m)
 

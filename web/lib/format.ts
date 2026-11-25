@@ -144,7 +144,7 @@ export function payloadSummary(e: Envelope): string {
       return `${n(p.speed_mps)} m/s from ${n(p.from_deg, 0)}°`
     case 'LinkStatus':
       if (p.rssi_dbm === null) return `link lost (${n(p.packet_loss_pct, 0)} % packets lost)`
-      return `${p.controller_id ? `${p.controller_id} ` : ''}rssi=${n(p.rssi_dbm, 0)} dBm lat=${n(p.latency_ms, 0)} ms${p.packet_loss_pct != null ? ` loss=${n(p.packet_loss_pct, 0)} %` : ''}`
+      return `rssi=${n(p.rssi_dbm, 0)} dBm lat=${n(p.latency_ms, 0)} ms${p.packet_loss_pct != null ? ` loss=${n(p.packet_loss_pct, 0)} %` : ''}`
     case 'BatteryStatus':
       return `${n(p.battery_pct, 0)} %${p.power_w != null ? ` · ${n(p.power_w, 0)} W · ${n(Number(p.time_remaining_s) / 60, 0)} min left` : ''}`
     case 'GnssStatus':

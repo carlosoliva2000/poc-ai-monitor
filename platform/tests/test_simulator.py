@@ -105,29 +105,6 @@ def test_gps_during_a_loss_has_no_fix_and_is_the_estimate() -> None:
     assert {e.payload["fix"] for e in outside} == {"3d"}
 
 
-def test_loss_is_navigation_on_estimate_it_ignores_the_wind() -> None:
-    """Sin viento la estima coincide con la verdad; con viento, se separa `viento · tiempo`."""
-    calm = scenario_config(
-        "nominal", wind={"base": {"speed_mps": 0, "from_deg": 0}, "episodes": []}
-    )
-    sim = Simulator(calm)
-    while sim.t < 50:
-        sim.step()
-    sim.set_fault(GPS, FaultMode.LOSS, True, MANUAL)
-    while sim.t < 80:
-        sim.step()
-    assert math.dist(sim._est, (sim.samples[-1].x, sim.samples[-1].y)) < 1e-6  # noqa: SLF001
-
-    windy = Simulator(scenario_config("nominal"))  # 2 m/s de base
-    while windy.t < 50:
-        windy.step()
-    windy.set_fault(GPS, FaultMode.LOSS, True, MANUAL)
-    while windy.t < 80:
-        windy.step()
-    gap = math.dist(windy._est, (windy.samples[-1].x, windy.samples[-1].y))  # noqa: SLF001
-    assert gap == pytest.approx(2.0 * 30, rel=0.05)
-
-
 def test_manual_fault_rules() -> None:
     sim = Simulator(scenario_config("faults"))
     with pytest.raises(ValueError, match="only exists for the GPS"):

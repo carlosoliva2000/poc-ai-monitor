@@ -44,8 +44,8 @@ def test_another_seed_changes_the_noise_and_the_trajectory_but_not_the_plan(tmp_
      "nominal-wind-cmd", "endurance", "jamming"],
 )  # fmt: skip
 def test_the_committed_runs_are_what_the_scenarios_generate(tmp_path: Path, name: str) -> None:
-    """`runs/<escenario>/` versionado = lo que genera el escenario tal cual (con los interruptores
-    del simulador v2 como estén en su YAML): ningún cambio se cuela sin regenerar `runs/`."""
+    """`runs/<escenario>/` versionado = lo que genera el escenario tal cual: ningún cambio se
+    cuela sin regenerar `runs/`."""
     from platform_app.generator.scenario_io import load_scenario
     from platform_app.paths import RUNS_DIR
 

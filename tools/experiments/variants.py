@@ -69,8 +69,7 @@ def _hijack(spec: dict[str, Any]) -> list[Variant]:
     for (tk, target), (mk, mute) in itertools.product(
         spec["target"].items(), spec["radar_mute"].items()
     ):
-        hijack = {"start_s": spec["start_s"], "end_s": spec["end_s"], "target": target,
-                  "link_hint": spec["link_hint"]}  # fmt: skip
+        hijack = {"start_s": spec["start_s"], "end_s": spec["end_s"], "target": target}
         faults = [] if mute is None else [{"source": "radar", "mode": "mute", **mute}]
         out.append((f"hijack-{tk}-radar-{mk}", "hijack", {"target": tk, "radar": mk},
                     {"hijack": hijack, "faults": faults}))  # fmt: skip
