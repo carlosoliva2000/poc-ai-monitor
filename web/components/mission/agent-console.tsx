@@ -74,7 +74,6 @@ export function AgentConsole({ events, data, chunks, activity, toolCalls, report
             Agent console
           </h2>
           <div className="flex items-center gap-3 text-xs text-muted-foreground" aria-label="Who is speaking">
-            {!incidentRun && <Legend className="bg-muted-foreground" label="Detector" />}
             <Legend className="bg-primary" label="Monitor" />
             <Legend className="bg-[oklch(0.55_0.12_195)]" label="Report" />
             <Legend className="bg-accent" label="Operator" />

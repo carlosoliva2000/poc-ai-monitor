@@ -58,9 +58,8 @@ export const EventTimeline = memo(function EventTimeline({ events, cursor, total
   const types = useMemo(() => countBy(events, (e) => e.type), [events])
   const topics = useMemo(() => countBy(events, topicOf), [events])
 
-  // Con incidentes no hay detector: su casilla sobra
-  const incidentRun = useMemo(() => events.some((e) => e.type === 'IncidentUpdated'), [events])
-  const groups = incidentRun ? GROUPS.filter((g) => g.id !== 'detector') : GROUPS
+  // El monitor de situación no usa detector: su casilla sobra
+  const groups = GROUPS.filter((g) => g.id !== 'detector')
   const set = (patch: Partial<Saved>) => setSaved((prev) => ({ ...prev, ...patch }))
   const columns = saved.showTopic ? 'grid-cols-[4.5rem_14rem_1fr]' : 'grid-cols-[4.5rem_11rem_1fr]'
 
