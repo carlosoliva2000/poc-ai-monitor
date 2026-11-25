@@ -49,17 +49,6 @@ export function MissionConsole() {
   const started = events.find((e) => e.type === 'SimulationStarted')
   const duration = started ? (started.payload as { duration_s: number }).duration_s : (plan?.duration_s ?? 0)
 
-  const waitingAgent = state?.status === 'paused' && data.pauseReason === 'waiting_agent'
-  const next = data.pending[0]
-  let waiting: string | null = null
-  if (waitingAgent) {
-    if (next) {
-      const id = (next.payload as { detection_id: string }).detection_id
-      waiting = `Waiting for the monitor: analysing ${next.type === 'DetectionCleared' ? `the closure of ${id}` : id}…`
-    } else {
-      waiting = 'Waiting for the monitor…'
-    }
-  }
   // El módulo de IA no ve el comando del instructor: la web le manda el viento activo en la pregunta.
   const sendInstructorAware = (conversation: Conversation, text: string) => {
     if (conversation !== 'instructor') return sendOperatorMessage(conversation, text)
@@ -78,7 +67,7 @@ export function MissionConsole() {
 
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh lg:overflow-hidden">
-      <MissionHeader missionId={plan?.mission_id ?? '—'} state={state} connection={connection} waiting={waitingAgent} agentBusy={agentBusy} view={view} onView={setView} />
+      <MissionHeader missionId={plan?.mission_id ?? '—'} state={state} connection={connection} agentBusy={agentBusy} view={view} onView={setView} />
 
       {errors.length > 0 && (
         <div className="flex flex-col gap-1 border-b border-destructive/30 bg-destructive/10 px-4 py-2" role="alert">
@@ -112,7 +101,7 @@ export function MissionConsole() {
             </div>
           </section>
 
-          <SimControls state={state} data={data} marks={marks} duration={duration} scenarios={scenarios} waiting={waiting} onControl={control} instructorControls={!student} />
+          <SimControls state={state} data={data} marks={marks} duration={duration} scenarios={scenarios} onControl={control} instructorControls={!student} />
           {!student && <FaultPanel state={state} onControl={control} />}
           {!student && <InstructorPanel state={state} events={events} form={windForm} onForm={setWindForm} forceOpen={openTick} onControl={control} />}
           {!student && <InjectedPanel events={events} truth={truth} />}

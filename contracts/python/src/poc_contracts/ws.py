@@ -110,12 +110,6 @@ class ControlSpeed(_Message):
     value: Speed
 
 
-class ControlWaitAgent(_Message):
-    op: Literal["control"] = "control"
-    action: Literal["wait_agent"] = "wait_agent"
-    value: StrictBool
-
-
 class ControlInteractive(_Message):
     op: Literal["control"] = "control"
     action: Literal["interactive"] = "interactive"
@@ -143,7 +137,6 @@ Control = Annotated[
     | ControlStep
     | ControlReset
     | ControlSpeed
-    | ControlWaitAgent
     | ControlInteractive
     | ControlFault
     | ControlInstructor,
@@ -181,7 +174,6 @@ class PlayerState(_Message):
     run_id: str | None
     sim_time: float
     speed: float
-    wait_agent: bool
     interactive: bool
     active_faults: list[ActiveFault]
     cursor: int

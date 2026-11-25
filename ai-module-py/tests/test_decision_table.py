@@ -1,5 +1,6 @@
-"""E6: la tabla de decisión (`config/decision_table.yaml`): una prueba por fila, con los ejemplos de
-`tests/data/decision_examples.yaml`, y que todas las celdas son unary tests de FEEL admitidos."""
+"""La tabla de decisión de la E6 (`tests/data/decision_table_e6.yaml`): una prueba por fila, con los
+ejemplos de `tests/data/decision_examples.yaml`, y que todas las celdas son unary tests de FEEL
+admitidos."""
 
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from ai_module.decision.table import load_tables
 EXAMPLES = yaml.safe_load(
     (Path(__file__).parent / "data" / "decision_examples.yaml").read_text(encoding="utf-8")
 )
-TABLES = load_tables()
+TABLES = load_tables(Path(__file__).parent / "data" / "decision_table_e6.yaml")
 CASES = [(table, rule.rule_id) for table, spec in TABLES.tables.items() for rule in spec.rules]
 
 

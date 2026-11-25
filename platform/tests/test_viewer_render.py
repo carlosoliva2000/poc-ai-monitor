@@ -17,7 +17,7 @@ def state_at(name: str, until_s: float) -> ViewerState:
     state = ViewerState(connected=True)
     state.apply_message(
         {"op": "state", "status": "running", "scenario": name, "run_id": "r", "sim_time": until_s,
-         "speed": 16.0, "wait_agent": False, "interactive": True,
+         "speed": 16.0, "interactive": True,
          "active_faults": [{"source": "gps", "mode": "loss", "origin": "manual"}],
          "cursor": 1, "total_events": 1}
     )  # fmt: skip

@@ -51,18 +51,40 @@ def _round(value: Any) -> Any:
     return round(value, 1) if isinstance(value, float) else value
 
 
-def condition(feature: str, cell: Any, value: Any) -> dict[str, Any]:
-    """Una celda de la tabla como condición legible: `>= 4` → op `>=`, umbral 4."""
+_RANGE = re.compile(r"^\(\s*(-?\d+(?:\.\d+)?)\s*\.\.\s*(-?\d+(?:\.\d+)?)\s*\]$")
+
+
+def conditions(feature: str, cell: Any, value: Any) -> list[dict[str, Any]]:
+    """Una celda de la tabla como condiciones legibles: `>= 4` → op `>=`, umbral 4.
+
+    Las tablas aprendidas añaden `, null` («o sin dato») a una comparación, `(a..b]` para un rango
+    y `not(null)`: el rango son dos condiciones (`>` a y `<=` b); el «o sin dato» no se pinta (el
+    valor `null` ya lo dice), y `not(null)` es `!= null`."""
     text = str(cell).strip() if not isinstance(cell, bool) else str(cell).lower()
+    shown = _round(value) if not isinstance(value, float) else round(value, 4)
+
+    def one(op: str, threshold: Any) -> dict[str, Any]:
+        return {"feature": feature, "op": op, "threshold": threshold, "value": shown}
+
     if match := _COMPARISON.match(text):
-        op, threshold = match.group(1), float(match.group(2))
-    elif text in ("true", "false"):
-        op, threshold = "==", text == "true"
-    elif text == "null":
-        op, threshold = "==", None
-    else:
-        op, threshold = "==", ", ".join(part.strip().strip('"') for part in text.split(","))
-    return {"feature": feature, "op": op, "threshold": threshold, "value": _round(value)}
+        return [one(match.group(1), round(float(match.group(2)), 4))]
+    if match := _RANGE.match(text):
+        return [
+            one(">", round(float(match.group(1)), 4)),
+            one("<=", round(float(match.group(2)), 4)),
+        ]
+    if text == "not(null)":
+        return [one("!=", None)]
+    parts = [part.strip() for part in text.split(",")]
+    if len(parts) > 1 and parts[-1] == "null" and parts[0] != "null":
+        inner = ", ".join(parts[:-1])
+        if _COMPARISON.match(inner) or _RANGE.match(inner):
+            return conditions(feature, inner, value)
+    if text in ("true", "false"):
+        return [one("==", text == "true")]
+    if text == "null":
+        return [one("==", None)]
+    return [one("==", ", ".join(part.strip('"') for part in parts))]
 
 
 def evidence_item(facet: str, rule: Rule, inputs: dict[str, Any]) -> dict[str, Any]:
@@ -70,5 +92,7 @@ def evidence_item(facet: str, rule: Rule, inputs: dict[str, Any]) -> dict[str, A
         "facet": facet,
         "state": str(rule.then.get("state", rule.then.get("kind"))),
         "rule_id": rule.rule_id,
-        "conditions": [condition(name, cell, inputs.get(name)) for name, cell in rule.when.items()],
+        "conditions": [
+            c for name, cell in rule.when.items() for c in conditions(name, cell, inputs.get(name))
+        ],
     }

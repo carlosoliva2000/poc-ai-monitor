@@ -1,6 +1,6 @@
 'use client'
 
-import { Hourglass, Pause, Play, RotateCcw, StepForward } from 'lucide-react'
+import { Pause, Play, RotateCcw, StepForward } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SPEEDS, type ControlMessage, type Envelope, type PlayerState, type ScenarioInfo } from '@/lib/contracts'
 import type { Derived } from '@/lib/derive'
@@ -43,20 +43,18 @@ type Props = {
   duration: number
   scenarios: ScenarioInfo[]
   /** Aviso mientras el reproductor espera al monitor. */
-  waiting: string | null
   onControl: (message: ControlMessage) => void
-  /** Vista del instructor: con los interruptores «Wait for the agent» y «Interactive mode». */
+  /** Vista del instructor: con el interruptor «Interactive mode». */
   instructorControls?: boolean
 }
 
-export function SimControls({ state, data, marks, duration, scenarios, waiting, onControl, instructorControls = true }: Props) {
+export function SimControls({ state, data, marks, duration, scenarios, onControl, instructorControls = true }: Props) {
   const status = state?.status ?? 'idle'
   const running = status === 'running'
   const finished = status === 'finished'
   const simTime = state?.sim_time ?? 0
   const pct = duration > 0 ? Math.min(100, (simTime / duration) * 100) : 0
   const loaded = Boolean(state?.scenario)
-  const waitingAgent = status === 'paused' && data.pauseReason === 'waiting_agent'
 
   return (
     <div className="flex flex-col gap-3 border-t border-border bg-card px-4 py-3">
@@ -84,16 +82,6 @@ export function SimControls({ state, data, marks, duration, scenarios, waiting, 
         <span className="w-16 shrink-0 text-right font-mono text-sm tabular-nums text-muted-foreground">{formatT(duration)}</span>
       </div>
 
-      {waitingAgent && (
-        <div
-          role="status"
-          className="flex items-center gap-2 rounded-md border border-accent/50 bg-accent/10 px-3 py-2 text-sm text-foreground"
-          data-testid="waiting-agent"
-        >
-          <Hourglass className="size-4 shrink-0 animate-pulse text-accent" aria-hidden="true" />
-          <span>{waiting ?? 'Waiting for the monitor…'}</span>
-        </div>
-      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -137,11 +125,6 @@ export function SimControls({ state, data, marks, duration, scenarios, waiting, 
         <div className="flex flex-wrap items-center gap-3">
           {instructorControls && (
             <>
-              <Toggle
-                label="Wait for the agent"
-                checked={state?.wait_agent ?? false}
-                onChange={(v) => onControl({ action: 'wait_agent', value: v })}
-              />
               <Toggle
                 label="Interactive mode"
                 checked={state?.interactive ?? false}

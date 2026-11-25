@@ -10,7 +10,7 @@ from platform_app.viewer_state import SPEEDS, ViewerState, clock
 
 STATE = {
     "op": "state", "status": "running", "scenario": "demo", "run_id": "r1", "sim_time": 61.0,
-    "speed": 4.0, "wait_agent": False, "interactive": False, "active_faults": [],
+    "speed": 4.0, "interactive": False, "active_faults": [],
     "cursor": 10, "total_events": 100,
 }  # fmt: skip
 
@@ -49,15 +49,15 @@ def test_clock_format() -> None:
 def test_state_message_updates_the_status_line() -> None:
     s = live()
     line = s.status_line()
-    for part in ("demo", "T+01:01", "4×", "running", "wait for the agent: no", "interactive: no"):
+    for part in ("demo", "T+01:01", "4×", "running", "interactive: no"):
         assert part in line
     s.apply_message(
-        {**STATE, "interactive": True, "wait_agent": True,
+        {**STATE, "interactive": True,
          "active_faults": [{"source": "radar", "mode": "mute", "origin": "manual"},
                            {"source": "gps", "mode": "loss", "origin": "manual"}]}
     )  # fmt: skip
     line = s.status_line()
-    assert "interactive: YES" in line and "wait for the agent: yes" in line
+    assert "interactive: YES" in line
     assert "radar(mute), gps(loss)" in line
     assert s.silenced_sources() == ["radar"]
     assert ViewerState().status_line() == "no connection to the platform"
@@ -144,7 +144,6 @@ def test_errors_show_as_a_temporary_notice() -> None:
         ("0", "paused", {"action": "reset", "value": None}),
         ("+", "paused", {"action": "speed", "value": 8.0}),  # velocidad actual: 4
         ("-", "paused", {"action": "speed", "value": 2.0}),
-        ("w", "paused", {"action": "wait_agent", "value": True}),
         ("i", "paused", {"action": "interactive", "value": True}),
     ],
 )

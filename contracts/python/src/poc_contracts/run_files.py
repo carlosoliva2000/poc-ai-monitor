@@ -170,7 +170,5 @@ class RunMeta(RunFile):
     run_id: str
     speed: float
     speed_changes: list[SpeedChange]
-    wait_agent: bool
-    wait_agent_changes: list[FlagChange]
     interactive: bool
     interactive_changes: list[FlagChange]

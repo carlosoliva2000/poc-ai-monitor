@@ -1,7 +1,5 @@
 """Respuestas de la API HTTP (`contracts/eventos.md` §6)."""
 
-from typing import Any, Literal
-
 from pydantic import BaseModel, ConfigDict
 
 from .envelope import Envelope
@@ -32,17 +30,3 @@ class TimelineResponse(_Model):
     events: list[Envelope]
     truncated: bool
     """`True` si `limit` ha recortado el resultado."""
-
-
-class ToolOk(_Model):
-    """Respuesta de `POST /api/tools/{name}` si va bien."""
-
-    ok: Literal[True] = True
-    result: Any
-
-
-class ToolError(_Model):
-    """Respuesta de `POST /api/tools/{name}` si falla (argumentos no válidos, tool desconocida…)."""
-
-    ok: Literal[False] = False
-    error: str

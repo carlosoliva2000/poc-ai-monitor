@@ -1,4 +1,4 @@
-"""Monitor de situación (versión del vídeo del 19/11/2026): incidentes sobre los runs y textos
+"""Monitor de situación con las tablas a mano del vídeo (alternativa `handwritten`) y textos
 preparados. Deterministas: no hay LLM ni plataforma."""
 
 import asyncio
@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ai_module.ids import IdAllocator
 from ai_module.outbox import EventFactory
-from ai_module.situation.replay import replay
+from ai_module.situation.replay import replay as replay_tables
 from ai_module.situation.scripted import Script, ScriptedAssistant, load_texts, normalize
 from poc_contracts.enums import EventType
 from poc_contracts.envelope import EventDraft
@@ -16,6 +16,12 @@ from poc_contracts.payloads import PAYLOAD_MODELS
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def replay(path: Path) -> list[tuple[float, dict]]:
+    """Estas pruebas son del vídeo (tablas a mano, instantes del guion): las tablas aprendidas
+    congeladas se prueban en `test_situation_learned.py`."""
+    return replay_tables(path, "handwritten")
 
 
 def transitions(path: Path) -> list[tuple[str, str, str, str]]:

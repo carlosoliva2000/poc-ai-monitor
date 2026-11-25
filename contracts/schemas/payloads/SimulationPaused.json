@@ -2,8 +2,7 @@
   "$defs": {
     "PauseReason": {
       "enum": [
-        "user",
-        "waiting_agent"
+        "user"
       ],
       "title": "PauseReason",
       "type": "string"

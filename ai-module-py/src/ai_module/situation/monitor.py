@@ -1,37 +1,28 @@
-"""Núcleo del monitor de situación, sin red: características → tablas por faceta → tipo de
-incidente → seguidor → payloads de `IncidentUpdated`. Determinista: lo usan el proceso en
-directo (`__main__`) y la reproducción sobre `events.jsonl` (`replay.py`).
+"""Núcleo del monitor de situación, sin red: características → estado de cada faceta (tablas
+aprendidas congeladas, o las escritas a mano como alternativa) → tipo de incidente → seguidor →
+payloads de `IncidentUpdated`. Determinista: lo usan el proceso en directo (`__main__`) y la
+reproducción sobre `events.jsonl` (`replay.py`).
 
-Los umbrales están en las tablas (`tables.yaml`), nunca en el código, y no hay disparos por tiempo
-ni por el nombre del escenario.
+Los umbrales están en las tablas, nunca en el código, y no hay disparos por tiempo ni por el nombre
+del escenario. El tipo de incidente sale todavía de la tabla `incident_kind` del vídeo (provisional
+hasta que el catálogo de incidentes la sustituya).
 """
 
-from collections import deque
-from dataclasses import dataclass, field
 from typing import Any
 
 from poc_contracts.enums import DecidedBy, IncidentChange, IncidentKind, IncidentState
 
-from ..decision.table import DecisionTables, Rule, load_tables
+from ..decision.table import DecisionTables, load_tables
 from ..ids import IdAllocator
+from .facets import LEARNED, FacetEngine, Snapshot, make_engine
 from .features import FeatureExtractor, FeatureRow
 from .policy import HERE, Policy, evidence_item, load_policy
 from .tracker import Incident, Tracker
 
-TABLE_NAME = "handwritten-video"
-# Provisional (tablas a mano del vídeo; la E7c lo sustituye por las tablas aprendidas):
-WIND_LIMIT_MPS = 12.0  # viento por encima del cual el dron no garantiza la ruta
-REFERENCE_WINDOW = 60  # mediana de 60 s para la referencia de C/N0 y AGC
-FACET_TABLES = {
-    "gps.integrity": "gps_integrity",
-    "link.availability": "link_availability",
-    "environment.wind": "environment_wind",
-    "drone.situation": "drone_situation",
-}
 CAUSE_FACET = "drone.cause"
 # Valores que crecen mientras dura un incidente (metros y segundos): una evidencia se refresca
 # cuando uno se duplica respecto a lo publicado.
-DRIFT_FEATURES = ("route_dev_m", "radar_route_dev_m", "tele_gap_s")
+DRIFT_FEATURES = ("route_dev_m", "radar_route_dev_m", "radar_dev_m", "gps_dev_m", "tele_gap_s")
 DRIFT_FACTOR = 2.0
 # Fuente de las evidencias de cada faceta (la de la situación depende de quién mide la desviación)
 FACET_EVIDENCE = {
@@ -41,73 +32,26 @@ FACET_EVIDENCE = {
 }
 
 
-def _median(values: deque[float]) -> float:
-    return sorted(values)[len(values) // 2]
-
-
-class GnssReference:
-    """Referencia de C/N0 y AGC de las tablas a mano: la mediana de los últimos 60 s, **congelada
-    mientras el GPS no es fiable** (una mediana que siguiera actualizándose subiría con el engaño y
-    lo dejaría de ver). Es un apaño del vídeo: depende de la salida de la tabla, así que no sirve
-    para entrenar; los árboles usan las referencias de `features.py`."""
-
-    def __init__(self) -> None:
-        self.reset()
-
-    def reset(self) -> None:
-        self._cn0: deque[float] = deque(maxlen=REFERENCE_WINDOW)
-        self._agc: deque[float] = deque(maxlen=REFERENCE_WINDOW)
-        self.cn0: float | None = None
-        self.agc: float | None = None
-
-    def deltas(self, row: FeatureRow) -> tuple[float | None, float | None]:
-        """C/N0 y AGC menos su referencia (la primera lectura es su propia referencia)."""
-        if row.cn0_dbhz is None or row.agc_db is None:
-            return None, None
-        if self.cn0 is None or self.agc is None:
-            self.cn0, self.agc = row.cn0_dbhz, row.agc_db
-        return row.cn0_dbhz - self.cn0, row.agc_db - self.agc
-
-    def update(self, row: FeatureRow, reliable: bool) -> None:
-        if not reliable or row.cn0_dbhz is None or row.agc_db is None:
-            return
-        self._cn0.append(row.cn0_dbhz)
-        self._agc.append(row.agc_db)
-        self.cn0, self.agc = _median(self._cn0), _median(self._agc)
-
-
-@dataclass
-class Snapshot:
-    """Estados y filas de un instante, para las evidencias."""
-
-    states: dict[str, str] = field(default_factory=dict)
-    rules: dict[str, Rule] = field(default_factory=dict)
-    inputs: dict[str, dict[str, Any]] = field(default_factory=dict)
-    deviation_source: str | None = None
-    wind_est_mps: float | None = None
-
-
 class SituationMonitor:
     def __init__(
         self,
         ids: IdAllocator | None = None,
-        tables: DecisionTables | None = None,
+        tables: str = LEARNED,
         policy: Policy | None = None,
+        kind_table: DecisionTables | None = None,
     ) -> None:
         self.ids = ids or IdAllocator()
-        self.tables = tables or load_tables(HERE / "tables.yaml")
+        self.engine: FacetEngine = make_engine(tables)
+        self.kind_tables = kind_table or load_tables(HERE / "tables.yaml")
         self.policy = policy or load_policy()
         self.features = FeatureExtractor()
-        self.reference = GnssReference()
         self.tracker = Tracker(self.ids, self.policy.base_severity, self.policy.rank)
         self.reset()
 
     def reset(self) -> None:
         self.features.reset()
-        self.reference.reset()
+        self.engine.reset()
         self.tracker.reset()
-        self._situation = "on_route"
-        self._wind_high_s = 0
         self._published: dict[str, str] = {}  # estado de las facetas de las últimas evidencias
         self._published_values: dict[str, float] = {}  # distancias y huecos de esas evidencias
         self.last = Snapshot()
@@ -128,49 +72,21 @@ class SituationMonitor:
             out.extend(self.step(row))
         return out
 
-    def _evaluate(self, snap: Snapshot, facet: str, table: str, inputs: dict[str, Any]) -> str:
-        rule = self.tables[table].evaluate(inputs)
-        snap.rules[facet], snap.inputs[facet] = rule, inputs
-        snap.states[facet] = str(rule.then["state"] if "state" in rule.then else rule.then["kind"])
-        return snap.states[facet]
-
     def step(self, row: FeatureRow) -> list[tuple[float, dict[str, Any]]]:
-        snap = Snapshot(wind_est_mps=row.wind_est_mps)
-        telemetry = row.tele_gap_s < 3.0
-        rise, drop = self.reference.deltas(row)
-        gps = self._evaluate(
-            snap, "gps.integrity", "gps_integrity",
-            {"telemetry": telemetry, "cn0_rise_db": rise, "agc_drop_db": drop},
-        )  # fmt: skip
-        self.reference.update(row, gps == "reliable")
-        link = self._evaluate(
-            snap, "link.availability", "link_availability",
-            {"tele_gap_s": row.tele_gap_s, "link_loss_pct": row.link_loss_pct},
-        )  # fmt: skip
-        high = row.wind_est_mps is not None and row.wind_est_mps >= WIND_LIMIT_MPS
-        self._wind_high_s = self._wind_high_s + 1 if high else 0
-        wind = self._evaluate(
-            snap, "environment.wind", "environment_wind",
-            {"wind_est_mps": row.wind_est_mps, "wind_high_s": self._wind_high_s},
-        )  # fmt: skip
-        use_gps = telemetry and gps == "reliable" and row.gps_route_dev_m is not None
-        deviation = row.gps_route_dev_m if use_gps else row.radar_route_dev_m
-        snap.deviation_source = "gps" if use_gps else "radar" if deviation is not None else None
-        self._situation = self._evaluate(
-            snap, "drone.situation", "drone_situation",
-            {"route_dev_m": deviation, "previous": self._situation},
-        )  # fmt: skip
-        cause_inputs = {
-            "link": link, "radar_route_dev_m": row.radar_route_dev_m, "gps_integrity": gps,
-            "situation": self._situation, "wind": wind,
-        }  # fmt: skip
-        rule = self.tables["incident_kind"].evaluate(cause_inputs)
-        snap.rules[CAUSE_FACET], snap.inputs[CAUSE_FACET] = rule, cause_inputs
-        kind = rule.then["kind"]
-        candidate = None if kind == "none" else IncidentKind(kind)
-        snap.states[CAUSE_FACET] = str(kind)
+        snap = self.engine.evaluate(row)
+        situation = snap.states["drone.situation"]
+        kind_inputs = {
+            "link": snap.states["link.availability"],
+            "radar_route_dev_m": row.radar_route_dev_m,
+            "gps_integrity": snap.states["gps.integrity"],
+            "situation": situation,
+            "wind": snap.states["environment.wind"],
+        }
+        rule = self.kind_tables["incident_kind"].evaluate(kind_inputs)
+        snap.kind_rule, snap.kind_inputs, snap.kind = rule, kind_inputs, str(rule.then["kind"])
+        candidate = None if snap.kind == "none" else IncidentKind(snap.kind)
         self.last = snap
-        transitions = self.tracker.step(row.t, candidate, self._situation == "on_route")
+        transitions = self.tracker.step(row.t, candidate, situation == "on_route")
         if not transitions and self.tracker.current is not None and self._evidence_changed(snap):
             transitions = [self.tracker.revise(row.t, IncidentChange.EVIDENCE)]
         if transitions:
@@ -226,9 +142,9 @@ class SituationMonitor:
             for facet in kind_policy.facets
             if facet in snap.rules
         ]
-        if inc.state == IncidentState.OPEN and snap.states.get(CAUSE_FACET) == inc.kind.value:
-            item = evidence_item(CAUSE_FACET, snap.rules[CAUSE_FACET], snap.inputs[CAUSE_FACET])
-            evidence.append(item)
+        if inc.state == IncidentState.OPEN and snap.kind == inc.kind.value:
+            assert snap.kind_rule is not None
+            evidence.append(evidence_item(CAUSE_FACET, snap.kind_rule, snap.kind_inputs))
         ids: list[str] = []
         for facet in kind_policy.facets:
             source = FACET_EVIDENCE.get(facet) or snap.deviation_source
@@ -257,12 +173,12 @@ class SituationMonitor:
             "checks": kind_policy.checks,
             "evidence_event_ids": ids,
             "decided_by": DecidedBy.TABLE.value,
-            "table": TABLE_NAME,
+            "table": self.engine.table_name,
         }
 
     def _confidence(self, inc: Incident) -> str:
         """Confianza fija por fila de la tabla del tipo (la primera fila de ese tipo)."""
-        for rule in self.tables["incident_kind"].rules:
+        for rule in self.kind_tables["incident_kind"].rules:
             if rule.then["kind"] == inc.kind.value:
                 return str(rule.then["confidence"])
         return "possible"

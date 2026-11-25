@@ -14,13 +14,12 @@ type Props = {
   missionId: string
   state: PlayerState | null
   connection: Connection
-  waiting: boolean
   agentBusy: boolean
   view: View
   onView: (view: View) => void
 }
 
-export function MissionHeader({ missionId, state, connection, waiting, agentBusy, view, onView }: Props) {
+export function MissionHeader({ missionId, state, connection, agentBusy, view, onView }: Props) {
   const status = state?.status ?? 'idle'
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-border bg-card px-4 py-3">
@@ -34,7 +33,7 @@ export function MissionHeader({ missionId, state, connection, waiting, agentBusy
           )}
         >
           <span className={cn('size-1.5 rounded-full', status === 'running' ? 'animate-pulse bg-accent-foreground' : 'bg-muted-foreground')} aria-hidden="true" />
-          {waiting ? 'Waiting for the monitor' : STATUS_LABEL[status]}
+          {STATUS_LABEL[status]}
         </span>
         {state?.scenario && <span className="font-mono text-xs text-muted-foreground">{state.scenario} · {state.run_id}</span>}
       </div>

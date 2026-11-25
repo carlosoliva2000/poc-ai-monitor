@@ -69,7 +69,7 @@ def drone_marker(heading_deg: float) -> MarkerStyle:
 
 
 HELP = (
-    "space play/pause · n step · +/- speed · 0 restart · w wait for the agent · "
+    "space play/pause · n step · +/- speed · 0 restart · "
     "t truth · i interactive · 1-5 mute gps/radar/meteo/link/battery · g GPS loss · "
     "l load scenario"
 )

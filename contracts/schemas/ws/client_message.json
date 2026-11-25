@@ -243,32 +243,6 @@
       "title": "ControlStep",
       "type": "object"
     },
-    "ControlWaitAgent": {
-      "additionalProperties": false,
-      "properties": {
-        "op": {
-          "const": "control",
-          "default": "control",
-          "title": "Op",
-          "type": "string"
-        },
-        "action": {
-          "const": "wait_agent",
-          "default": "wait_agent",
-          "title": "Action",
-          "type": "string"
-        },
-        "value": {
-          "title": "Value",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "value"
-      ],
-      "title": "ControlWaitAgent",
-      "type": "object"
-    },
     "EventDraft": {
       "additionalProperties": false,
       "description": "Evento tal como lo escribe el generador o lo publica un cliente: sin `seq` ni\n`ingestion_time`, que pone el bus.",
@@ -626,8 +600,7 @@
             "play": "#/$defs/ControlPlay",
             "reset": "#/$defs/ControlReset",
             "speed": "#/$defs/ControlSpeed",
-            "step": "#/$defs/ControlStep",
-            "wait_agent": "#/$defs/ControlWaitAgent"
+            "step": "#/$defs/ControlStep"
           },
           "propertyName": "action"
         },
@@ -649,9 +622,6 @@
           },
           {
             "$ref": "#/$defs/ControlSpeed"
-          },
-          {
-            "$ref": "#/$defs/ControlWaitAgent"
           },
           {
             "$ref": "#/$defs/ControlInteractive"
@@ -695,8 +665,7 @@
           "play": "#/$defs/ControlPlay",
           "reset": "#/$defs/ControlReset",
           "speed": "#/$defs/ControlSpeed",
-          "step": "#/$defs/ControlStep",
-          "wait_agent": "#/$defs/ControlWaitAgent"
+          "step": "#/$defs/ControlStep"
         },
         "propertyName": "action"
       },
@@ -718,9 +687,6 @@
         },
         {
           "$ref": "#/$defs/ControlSpeed"
-        },
-        {
-          "$ref": "#/$defs/ControlWaitAgent"
         },
         {
           "$ref": "#/$defs/ControlInteractive"

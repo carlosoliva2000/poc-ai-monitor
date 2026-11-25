@@ -9,15 +9,14 @@ import json
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import TypeAdapter
 
-from .api import ScenariosResponse, TimelineResponse, ToolError, ToolOk
+from .api import ScenariosResponse, TimelineResponse
 from .envelope import Envelope, EventDraft
 from .payloads import PAYLOAD_MODELS
 from .run_files import LabelsFile, PlanFile, RunMeta, TruthFile, UnlabeledEpisodesFile
 from .scenario import ScenarioConfig
 from .states import StateRow
-from .tools import TOOL_MODELS, PublishAlertResult
 from .ws import ClientMessage, ServerMessage, StateMessage
 
 DEFAULT_OUT = Path(__file__).resolve().parents[3] / "schemas"
@@ -33,9 +32,6 @@ def build_schemas() -> dict[str, dict[str, Any]]:
         "api/state.json": StateMessage.model_json_schema(),
         "api/scenarios_response.json": ScenariosResponse.model_json_schema(),
         "api/timeline_response.json": TimelineResponse.model_json_schema(),
-        "api/tool_ok.json": ToolOk.model_json_schema(),
-        "api/tool_error.json": ToolError.model_json_schema(),
-        "tools/publish_alert.result.json": TypeAdapter(PublishAlertResult).json_schema(),
         "files/scenario.json": ScenarioConfig.model_json_schema(),
         "files/plan.json": PlanFile.model_json_schema(),
         "files/truth.json": TruthFile.model_json_schema(),
@@ -46,15 +42,7 @@ def build_schemas() -> dict[str, dict[str, Any]]:
     }
     for event_type, model in PAYLOAD_MODELS.items():
         schemas[f"payloads/{event_type.value}.json"] = model.model_json_schema()
-    for name, (args, result) in TOOL_MODELS.items():
-        schemas[f"tools/{name}.args.json"] = _schema(args)
-        if result is not None:
-            schemas[f"tools/{name}.result.json"] = _schema(result)
     return schemas
-
-
-def _schema(model: type[BaseModel]) -> dict[str, Any]:
-    return model.model_json_schema()
 
 
 def render(schema: dict[str, Any]) -> str:

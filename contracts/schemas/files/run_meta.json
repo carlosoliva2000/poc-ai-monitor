@@ -61,17 +61,6 @@
       "title": "Speed Changes",
       "type": "array"
     },
-    "wait_agent": {
-      "title": "Wait Agent",
-      "type": "boolean"
-    },
-    "wait_agent_changes": {
-      "items": {
-        "$ref": "#/$defs/FlagChange"
-      },
-      "title": "Wait Agent Changes",
-      "type": "array"
-    },
     "interactive": {
       "title": "Interactive",
       "type": "boolean"
@@ -89,8 +78,6 @@
     "run_id",
     "speed",
     "speed_changes",
-    "wait_agent",
-    "wait_agent_changes",
     "interactive",
     "interactive_changes"
   ],

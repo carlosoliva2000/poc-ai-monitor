@@ -12,14 +12,15 @@ from pathlib import Path
 import numpy as np
 from features import CODES, variant_assets
 
-from ai_module.situation.monitor import FACET_TABLES, SituationMonitor
+from ai_module.situation.facets import HAND_FACET_TABLES, HANDWRITTEN
+from ai_module.situation.monitor import SituationMonitor
 from ai_module.situation.replay import is_world, read_events
 
-HAND_FACETS = tuple(FACET_TABLES)  # gps.integrity, link.availability, environment.wind, …
+HAND_FACETS = tuple(HAND_FACET_TABLES)  # gps.integrity, link.availability, environment.wind, …
 
 
 def _variant(folder: Path) -> dict[int, dict[str, str]]:
-    monitor = SituationMonitor()
+    monitor = SituationMonitor(tables=HANDWRITTEN)
     monitor.features.assets = variant_assets(folder)
     out: dict[int, dict[str, str]] = {}
     for event in read_events(folder / "events.jsonl.gz"):

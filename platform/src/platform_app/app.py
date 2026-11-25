@@ -22,7 +22,6 @@ from fastapi import (
     FastAPI,
     HTTPException,
     Query,
-    Request,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -33,8 +32,6 @@ from poc_contracts.api import (
     ScenarioInfo,
     ScenariosResponse,
     TimelineResponse,
-    ToolError,
-    ToolOk,
 )
 from poc_contracts.enums import ClientKind, EventType, PlayerStatus
 from poc_contracts.envelope import Envelope
@@ -51,7 +48,6 @@ from poc_contracts.ws import (
     ControlReset,
     ControlSpeed,
     ControlStep,
-    ControlWaitAgent,
     ErrorMessage,
     EventMessage,
     Hello,
@@ -68,7 +64,6 @@ from .generator.scenario_io import list_scenarios, load_scenario
 from .paths import RUNS_DIR, SCENARIOS_DIR
 from .player import Player, PlayerError
 from .timeline import Timeline
-from .tools import ToolContext, ToolFailure, call_tool
 
 log = logging.getLogger(__name__)
 
@@ -170,8 +165,6 @@ def _handle_control(player: Player, message: Any) -> None:
             player.reset()
         case ControlSpeed():
             player.set_speed(message.value)
-        case ControlWaitAgent():
-            player.set_wait_agent(message.value)
         case ControlInteractive():
             player.set_interactive(message.value)
         case ControlFault():
@@ -275,16 +268,13 @@ def create_app(
     runs_dir: Path = RUNS_DIR,
     scenarios_dir: Path = SCENARIOS_DIR,
     run_clock: bool = True,
-    wait_timeout_s: float | None = None,
 ) -> FastAPI:
     """Crea la aplicación. `run_clock=False` desactiva el reloj de pared (las pruebas avanzan el
     reproductor a mano)."""
     bus = Bus(Timeline())
-    options: dict[str, Any] = {} if wait_timeout_s is None else {"wait_timeout_s": wait_timeout_s}
-    player = Player(bus, runs_dir=runs_dir, scenarios_dir=scenarios_dir, **options)
+    player = Player(bus, runs_dir=runs_dir, scenarios_dir=scenarios_dir)
     hub = Hub(player)
     player.listeners.append(hub.broadcast_state)
-    tools = ToolContext(bus.timeline, lambda: player.sim_time)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -356,22 +346,6 @@ def create_app(
         )
         return TimelineResponse(events=found, truncated=truncated).model_dump(mode="json")
 
-    @api.post("/tools/{name}")
-    async def run_tool(name: str, request: Request) -> ToolOk | ToolError:
-        raw = await request.body()
-        try:
-            args = json.loads(raw) if raw.strip() else {}
-        except json.JSONDecodeError:
-            return ToolError(error="the body is not valid JSON")
-        if not isinstance(args, dict):
-            return ToolError(error="the arguments must be a JSON object")
-        if player.config is None:
-            return ToolError(error="no scenario is loaded")
-        try:
-            return ToolOk(result=call_tool(tools, name, args))
-        except ToolFailure as exc:
-            return ToolError(error=str(exc))
-
     app.include_router(api)
 
     @app.websocket("/ws")
@@ -398,16 +372,11 @@ def create_app(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Platform: player, bus, API and WebSocket")
     parser.add_argument("--port", type=int, default=PORT, help=f"port (default {PORT})")
-    parser.add_argument(
-        "--wait-timeout", type=float, help="seconds the player waits for the agent (default 90)"
-    )
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
-    uvicorn.run(
-        create_app(wait_timeout_s=args.wait_timeout), host=HOST, port=args.port, log_level="info"
-    )
+    uvicorn.run(create_app(), host=HOST, port=args.port, log_level="info")
 
 
 if __name__ == "__main__":

@@ -1,27 +1,23 @@
-"""Ejecuta escenarios de principio a fin y muestra lo que detecta y responde el módulo de IA.
+"""Ejecuta escenarios de principio a fin y muestra los incidentes del monitor de situación.
 
-Levanta la plataforma y el módulo de IA como procesos aparte (o usa una plataforma ya en marcha
-con `--platform`), se conecta por el WebSocket como cliente `web`, carga el escenario, pone la
-velocidad y da al play. Imprime las detecciones (`DetectionRaised/Updated/Cleared`), las
-respuestas del monitor y el informe, hasta `SimulationFinished` (y `ReportGenerated`).
+Levanta la plataforma y el monitor de situación (`ai_module.situation`) como procesos aparte (o usa
+una plataforma ya en marcha con `--platform`), se conecta por el WebSocket como cliente `web`,
+carga el escenario, pone la velocidad y da al play. Imprime cada revisión de incidente
+(`IncidentUpdated`), los textos del asistente (`IncidentEnriched`), las respuestas del chat y el
+informe, hasta `SimulationFinished` (y `ReportGenerated`, si el asistente lo publica).
 
-    uv run --project platform python -m platform_app.run --scenario demo --speed 16 --detector-only
-    uv run --project platform python -m platform_app.run --scenario demo --speed 16 \\
-        --wait-agent --evaluate
-    uv run --project platform python -m platform_app.run --all --check --detector-only
+    uv run --project platform python -m platform_app.run --scenario demo --speed 16
+    uv run --project platform python -m platform_app.run --scenario demo --tables handwritten
     uv run --project platform python -m platform_app.run --scenario nominal --interactive \\
         --fault radar:mute:150:200 --fault gps:loss:240:285
-    uv run --project platform python -m platform_app.run --scenario wind --speed 16 \\
-        --wait-agent --ask monitor:120:"¿Por qué crees que es viento?" --ask report:end:"¿Qué pasó?"
+    uv run --project platform python -m platform_app.run --scenario demo --speed 16 \\
+        --ask monitor:398:"Why do you think the drone is being hijacked?"
 
-`--wait-agent` activa «esperar al agente» (el reproductor se pausa en cada detección hasta que
-el monitor responde). `--detector-only` arranca el módulo de IA solo con el detector (sin LLM).
+`--tables learned|handwritten` elige las tablas de las facetas (por defecto, las aprendidas
+congeladas) y `--assistant scripted|off` el asistente (`off`: sin textos, chats ni informe).
 `--ask CONVERSACIÓN:CUÁNDO:TEXTO` manda una pregunta al chat (`monitor` o `report`) cuando el
 `sim_time` llega a CUÁNDO (segundos) o, con `end`, cuando se ha publicado el informe; imprime la
-respuesta según llega. `--evaluate` ejecuta la evaluación de la ejecución (`eval.md`).
-
-`--check` compara las detecciones con las etiquetas de `runs/<escenario>/labels.json` (solo para
-evaluar: lo lee este comando, nunca el módulo de IA).
+respuesta según llega.
 """
 
 import argparse
@@ -38,7 +34,6 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-import yaml
 from websockets.exceptions import WebSocketException
 from websockets.sync.client import ClientConnection, connect
 
@@ -46,48 +41,18 @@ from poc_contracts.enums import ConversationId, EventType
 from poc_contracts.topics import topic_for
 
 from .generator.scenario_io import list_scenarios
-from .paths import REPO_ROOT, RUNS_DIR
+from .paths import REPO_ROOT
 from .viewer_state import clock
 
 log = logging.getLogger("run")
 
 DEFAULT_PORT = 8100
-DETECTION_TYPES = ("DetectionRaised", "DetectionUpdated", "DetectionCleared")
-AI_READY_MARKER = "connected"  # línea de log del módulo de IA cuando ya está suscrito
+AI_READY_MARKER = "connected"  # línea de log del monitor cuando ya está suscrito
 AI_READY_TIMEOUT_S = 20.0
 PLATFORM_READY_TIMEOUT_S = 30.0
 RECV_TIMEOUT_S = 0.5
-REPORT_TIMEOUT_S = 600.0
+REPORT_TIMEOUT_S = 15.0  # el asistente preparado publica el informe unos 4 s después
 SETTLE_S = 2.0  # tras el informe, para que lleguen los últimos eventos al timeline
-RESPONSE_TYPES = ("AnomalyDetected", "AlertClosed", "DetectionAcknowledged")
-
-
-@dataclass(frozen=True)
-class Detection:
-    """Una línea de detección tal y como llegó por el bus."""
-
-    kind: str  # Raised | Updated | Cleared
-    t: float
-    detection_id: str
-    rule: str
-    source: str | None
-    severity: str | None
-    value: float | None
-    threshold: float | None
-    unit: str | None
-    message: str | None
-
-    def line(self) -> str:
-        src = self.source or "-"
-        if self.kind == "Cleared":
-            return (
-                f"{clock(self.t)}  {self.kind.upper():8} {self.rule:19} {src:8} {self.detection_id}"
-            )
-        what = f"{self.value:g}/{self.threshold:g} {self.unit}"
-        return (
-            f"{clock(self.t)}  {self.kind.upper():8} {self.rule:19} {src:8} {what:14} "
-            f"[{self.severity}] {self.message}"
-        )
 
 
 @dataclass(frozen=True)
@@ -110,18 +75,6 @@ class ManualFault:
             ) from exc
 
 
-def parse_detection(event: dict) -> Detection:
-    p = event["payload"]
-    kind = event["type"].removeprefix("Detection")
-    if kind == "Cleared":
-        return Detection(kind, event["sim_time"], p["detection_id"], p["rule"], None, None,
-                         p["max_value"], None, None, None)  # fmt: skip
-    return Detection(
-        kind, event["sim_time"], p["detection_id"], p["rule"], p["source"], p["severity"],
-        p["value"], p["threshold"], p["unit"], p["message"],
-    )  # fmt: skip
-
-
 # --- procesos -----------------------------------------------------------------------------------
 
 
@@ -133,14 +86,12 @@ def http_get(url: str, timeout: float = 2.0) -> dict | None:
         return None
 
 
-def start_platform(port: int, wait_timeout_s: float | None = None) -> subprocess.Popen:
+def start_platform(port: int) -> subprocess.Popen:
     if http_get(f"http://127.0.0.1:{port}/api/state") is not None:
         raise SystemExit(
             f"el puerto {port} ya está en uso (¿hay una plataforma en marcha? usa --platform)"
         )
     command = [sys.executable, "-m", "platform_app.app", "--port", str(port)]
-    if wait_timeout_s is not None:
-        command += ["--wait-timeout", str(wait_timeout_s)]
     proc = subprocess.Popen(
         command, cwd=REPO_ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
@@ -155,28 +106,11 @@ def start_platform(port: int, wait_timeout_s: float | None = None) -> subprocess
     raise SystemExit("la plataforma no responde")
 
 
-def start_ai_module(
-    platform_url: str,
-    *,
-    detector_only: bool = False,
-    llm_url: str | None = None,
-    profile: str | None = None,
-    tool_call_events: bool = True,
-    no_llm: bool = False,
-) -> subprocess.Popen:
-    """Arranca el módulo de IA (proceso aparte) y espera a que esté conectado y suscrito."""
+def start_ai_module(platform_url: str, *, tables: str, assistant: str) -> subprocess.Popen:
+    """Arranca el monitor de situación (proceso aparte) y espera a que esté conectado."""
     command = ["uv", "run", "--project", str(REPO_ROOT / "ai-module-py"), "python", "-m",
-               "ai_module", "--platform", platform_url, "--runs", str(RUNS_DIR)]  # fmt: skip
-    if detector_only:
-        command.append("--detector-only")
-    if llm_url:
-        command += ["--llm-url", llm_url]
-    if profile:
-        command += ["--profile", profile]
-    if not tool_call_events:
-        command.append("--no-tool-call-events")
-    if no_llm:
-        command.append("--no-llm")
+               "ai_module.situation", "--platform", platform_url, "--tables", tables,
+               "--assistant", assistant]  # fmt: skip
     proc = subprocess.Popen(
         command, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         bufsize=1,
@@ -197,26 +131,15 @@ def start_ai_module(
     threading.Thread(target=pump, daemon=True).start()
     deadline = time.monotonic() + AI_READY_TIMEOUT_S
     while not ready.wait(0.2):
-        if proc.poll() is not None:  # p. ej. vLLM sirve otro modelo: el módulo para con un error
+        if proc.poll() is not None:  # p. ej. las tablas congeladas han cambiado
             time.sleep(0.3)  # deja que el hilo recoja las últimas líneas
-            raise SystemExit("the AI module stopped at startup:\n" + "\n".join(tail))
+            raise SystemExit("the situation monitor stopped at startup:\n" + "\n".join(tail))
         if time.monotonic() > deadline:
             log.warning(
-                "the AI module did not report being connected in %.0f s", AI_READY_TIMEOUT_S
+                "the situation monitor did not report being connected in %.0f s", AI_READY_TIMEOUT_S
             )
             break
     return proc
-
-
-def profile_wait_timeout(profile: str) -> float | None:
-    """Espera de la plataforma que fija el perfil (`platform.wait_agent_timeout_s`), si la fija."""
-    path = REPO_ROOT / "model-profiles" / f"{profile}.yaml"
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except OSError as exc:
-        raise SystemExit(f"cannot read profile {profile}: {exc}") from exc
-    value = data.get("platform", {}).get("wait_agent_timeout_s")
-    return None if value is None else float(value)
 
 
 def stop(proc: subprocess.Popen | None) -> None:
@@ -259,7 +182,7 @@ class Ask:
 
 @dataclass
 class RunResult:
-    detections: list[Detection]
+    incidents: list[dict]
     run_id: str | None = None
     wall_s: float = 0.0
     responses: list[dict] = field(default_factory=list)
@@ -282,24 +205,18 @@ def _operator_message(ask: Ask, number: int, sim_time: float, t0: datetime) -> d
     }
 
 
-def _response_line(event: dict) -> str:
+def _incident_line(event: dict) -> str:
     p = event["payload"]
-    at = clock(event["sim_time"])
-    cause = event.get("causation_id")
-    if event["type"] == "AnomalyDetected":
-        fb = " [fallback]" if p["fallback"] else ""
-        sup = f" (sustituye a {p['supersedes']})" if p["supersedes"] else ""
-        return (
-            f"{at}  ALERTA   {p['alert_id']} {p['cause']} {p['severity']} conf {p['confidence']:g}"
-            f"{sup}{fb} ← {cause}: {p['summary']}"
-        )
-    if event["type"] == "AlertClosed":
-        return f"{at}  CIERRE   {p['alert_id']} ← {cause}: {p['reason']}"
-    fb = " [fallback]" if p["fallback"] else ""
+    subject = f" ({p['subject']})" if p.get("subject") else ""
     return (
-        f"{at}  ACK      {p['detection_id']} → {p['alert_id'] or 'sin alerta'}{fb} ← {cause}: "
-        f"{p['reason']}"
+        f"{clock(p['as_of_sim_time'])}  {p['change']:<8} {p['incident_id']} "
+        f"{p['name']}{subject} · {p['state']} · {p['severity']} · {p['confidence']}"
     )
+
+
+def _enriched_line(event: dict) -> str:
+    p = event["payload"]
+    return f"{clock(event['sim_time'])}  TEXTO    {p['incident_id']} r{p['revision']}: {p['text']}"
 
 
 def run_scenario(
@@ -310,24 +227,22 @@ def run_scenario(
     faults: list[ManualFault],
     timeout_s: float,
     *,
-    wait_agent: bool = False,
-    agents: bool = False,
+    reports: bool = False,
     asks: list[Ask] | None = None,
     quiet: bool = False,
 ) -> RunResult:
-    """Carga `name`, lo ejecuta hasta `SimulationFinished` (y, con agentes, hasta el informe) y
-    devuelve sus detecciones."""
+    """Carga `name`, lo ejecuta hasta `SimulationFinished` (y, con asistente, hasta el informe) y
+    devuelve sus incidentes."""
     asks = [Ask(a.conversation, a.when, a.text) for a in (asks or [])]
     send(ws, "load", name)
     if not _wait_for(ws, lambda m: m.get("op") == "state" and m["scenario"] == name, 60):
         raise SystemExit(f"la plataforma no ha cargado {name}")
     send(ws, "speed", speed)
     send(ws, "interactive", interactive)
-    send(ws, "wait_agent", wait_agent)
     send(ws, "play")
 
     result = RunResult([])
-    detections = result.detections
+    incidents = result.incidents
     pending = sorted(
         [(f.start_s, f, True) for f in faults] + [(f.end_s, f, False) for f in faults],
         key=lambda x: x[0],
@@ -357,12 +272,13 @@ def run_scenario(
 
     while True:
         now = time.monotonic()
-        done = finished and (not agents or reported) and now >= settle_until
+        done = finished and (not reports or reported) and now >= settle_until
         if done and all(a.sent for a in asks) and not streaming and not awaiting:
             break
-        if now > (report_deadline if finished and agents else deadline):
-            where = "el informe" if finished else "la simulación"
-            raise SystemExit(f"{name}: no ha terminado {where} en el tiempo previsto")
+        if finished and reports and now > report_deadline:
+            break  # el asistente no publica informe de este escenario
+        if now > deadline:
+            raise SystemExit(f"{name}: la simulación no ha terminado en el tiempo previsto")
         try:
             msg = json.loads(ws.recv(timeout=RECV_TIMEOUT_S))
         except TimeoutError:
@@ -382,14 +298,14 @@ def run_scenario(
         while pending and event["sim_time"] >= pending[0][0]:
             _, fault, active = pending.pop(0)
             send(ws, "fault", {"source": fault.source, "mode": fault.mode, "active": active})
-        if kind in DETECTION_TYPES:
-            detections.append(parse_detection(event))
+        if kind == "IncidentUpdated":
+            incidents.append(event)
             if not quiet:
-                print(detections[-1].line(), flush=True)
-        elif kind in RESPONSE_TYPES and event["source"] == "ai-monitor":
+                print(_incident_line(event), flush=True)
+        elif kind == "IncidentEnriched":
             result.responses.append(event)
             if not quiet:
-                print(_response_line(event), flush=True)
+                print(_enriched_line(event), flush=True)
         elif kind == "AgentReplyChunk":
             if not streaming:
                 print(f"🤖 {event['payload']['conversation_id']}: ", end="", flush=True)
@@ -409,8 +325,8 @@ def run_scenario(
             finished = True
             result.wall_s = time.monotonic() - started
             report_deadline = time.monotonic() + REPORT_TIMEOUT_S
-            settle_until = time.monotonic() + (0.0 if agents else 0.0)
-            if not agents:
+            settle_until = time.monotonic()
+            if not reports:
                 ask_due(event["sim_time"], True)
         elif kind == "ReportGenerated":
             reported = True
@@ -419,7 +335,7 @@ def run_scenario(
                 report = event["payload"]
                 print(
                     f"{clock(event['sim_time'])}  INFORME  {len(report['markdown'])} caracteres, "
-                    f"{report['alerts_count']} alertas",
+                    f"{report['alerts_count']} incidentes",
                     flush=True,
                 )
             ask_due(event["sim_time"], True)
@@ -440,73 +356,7 @@ def _wait_for(ws: ClientConnection, predicate, timeout_s: float) -> bool:
     return False
 
 
-# --- comprobación contra las etiquetas ------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Check:
-    ok: bool
-    what: str
-
-
-def check_detections(labels: list[dict], detections: list[Detection]) -> list[Check]:
-    """Comprueba las detecciones de un escenario contra sus etiquetas (solo para evaluar)."""
-    raised = [d for d in detections if d.kind == "Raised"]
-    out: list[Check] = []
-    if not labels:
-        out.append(Check(not detections, f"sin anomalías ni fallos: {len(detections)} detecciones"))
-    inside: set[str] = set()
-    for lb in labels:
-        a, b = lb["eval_window"]
-        window = [d for d in raised if a <= d.t <= b]
-        inside |= {d.detection_id for d in window}
-        for rule in lb["expected_rules"]:
-            hits = [d for d in window if d.rule == rule and d.source in (None, lb["source"])]
-            optional = rule == "ROUTE_DEVIATION" and lb["type"] in ("gps_spoofing", "gps_loss")
-            if hits:
-                out.append(
-                    Check(
-                        len(hits) == 1,
-                        f"{lb['id']} {rule}: {len(hits)} vez/veces ({clock(hits[0].t)})",
-                    )
-                )
-            elif not optional:
-                out.append(Check(False, f"{lb['id']} {rule}: no ha saltado"))
-        if lb["type"] == "gps_loss":
-            first = next((d for d in window if d.rule == "GPS_DEGRADED"), None)
-            ok = first is not None and first.t - lb["start_s"] <= 1.0
-            out.append(Check(ok, f"{lb['id']} GPS_DEGRADED en el primer segundo"))
-            disc = next((d for d in window if d.rule == "SOURCE_DISCREPANCY"), None)
-            out.append(Check(bool(first and disc and disc.t > first.t),
-                             f"{lb['id']} SOURCE_DISCREPANCY después de GPS_DEGRADED"))  # fmt: skip
-        if lb["type"] == "source_silent":
-            others = [d for d in window if d.rule == "SOURCE_SILENT" and d.source != lb["source"]
-                      and lb["start_s"] <= d.t <= lb["end_s"] + 6]  # fmt: skip
-            out.append(Check(not others, f"{lb['id']} solo salta SOURCE_SILENT de {lb['source']}"))
-    stray = [d for d in raised if d.detection_id not in inside]
-    if labels:
-        out.append(
-            Check(not stray, f"detecciones fuera de las ventanas de evaluación: {len(stray)}")
-        )
-    return out
-
-
-def load_labels(name: str) -> list[dict]:
-    path = RUNS_DIR / name / "labels.json"
-    return json.loads(path.read_text(encoding="utf-8"))["labels"]
-
-
 # --- programa -------------------------------------------------------------------------------------
-
-
-def evaluate(name: str, run_id: str) -> None:
-    """Ejecuta la evaluación del módulo de IA sobre la carpeta de la ejecución."""
-    folder = RUNS_DIR / name / run_id
-    subprocess.run(
-        ["uv", "run", "--project", str(REPO_ROOT / "ai-module-py"), "python", "-m",
-         "ai_module.evaluate", str(folder)],
-        cwd=REPO_ROOT, check=False,
-    )  # fmt: skip
 
 
 def main() -> int:
@@ -521,37 +371,22 @@ def main() -> int:
         "--fault", action="append", type=ManualFault.parse, default=[],
         metavar="FUENTE:MODO:INICIO:FIN", help="fallo manual (activa --interactive)",
     )  # fmt: skip
-    parser.add_argument("--check", action="store_true", help="comparar con labels.json")
-    parser.add_argument("--wait-agent", action="store_true", help="«esperar al agente»")
-    parser.add_argument("--evaluate", action="store_true", help="generar eval.md de la ejecución")
     parser.add_argument(
         "--ask", action="append", type=Ask.parse, default=[],
         metavar="CONVERSACIÓN:CUÁNDO:TEXTO", help="pregunta al chat (monitor|report)",
     )  # fmt: skip
     parser.add_argument(
-        "--detector-only", action="store_true", help="módulo de IA solo con el detector"
-    )
-    parser.add_argument("--llm-url", help="URL del servidor LLM (se pasa al módulo de IA)")
+        "--tables", choices=["learned", "handwritten"], default="learned",
+        help="tablas de las facetas: aprendidas congeladas (por defecto) o las del vídeo",
+    )  # fmt: skip
     parser.add_argument(
-        "--profile", help="perfil de model-profiles/ (se pasa al módulo de IA y fija la espera)"
-    )
-    parser.add_argument(
-        "--wait-timeout", type=float, help="espera al agente de la plataforma, en segundos"
-    )
+        "--assistant", choices=["scripted", "off"], default="scripted",
+        help="asistente: textos preparados o ninguno (sin textos, chats ni informe)",
+    )  # fmt: skip
     parser.add_argument(
         "--platform", help="URL de una plataforma ya en marcha (si no, arranca una)"
     )
-    parser.add_argument(
-        "--no-tool-call-events",
-        action="store_true",
-        help="el módulo de IA no publica AgentToolCall (lo que la web muestra para depurar)",
-    )
-    parser.add_argument("--no-ai", action="store_true", help="no arrancar el módulo de IA")
-    parser.add_argument(
-        "--no-llm",
-        action="store_true",
-        help="módulo de IA sin LLM (perfil con monitor.engine: table): sin informe ni chats",
-    )
+    parser.add_argument("--no-ai", action="store_true", help="no arrancar el monitor")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument(
         "--timeout", type=float, default=900.0, help="segundos de reloj por escenario"
@@ -561,29 +396,17 @@ def main() -> int:
     names = list_scenarios() if args.all else args.scenario
     if not names:
         parser.error("indica --scenario NOMBRE (repetible) o --all")
-    # con `--no-llm` (E6) no hay informe que esperar: el monitor es la tabla de decisión
-    agents = not (args.no_ai or args.detector_only or args.no_llm)
-    if args.wait_agent and args.no_ai:
-        parser.error("--wait-agent necesita el módulo de IA")
+    monitor = not args.no_ai
+    # el informe solo lo publica el asistente preparado y de algunos escenarios: se espera un rato
+    reports = monitor and args.assistant == "scripted"
 
     platform_proc = ai_proc = None
     url = args.platform or f"http://127.0.0.1:{args.port}"
-    failed = False
     try:
         if args.platform is None:
-            wait = args.wait_timeout
-            if wait is None and args.profile:
-                wait = profile_wait_timeout(args.profile)
-            platform_proc = start_platform(args.port, wait)
-        if not args.no_ai:
-            ai_proc = start_ai_module(
-                url,
-                detector_only=args.detector_only,
-                llm_url=args.llm_url,
-                profile=args.profile,
-                tool_call_events=not args.no_tool_call_events,
-                no_llm=args.no_llm,
-            )
+            platform_proc = start_platform(args.port)
+        if monitor:
+            ai_proc = start_ai_module(url, tables=args.tables, assistant=args.assistant)
         ws_url = url.replace("http", "ws", 1).rstrip("/") + "/ws"
         with connect(ws_url, open_timeout=5) as ws:
             ws.send(json.dumps({"op": "hello", "client": "web"}))
@@ -592,24 +415,17 @@ def main() -> int:
                 print(f"\n== {name} (a {args.speed:g}×) ==", flush=True)
                 result = run_scenario(
                     ws, name, args.speed, args.interactive or bool(args.fault), args.fault,
-                    args.timeout, wait_agent=args.wait_agent, agents=agents, asks=args.ask,
+                    args.timeout, reports=reports, asks=args.ask,
                 )  # fmt: skip
-                found = result.detections
-                raised = sum(d.kind == "Raised" for d in found)
-                print(f"-- {name}: {raised} detecciones abiertas ({result.wall_s:.0f} s de reloj)")
-                if args.check:
-                    for c in check_detections(load_labels(name), found):
-                        print(f"   {'✅' if c.ok else '❌'} {c.what}")
-                        failed |= not c.ok
-                if args.evaluate and result.run_id:
-                    evaluate(name, result.run_id)
+                opened = sum(e["payload"]["change"] == "opened" for e in result.incidents)
+                print(f"-- {name}: {opened} incidentes abiertos ({result.wall_s:.0f} s de reloj)")
     except (OSError, WebSocketException) as exc:
         print(f"error de conexión: {exc}", file=sys.stderr)
         return 2
     finally:
         stop(ai_proc)
         stop(platform_proc)
-    return 1 if failed else 0
+    return 0
 
 
 if __name__ == "__main__":

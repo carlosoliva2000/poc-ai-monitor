@@ -210,7 +210,6 @@ class CompletionReason(StrEnum):
 
 class PauseReason(StrEnum):
     USER = "user"
-    WAITING_AGENT = "waiting_agent"
 
 
 class FaultMode(StrEnum):

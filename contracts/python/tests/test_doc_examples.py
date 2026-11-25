@@ -9,9 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pydantic import TypeAdapter
 
-from poc_contracts.api import ScenarioInfo, ScenariosResponse, ToolError
+from poc_contracts.api import ScenarioInfo, ScenariosResponse
 from poc_contracts.commands import InstructorControl
 from poc_contracts.enums import EventType
 from poc_contracts.envelope import Envelope
@@ -19,13 +18,6 @@ from poc_contracts.payloads import PAYLOAD_MODELS
 from poc_contracts.run_files import LabelsFile, PlanFile, RunMeta, TruthFile, UnlabeledEpisodesFile
 from poc_contracts.scenario import GpsConfig, LinkConfig, ScenarioConfig
 from poc_contracts.states import StateRow
-from poc_contracts.tools import (
-    FlightSummary,
-    GetEventsResult,
-    MyAlertsResult,
-    PublishAlertResult,
-    TrackMetrics,
-)
 from poc_contracts.ws import FaultControl
 
 DOC = Path(__file__).resolve().parents[2] / "eventos.md"
@@ -119,14 +111,6 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ('{"source": "gps", "mode": "loss", "active"', model(FaultControl)),
     ('{"command": "set_wind", "params": {"from_deg": 0.0', model(InstructorControl)),
     ('{"scenarios"', model(ScenariosResponse)),
-    ('{"ok": true, "result"', SKIP),  # ilustrativo: `…` no es JSON; `result` depende de cada tool
-    ('{"ok": false, "error"', model(ToolError)),
-    ('{"events"', model(GetEventsResult)),
-    ('{ "since": 60.0', model(TrackMetrics)),
-    ('{"alerts"', model(MyAlertsResult)),
-    ('{ "mission_id": "MSN-DEMO", "duration_s"', model(FlightSummary)),
-    ('{"ok": true, "alert_id"', TypeAdapter(PublishAlertResult).validate_python),
-    ('{"ok": false, "errors"', TypeAdapter(PublishAlertResult).validate_python),
     (
         '{ "mission_id": "MSN-DEMO", "cruise_speed_mps": 15.0, "altitude_m": 60.0, '
         '"acceptance_radius_m": 25.0, "duration_s"',

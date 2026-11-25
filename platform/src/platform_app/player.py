@@ -54,12 +54,9 @@ log = logging.getLogger(__name__)
 
 TICK_S = 0.05  # periodo del bucle de reloj (reloj de pared)
 MAX_TICK_S = 0.5  # tras un atasco no se recupera más de esto de golpe
-WAIT_AGENT_TIMEOUT_S = 90.0  # reloj de pared
-AI_PATTERN = "citadel.pub.evt.ai.>"
-MONITOR_SOURCE = "ai-monitor"
 INTERACTIVE_OFF_MESSAGE = "interactive mode is off: turn it on to inject faults"
 INTERACTIVE_OFF_MESSAGE_COMMANDS = "interactive mode is off: turn it on to send instructor commands"
-META_KEYS = ("speed", "wait_agent", "interactive")
+META_KEYS = ("speed", "interactive")
 
 
 @dataclass(frozen=True)
@@ -85,18 +82,13 @@ class Player:
         *,
         runs_dir: Path = RUNS_DIR,
         scenarios_dir: Path = SCENARIOS_DIR,
-        wait_timeout_s: float = WAIT_AGENT_TIMEOUT_S,
-        wall_clock: Callable[[], float] = time.monotonic,
         run_id_factory: Callable[[], str] | None = None,
     ) -> None:
         self.bus = bus
         self.runs_dir = runs_dir
         self.scenarios_dir = scenarios_dir
-        self.wait_timeout_s = wait_timeout_s
-        self._wall_clock = wall_clock
         self._run_id_factory = run_id_factory or _default_run_id
         self.speed = 1.0
-        self.wait_agent = False
         self.interactive = False
         self.listeners: list[Callable[[], None]] = []
 
@@ -113,10 +105,7 @@ class Player:
         self._cursor = 0
         self._started = False
         self._dumped = False
-        self._waiting_for: set[str] = set()
-        self._wait_deadline = 0.0
         self._history: dict[str, list[dict]] = {key: [] for key in META_KEYS}
-        bus.subscribe(AI_PATTERN, self._on_ai_event)
 
     # --- Estado -------------------------------------------------------------------------------
 
@@ -143,7 +132,6 @@ class Player:
             run_id=self.run_id,
             sim_time=self.sim_time,
             speed=self.speed,
-            wait_agent=self.wait_agent,
             interactive=self.interactive,
             active_faults=[ActiveFault(source=s, mode=f.mode, origin=f.origin) for s, f in faults],
             cursor=self._cursor,
@@ -222,7 +210,6 @@ class Player:
         self._cursor = 0
         self._started = False
         self._dumped = False
-        self._waiting_for.clear()
         self._history = {key: [] for key in META_KEYS}
         self._status = PlayerStatus.IDLE
         self._plr(
@@ -270,7 +257,6 @@ class Player:
         self._started = True
         values = {
             "speed": self.speed,
-            "wait_agent": self.wait_agent,
             "interactive": self.interactive,
         }
         for key in META_KEYS:
@@ -321,7 +307,6 @@ class Player:
         if self._status == PlayerStatus.RUNNING:
             return
         was_paused = self._status == PlayerStatus.PAUSED
-        self._waiting_for.clear()
         self._mark_started()
         self._status = PlayerStatus.RUNNING
         if was_paused:
@@ -332,9 +317,6 @@ class Player:
         self._require_sim()
         if self._status == PlayerStatus.RUNNING:
             self._pause(PauseReason.USER)
-        elif self._status == PlayerStatus.PAUSED:
-            self._waiting_for.clear()  # una pausa del usuario no se levanta sola
-            self._notify()
 
     def step(self) -> None:
         """Publica el siguiente evento y se queda en pausa."""
@@ -343,7 +325,6 @@ class Player:
             raise PlayerError("the simulation has finished: restart it to watch it again")
         if self._status == PlayerStatus.RUNNING:
             self._pause(PauseReason.USER)
-        self._waiting_for.clear()
         self._mark_started()
         while not self._queue and not sim.finished:
             self._queue.extend(sim.step())
@@ -360,13 +341,6 @@ class Player:
             raise PlayerError(f"invalid speed: {speed} (values: {SPEEDS})")
         self.speed = speed
         self._record("speed", speed)
-        self._notify()
-
-    def set_wait_agent(self, value: bool) -> None:
-        self.wait_agent = value
-        self._record("wait_agent", value)
-        if not value and self._waiting_for:
-            self._stop_waiting()
         self._notify()
 
     def set_interactive(self, value: bool) -> None:
@@ -462,46 +436,6 @@ class Player:
         event = make_event(self.config, event_type, self.sim_time, self._plr_n, payload)
         return self.bus.publish(event)
 
-    # --- Esperar al agente --------------------------------------------------------------------
-
-    def _on_ai_event(self, event: Envelope) -> None:
-        """Pausa ante un evento de detección (nueva, actualizada o cerrada) y reanuda cuando el
-        monitor responde a todos con un evento que lleve su `event_id` como `causation_id`."""
-        if event.type in (
-            EventType.DETECTION_RAISED,
-            EventType.DETECTION_UPDATED,
-            EventType.DETECTION_CLEARED,
-        ):
-            if not self.wait_agent:
-                return
-            if self._status == PlayerStatus.RUNNING:
-                self._pause(PauseReason.WAITING_AGENT)
-            elif not self._waiting_for:
-                return  # pausa del usuario o fin de simulación: no se espera a nadie
-            self._waiting_for.add(event.event_id)
-            self._wait_deadline = self._wall_clock() + self.wait_timeout_s
-        elif (
-            self._waiting_for
-            and event.source == MONITOR_SOURCE
-            and event.causation_id in self._waiting_for
-        ):
-            self._waiting_for.discard(event.causation_id)  # type: ignore[arg-type]
-            if not self._waiting_for:
-                self._stop_waiting()
-
-    def _stop_waiting(self) -> None:
-        self._waiting_for.clear()
-        if self._status == PlayerStatus.PAUSED:
-            self._status = PlayerStatus.RUNNING
-            self._plr(EventType.SIMULATION_RESUMED, {})
-        self._notify()
-
-    def check_wait_timeout(self) -> None:
-        """Reanuda si se ha agotado la espera al agente (reloj de pared)."""
-        if self._waiting_for and self._wall_clock() >= self._wait_deadline:
-            log.warning("agent did not answer in %.0f s: resuming", self.wait_timeout_s)
-            self._stop_waiting()
-
     # --- Reloj de pared -----------------------------------------------------------------------
 
     async def run_clock(self) -> None:
@@ -513,7 +447,6 @@ class Player:
             elapsed, last = min(now - last, MAX_TICK_S), now
             try:
                 self.advance(elapsed * self.speed)
-                self.check_wait_timeout()
             except Exception:
                 log.exception("player tick failed")
 

@@ -268,10 +268,6 @@
           "title": "Speed",
           "type": "number"
         },
-        "wait_agent": {
-          "title": "Wait Agent",
-          "type": "boolean"
-        },
         "interactive": {
           "title": "Interactive",
           "type": "boolean"
@@ -304,7 +300,6 @@
         "run_id",
         "sim_time",
         "speed",
-        "wait_agent",
         "interactive",
         "active_faults",
         "cursor",

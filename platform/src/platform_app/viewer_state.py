@@ -84,7 +84,6 @@ class ViewerState:
     run_id: str | None = None
     sim_time: float = 0.0
     speed: float = 1.0
-    wait_agent: bool = False
     interactive: bool = False
     active_faults: list[dict] = field(default_factory=list)
 
@@ -120,7 +119,6 @@ class ViewerState:
         self.scenario = msg["scenario"]
         self.sim_time = msg["sim_time"]
         self.speed = msg["speed"]
-        self.wait_agent = msg["wait_agent"]
         self.interactive = msg["interactive"]
         self.active_faults = list(msg["active_faults"])
         if scenario_changed:
@@ -231,13 +229,11 @@ class ViewerState:
         """Línea de estado: tiempo, velocidad, estado, esperar al agente, interactivo y fallos."""
         if not self.connected:
             return "no connection to the platform"
-        yes = {True: "yes", False: "no"}
         parts = [
             f"{self.scenario or '—'}",
             clock(self.sim_time),
             f"{self.speed:g}×",
             self.status,
-            f"wait for the agent: {yes[self.wait_agent]}",
             f"interactive: {'YES' if self.interactive else 'no'}",
             f"faults: {self.faults_text()}",
         ]
@@ -268,8 +264,6 @@ class ViewerState:
             return Action(control("speed", SPEEDS[j]))
         if key == "0":
             return Action(control("reset"))
-        if key == "w":
-            return Action(control("wait_agent", not self.wait_agent))
         if key == "t":
             return Action(toggle_truth=True)
         if key == "i":

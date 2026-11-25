@@ -235,25 +235,21 @@ def test_run_meta_is_written_by_the_player_with_the_changes_during_the_run(
     player = make_player(runs_dir, run_id_factory=lambda: "20990101-000001")
     player.load("nominal")
     player.set_speed(4)  # antes del primer play: es el valor inicial
-    player.set_wait_agent(True)
     assert not (runs_dir / "nominal" / str(player.run_id)).exists()  # sin ejecución, sin fichero
     player.play()
     assert read_meta(runs_dir, player) == {
         "scenario": "nominal", "run_id": player.run_id,
         "speed": 4.0, "speed_changes": [],
-        "wait_agent": True, "wait_agent_changes": [],
         "interactive": False, "interactive_changes": [],
     }  # fmt: skip
     player.advance(30)
     player.set_speed(8)
     player.set_speed(8)  # sin cambio: nada
-    player.set_wait_agent(False)
     player.set_interactive(True)
     player.advance(10)
     player.set_interactive(False)
     meta = read_meta(runs_dir, player)
     assert meta["speed"] == 4.0 and meta["speed_changes"] == [{"sim_time": 30.0, "value": 8.0}]
-    assert meta["wait_agent_changes"] == [{"sim_time": 30.0, "value": False}]
     assert meta["interactive_changes"] == [
         {"sim_time": 30.0, "value": True},
         {"sim_time": 40.0, "value": False},
@@ -262,6 +258,21 @@ def test_run_meta_is_written_by_the_player_with_the_changes_during_the_run(
     player.run_to_end()
     folder = runs_dir / "nominal" / str(player.run_id)
     assert (folder / "timeline.jsonl").exists() and read_meta(runs_dir, player) == meta
+
+
+def cleared(number: int, sim_time: float) -> Envelope:
+    """Un evento de la IA cualquiera: lo que llega al timeline después de terminar."""
+    from platform_app.generator.events import make_event
+
+    payload = {
+        "detection_id": f"det-{number:04d}",
+        "rule": "ROUTE_DEVIATION",
+        "duration_s": 20.0,
+        "max_value": 40.0,
+    }
+    return make_event(
+        load_scenario("nominal"), EventType.DETECTION_CLEARED, sim_time, number + 50, payload
+    )
 
 
 def test_timeline_keeps_appending_after_the_dump(runs_dir: Path) -> None:
@@ -457,221 +468,3 @@ def test_truth_never_passes_the_current_instant(runs_dir: Path) -> None:
 
 
 # --- Esperar al agente --------------------------------------------------------------------------
-
-
-def detection(number: int, sim_time: float, kind: EventType = EventType.DETECTION_RAISED):
-    from platform_app.generator.events import make_event
-
-    payload = {
-        "detection_id": f"det-{number:04d}",
-        "rule": "ROUTE_DEVIATION",
-        "severity": "medium",
-        "value": 35.0,
-        "threshold": 30.0,
-        "unit": "m",
-        "source": None,
-        "window": {"since": sim_time - 4, "until": sim_time},
-        "trigger_event_ids": [],
-        "message": "desviación",
-    }
-    return make_event(load_scenario("nominal"), kind, sim_time, number, payload)
-
-
-def monitor_reply(number: int, causation_id: str, sim_time: float):
-    from platform_app.generator.events import make_event
-
-    payload = {
-        "alert_id": f"ai-{number:04d}",
-        "detection_ids": [causation_id],
-        "cause": "WIND",
-        "severity": "low",
-        "confidence": 0.8,
-        "summary": "wind",
-        "explanation": "x",
-        "recommendation": "y",
-        "evidence_event_ids": ["gps-000001"],
-        "supersedes": None,
-        "as_of_sim_time": sim_time,
-        "fallback": False,
-    }
-    event = make_event(
-        load_scenario("nominal"), EventType.ANOMALY_DETECTED, sim_time, number, payload
-    )
-    return event.model_copy(update={"causation_id": causation_id})
-
-
-def test_wait_agent_pauses_on_detection_and_resumes_on_the_monitor_reply(runs_dir: Path) -> None:
-    player = make_player(runs_dir)
-    player.load("nominal")
-    player.set_wait_agent(True)
-    bus = player.bus
-    raised: list[Envelope] = []
-
-    def fake_detector(event: Envelope) -> None:
-        # a los 40 s el detector avisa (una vez)
-        if event.type == EventType.POSITION_UPDATED and event.sim_time == 40.0 and not raised:
-            raised.append(bus.publish(detection(1, event.sim_time)))
-
-    bus.subscribe("citadel.pub.evt.air.d1.>", fake_detector)
-    player.play()
-    player.advance(60)
-    # el monitor no ha contestado: el reproductor está esperando
-    assert player.state().status == PlayerStatus.PAUSED
-    waiting_at = player.sim_time
-    assert of_type(player, EventType.SIMULATION_PAUSED)[-1].payload == {"reason": "waiting_agent"}
-    player.advance(30)
-    assert player.sim_time == waiting_at
-    # un evento del monitor con otro causation_id no reanuda
-    bus.publish(monitor_reply(1, "det-9999", waiting_at))
-    assert player.state().status == PlayerStatus.PAUSED
-    bus.publish(monitor_reply(2, raised[0].event_id, waiting_at))
-    assert player.state().status == PlayerStatus.RUNNING
-    assert types(player).count("SimulationResumed") == 1
-    player.advance(5)
-    assert player.sim_time > waiting_at
-
-
-def cleared(number: int, sim_time: float) -> Envelope:
-    from platform_app.generator.events import make_event
-
-    payload = {
-        "detection_id": f"det-{number:04d}",
-        "rule": "ROUTE_DEVIATION",
-        "duration_s": 20.0,
-        "max_value": 40.0,
-    }
-    return make_event(
-        load_scenario("nominal"), EventType.DETECTION_CLEARED, sim_time, number + 50, payload
-    )
-
-
-def test_wait_agent_resumes_with_a_detection_acknowledged(runs_dir: Path) -> None:
-    """Cualquier evento del monitor con el `causation_id` de la detección reanuda, también la
-    respuesta que no crea alerta; un `DetectionUpdated` espera por su propio `event_id`."""
-    from platform_app.generator.events import make_event
-
-    def ack(number: int, detection_id: str, causation_id: str, sim_time: float) -> Envelope:
-        payload = {
-            "detection_id": detection_id,
-            "alert_id": None,
-            "reason": "sin alerta",
-            "as_of_sim_time": sim_time,
-            "fallback": False,
-        }
-        event = make_event(
-            load_scenario("nominal"), EventType.DETECTION_ACKNOWLEDGED, sim_time, number, payload
-        )
-        return event.model_copy(update={"causation_id": causation_id})
-
-    player = make_player(runs_dir)
-    player.load("nominal")
-    player.set_wait_agent(True)
-    player.play()
-    player.advance(10)
-    raised = player.bus.publish(detection(1, player.sim_time))
-    updated = player.bus.publish(detection(2, player.sim_time, EventType.DETECTION_UPDATED))
-    assert player.state().status == PlayerStatus.PAUSED
-    # el `detection_id` no vale: hay que responder al `event_id` de cada evento de detección
-    player.bus.publish(ack(1, "det-0001", "det-0001-no", player.sim_time))
-    assert player.state().status == PlayerStatus.PAUSED
-    player.bus.publish(ack(2, "det-0001", raised.event_id, player.sim_time))
-    assert player.state().status == PlayerStatus.PAUSED
-    player.bus.publish(ack(3, "det-0001", updated.event_id, player.sim_time))
-    assert player.state().status == PlayerStatus.RUNNING
-
-
-def test_wait_agent_pauses_on_a_cleared_detection_and_resumes_with_the_alert_closed(
-    runs_dir: Path,
-) -> None:
-    """El cierre de una detección también espera: se reanuda con el `AlertClosed` (o cualquier
-    respuesta del monitor) que lleve el `event_id` del `DetectionCleared`."""
-    from platform_app.generator.events import make_event
-
-    player = make_player(runs_dir)
-    player.load("nominal")
-    player.set_wait_agent(True)
-    player.play()
-    player.advance(10)
-    closing = player.bus.publish(cleared(1, player.sim_time))
-    assert player.state().status == PlayerStatus.PAUSED
-    assert of_type(player, EventType.SIMULATION_PAUSED)[-1].payload == {"reason": "waiting_agent"}
-    waiting_at = player.sim_time
-    player.advance(30)
-    assert player.sim_time == waiting_at
-    payload = {"alert_id": "ai-0003", "reason": "cerrada", "as_of_sim_time": waiting_at}
-    closed = make_event(
-        load_scenario("nominal"), EventType.ALERT_CLOSED, waiting_at, 9, payload
-    ).model_copy(update={"causation_id": closing.event_id})
-    player.bus.publish(closed)
-    assert player.state().status == PlayerStatus.RUNNING
-    player.advance(5)
-    assert player.sim_time > waiting_at
-
-
-def test_wait_agent_resumes_a_cleared_detection_with_a_deterministic_acknowledgement(
-    runs_dir: Path,
-) -> None:
-    from platform_app.generator.events import make_event
-
-    player = make_player(runs_dir)
-    player.load("nominal")
-    player.set_wait_agent(True)
-    player.play()
-    player.advance(10)
-    closing = player.bus.publish(cleared(1, player.sim_time))
-    assert player.state().status == PlayerStatus.PAUSED
-    payload = {
-        "detection_id": "det-0001",
-        "alert_id": None,
-        "reason": "sin alerta",
-        "as_of_sim_time": player.sim_time,
-        "fallback": False,
-    }
-    ack = make_event(
-        load_scenario("nominal"), EventType.DETECTION_ACKNOWLEDGED, player.sim_time, 9, payload
-    ).model_copy(update={"causation_id": closing.event_id})
-    player.bus.publish(ack)
-    assert player.state().status == PlayerStatus.RUNNING
-
-
-def test_wait_agent_resumes_after_the_wall_clock_timeout(runs_dir: Path) -> None:
-    now = [1000.0]
-    player = make_player(runs_dir, wait_timeout_s=3.0, wall_clock=lambda: now[0])
-    player.load("nominal")
-    player.set_wait_agent(True)
-    player.play()
-    player.advance(10)
-    player.bus.publish(detection(1, player.sim_time, EventType.DETECTION_UPDATED))
-    assert player.state().status == PlayerStatus.PAUSED
-    now[0] += 2.9
-    player.check_wait_timeout()
-    assert player.state().status == PlayerStatus.PAUSED
-    now[0] += 0.2
-    player.check_wait_timeout()
-    assert player.state().status == PlayerStatus.RUNNING
-
-
-def test_wait_agent_off_ignores_detections_and_turning_it_off_resumes(runs_dir: Path) -> None:
-    player = make_player(runs_dir)
-    player.load("nominal")
-    player.play()
-    player.advance(10)
-    player.bus.publish(detection(1, player.sim_time))
-    assert player.state().status == PlayerStatus.RUNNING
-    player.set_wait_agent(True)
-    player.bus.publish(detection(2, player.sim_time))
-    assert player.state().status == PlayerStatus.PAUSED
-    player.set_wait_agent(False)
-    assert player.state().status == PlayerStatus.RUNNING
-
-
-def test_user_pause_is_not_lifted_by_the_agent(runs_dir: Path) -> None:
-    player = make_player(runs_dir)
-    player.load("nominal")
-    player.set_wait_agent(True)
-    player.play()
-    player.advance(10)
-    player.pause()
-    d = player.bus.publish(detection(1, player.sim_time))
-    player.bus.publish(monitor_reply(1, d.event_id, player.sim_time))
-    assert player.state().status == PlayerStatus.PAUSED

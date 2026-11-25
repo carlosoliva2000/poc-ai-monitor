@@ -70,7 +70,7 @@ const simTime = async () => {
   return Number(text ?? 0)
 }
 
-async function setup(scenario, { waitAgent, interactive, speed, resetCheck = false }) {
+async function setup(scenario, { interactive, speed, resetCheck = false }) {
   await page.goto('http://127.0.0.1:3000')
   // el recordatorio de seguridad de Next.js en desarrollo (`1 Insight`) sale en las capturas: se oculta
   await page.addStyleTag({ content: 'nextjs-portal { display: none !important }' })
@@ -87,14 +87,11 @@ async function setup(scenario, { waitAgent, interactive, speed, resetCheck = fal
   await sleep(800)
   if (resetCheck) note(`tras cargar, modo interactivo = ${await page.getByRole('switch', { name: 'Interactive mode' }).getAttribute('aria-checked')}`)
   await page.getByRole('button', { name: `${speed}×`, exact: true }).click()
-  const wa = page.getByRole('switch', { name: 'Wait for the agent' })
-  // «esperar al agente» se conserva entre cargas: se fija al valor pedido, encendido o apagado
-  if ((await wa.getAttribute('aria-checked')) !== String(waitAgent)) await wa.click()
   const it = page.getByRole('switch', { name: 'Interactive mode' })
   // el modo interactivo se conserva entre cargas: se fija al valor pedido, encendido o apagado
   if ((await it.getAttribute('aria-checked')) !== String(interactive)) await it.click()
   await sleep(500)
-  note(`escenario ${scenario} cargado, ${speed}×, esperar al agente=${waitAgent}, interactivo=${interactive}`)
+  note(`escenario ${scenario} cargado, ${speed}×, interactivo=${interactive}`)
 }
 
 async function ask(tab, question, shotName) {
@@ -122,7 +119,7 @@ async function ask(tab, question, shotName) {
 }
 
 async function runDemo() {
-  await setup('demo', { waitAgent: true, interactive: false, speed: 4, resetCheck: true })
+  await setup('demo', { interactive: false, speed: 4, resetCheck: true })
   await shot('00_inicio')
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   note('play')
@@ -184,7 +181,7 @@ async function runDemo() {
 }
 
 async function runRadar() {
-  await setup('nominal', { waitAgent: true, interactive: true, speed: 4 })
+  await setup('nominal', { interactive: true, speed: 4 })
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   note('play')
   while ((await simTime()) < 40) await sleep(500)
@@ -222,7 +219,7 @@ async function runRadar() {
 }
 
 async function runGps() {
-  await setup('nominal', { waitAgent: true, interactive: true, speed: 4 })
+  await setup('nominal', { interactive: true, speed: 4 })
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   while ((await simTime()) < 40) await sleep(500)
   await page.getByRole('switch', { name: 'GPS loss', exact: true }).click()
@@ -242,7 +239,7 @@ const mapBox = async () => (await page.locator('[data-testid=drone-map]').boundi
 const mapAttr = (name) => page.locator('[data-testid=drone-map]').getAttribute(name)
 
 async function runFase9() {
-  await setup('demo', { waitAgent: true, interactive: false, speed: 4, resetCheck: false })
+  await setup('demo', { interactive: false, speed: 4, resetCheck: false })
   await shot('00_inicio')
   const initialMap = await mapBox()
   await page.getByRole('tab', { name: 'Report' }).click()
@@ -386,7 +383,7 @@ async function runFase9() {
 
 async function runFase14_1() {
   await page.setViewportSize({ width: 1920, height: 1080 })
-  await setup('demo', { waitAgent: true, interactive: false, speed: 16 })
+  await setup('demo', { interactive: false, speed: 16 })
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   note('play')
   while (!(await headerText()).includes('Finished')) await sleep(500)
@@ -412,7 +409,7 @@ async function runFase14_1() {
 
 async function runFase14_2() {
   await page.setViewportSize({ width: 1920, height: 1080 })
-  await setup('demo', { waitAgent: true, interactive: false, speed: 16 })
+  await setup('demo', { interactive: false, speed: 16 })
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   note('play')
   const deadline = Date.now() + 20 * 60 * 1000
@@ -446,7 +443,7 @@ const SIZES = [
 
 async function runIcons() {
   // El engaño del GPS (demo, T+168–222) separa la posición conocida de la real.
-  await setup('demo', { waitAgent: false, interactive: false, speed: 8 })
+  await setup('demo', { interactive: false, speed: 8 })
   await page.getByRole("checkbox", { name: /Truth trail/ }).check()
   await page.getByRole("checkbox", { name: /True position/ }).check()
   await page.getByRole('button', { name: 'Start', exact: true }).click()
@@ -472,7 +469,7 @@ async function runIcons() {
 
 async function runE7a() {
   // Simulador v2 (E7a) sin módulo de IA: radar, línea dron–base, huecos de telemetría y emisores.
-  await setup('demo', { waitAgent: false, interactive: false, speed: 16 })
+  await setup('demo', { interactive: false, speed: 16 })
   await page.getByRole('checkbox', { name: /Truth trail/ }).check()
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   while ((await simTime()) < 195) await sleep(200)
@@ -496,7 +493,7 @@ async function runE7a() {
 }
 
 async function runChatSize() {
-  await setup('demo', { waitAgent: false, interactive: false, speed: 8 })
+  await setup('demo', { interactive: false, speed: 8 })
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   while ((await simTime()) < 110) await sleep(500)
   await ask('monitor', 'Which alerts are open?', null)
@@ -534,7 +531,7 @@ async function runChatSize() {
 
 
 async function runChatLayout() {
-  await setup('faults', { waitAgent: true, interactive: false, speed: 16 })
+  await setup('faults', { interactive: false, speed: 16 })
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   while ((await simTime()) < 270) await sleep(500)
   await page.waitForFunction(() => document.querySelectorAll('[data-testid=episode-chip]').length >= 1)
@@ -604,7 +601,7 @@ async function runChatLayout() {
 }
 
 async function runLayout() {
-  await setup('demo', { waitAgent: false, interactive: false, speed: 16 })
+  await setup('demo', { interactive: false, speed: 16 })
   const report = []
   for (const [w, h] of SIZES) {
     await page.setViewportSize({ width: w, height: h })
@@ -640,7 +637,7 @@ async function runLayout() {
 const faultsText = () => page.locator('[data-testid=active-faults]').innerText()
 
 async function runDeadGps() {
-  await setup('nominal', { waitAgent: false, interactive: true, speed: 4 })
+  await setup('nominal', { interactive: true, speed: 4 })
   await page.getByRole("checkbox", { name: /Truth trail/ }).check()
   await page.getByRole("checkbox", { name: /True position/ }).check()
   await page.getByRole('button', { name: 'Start', exact: true }).click()
@@ -683,7 +680,7 @@ async function runDeadGps() {
 }
 
 async function runChatTools() {
-  await setup('demo', { waitAgent: false, interactive: false, speed: 8 })
+  await setup('demo', { interactive: false, speed: 8 })
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   while ((await simTime()) < 110) await sleep(500)
   // el chat se agranda para que quepa la respuesta con sus llamadas a tool
@@ -727,7 +724,7 @@ async function zoomClicks(name, n) {
 
 async function runFase9_1() {
   await page.setViewportSize({ width: 1920, height: 1080 })
-  await setup('demo', { waitAgent: true, interactive: false, speed: 4 })
+  await setup('demo', { interactive: false, speed: 4 })
   await shot('00_inicio_mapa_alto')
   await page.getByRole('group', { name: 'Map layers' }).screenshot({ path: `${out}/01_leyenda_por_grupos.png` })
   note('captura 01_leyenda_por_grupos.png')
@@ -909,7 +906,7 @@ async function runTruthLag() {
   await page.setViewportSize({ width: 1920, height: 1080 })
   const report = {}
   for (const speed of [16, 4]) {
-    await setup('demo', { waitAgent: false, interactive: false, speed })
+    await setup('demo', { interactive: false, speed })
     await page.getByRole('checkbox', { name: /True position/ }).check()
     await page.getByRole('button', { name: 'Start', exact: true }).click()
     await waitSim(60)
@@ -964,7 +961,7 @@ async function runSmooth() {
   const only = process.env.SMOOTH_ONLY?.split(':').map(Number) // «zoom:velocidad»: una sola combinación
   for (const zoom of only ? [only[0]] : [8, 20]) {
     for (const speed of only ? [only[1]] : [1, 4, 16]) {
-      await setup('wind', { waitAgent: false, interactive: false, speed })
+      await setup('wind', { interactive: false, speed })
       const zin = page.getByRole('button', { name: 'Zoom in' })
       const mapZoom = async () => Number(await page.locator('[data-testid=drone-map]').getAttribute('data-zoom'))
       await page.getByRole('button', { name: 'Start', exact: true }).click()
@@ -1039,7 +1036,7 @@ async function runSmooth() {
 /** Telemetría a varios anchos (1280×800 … 1920×1080): captura y comprobación por el DOM de que ningún valor se corta
  *  (`scrollWidth <= clientWidth`) y de cuántas filas ocupa la barra. Salida: telemetry.json. */
 async function runTelemetry() {
-  await setup('wind', { waitAgent: false, interactive: false, speed: 4 })
+  await setup('wind', { interactive: false, speed: 4 })
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   while ((await simTime()) < 40) await sleep(300)
   await page.getByRole('button', { name: 'Pause' }).click().catch(() => {})
@@ -1090,7 +1087,7 @@ async function runHighlight() {
   }
   const report = {}
   for (const scenario of scenarios) {
-    await setup(scenario, { waitAgent: false, interactive: false, speed: 16 })
+    await setup(scenario, { interactive: false, speed: 16 })
     await page.getByRole('button', { name: 'Start', exact: true }).click()
     // Se espera a tener un tramo de detección con unas cuantas muestras y se pausa.
     const t1 = Date.now()
@@ -1121,7 +1118,7 @@ async function runHighlight() {
 /** «Seguir» en los casos límite: pausa, reanudar, GPS callado y recuperación, reinicio y cambio de escenario. Un muestreador por
  *  fotograma recoge cámara (Δ de la base en pantalla) e icono respecto al mapa; las fases se marcan con `mark`. Salida: followcheck.json. */
 async function runFollowCheck() {
-  await setup('wind', { waitAgent: false, interactive: true, speed: 4 })
+  await setup('wind', { interactive: true, speed: 4 })
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   await sleep(1500)
   await page.getByRole('button', { name: 'Follow the drone' }).click()
@@ -1185,7 +1182,7 @@ async function runFase9_2() {
   await page.setViewportSize({ width: 1536, height: 960 })
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))
-  await setup(scenario, { waitAgent: true, interactive: false, speed })
+  await setup(scenario, { interactive: false, speed })
   await page.getByRole('checkbox', { name: 'True position' }).check()
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   const map = page.locator('[data-testid=drone-map]')
@@ -1263,7 +1260,7 @@ async function runFase9_2() {
  *  episodio desplegada (checks y evidencias), el chat del monitor, el informe y el chat del informe. */
 async function runFase16() {
   await page.setViewportSize({ width: 1920, height: 1080 })
-  await setup('nominal', { waitAgent: true, interactive: true, speed: 4 })
+  await setup('nominal', { interactive: true, speed: 4 })
   const panel = page.locator('[data-testid=instructor-panel]')
   await shot('01_panel_plegado')
   await panel.getByRole('button', { name: /Instructor/ }).click()
@@ -1380,7 +1377,7 @@ async function answered(chat, timeout = 30000) {
 async function runVideo1() {
   // Vídeo 1 · demo (572 s): vista del alumno; interruptores fijados antes desde la del instructor.
   await page.setViewportSize({ width: 1920, height: 1080 })
-  await setup('demo', { waitAgent: false, interactive: false, speed: 8 })
+  await setup('demo', { interactive: false, speed: 8 })
   await setView('Student')
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   note('play')
@@ -1473,7 +1470,7 @@ async function runVideo1() {
 async function runVideo2() {
   // Vídeo 2 · nominal: vista del instructor, modo interactivo y las dos órdenes del guion.
   await page.setViewportSize({ width: 1920, height: 1080 })
-  await setup('nominal', { waitAgent: false, interactive: true, speed: 4 })
+  await setup('nominal', { interactive: true, speed: 4 })
   await setView('Instructor')
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   note('play')
@@ -1531,7 +1528,7 @@ async function runVideo2() {
 
 async function runFase10() {
   await page.setViewportSize({ width: 1920, height: 1080 })
-  await setup('demo', { waitAgent: true, interactive: false, speed: 4 })
+  await setup('demo', { interactive: false, speed: 4 })
   await shot('00_inicio')
   await page.getByRole('button', { name: 'Start', exact: true }).click()
   note('play')

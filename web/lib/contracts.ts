@@ -207,7 +207,7 @@ export type InstructorCommand = {
   text: string | null
 }
 export type SimulationStarted = { scenario: string; run_id: string; duration_s: number; total_events: number }
-export type SimulationPaused = { reason: 'user' | 'waiting_agent' }
+export type SimulationPaused = { reason: 'user' }
 export type FaultEvent = { source: SensorSource; mode: FaultMode; origin: 'manual' | 'scenario' }
 
 export type ActiveFault = FaultEvent
@@ -218,7 +218,6 @@ export type PlayerState = {
   run_id: string | null
   sim_time: number
   speed: number
-  wait_agent: boolean
   interactive: boolean
   active_faults: ActiveFault[]
   cursor: number
@@ -248,7 +247,7 @@ export type ControlMessage =
   | { action: 'load'; value: string }
   | { action: 'play' | 'pause' | 'step' | 'reset'; value?: null }
   | { action: 'speed'; value: number }
-  | { action: 'wait_agent' | 'interactive'; value: boolean }
+  | { action: 'interactive'; value: boolean }
   | { action: 'fault'; value: { source: SensorSource; mode: FaultMode; active: boolean } }
   | { action: 'instructor'; value: InstructorCommand }
 

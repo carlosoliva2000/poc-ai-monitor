@@ -1,9 +1,14 @@
 # Monitor de situación (versión rápida de la E7c).
 #
-# PROVISIONAL para el vídeo del 19/11/2026: las tablas (tables.yaml) están escritas a mano y los
-# textos del asistente (scripted_texts.yaml) están preparados. El contrato v1.1 (IncidentUpdated,
-# IncidentEnriched) y la web de incidentes sí son definitivos.
+# PROVISIONAL: los textos del asistente (scripted_texts.yaml) están preparados hasta que llegue el
+# asistente con LLM. El contrato de incidentes y la web de incidentes sí son definitivos.
 #
+# Tablas de las facetas: "learned" = las 13 tablas aprendidas y la regla de la situación de la E7b,
+# congeladas (el monitor comprueba su hash al arrancar y no arranca si cambiaron); "handwritten" =
+# las escritas a mano del vídeo (tables.yaml), solo como alternativa para comparar. Se puede pisar
+# con `--tables`.
+tables: learned
+
 # Asistente: "scripted" = textos preparados de scripted_texts.yaml (solo para el vídeo);
 # "off" = sin interpretación, sin chats y sin informe. El modo "llm" llegará en la E7d.
 # Se puede pisar con `--assistant off`.

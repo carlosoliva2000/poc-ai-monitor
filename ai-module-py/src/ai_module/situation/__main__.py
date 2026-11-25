@@ -24,6 +24,7 @@ from poc_contracts.ws import EventMessage, StateMessage
 from ..bus_client import DEFAULT_PLATFORM, BusClient
 from ..ids import IdAllocator
 from ..outbox import EventFactory, format_t
+from .facets import HANDWRITTEN, LEARNED
 from .monitor import SituationMonitor
 from .policy import HERE
 from .replay import is_world
@@ -34,11 +35,11 @@ RESET_TYPES = {EventType.SIMULATION_STARTED, EventType.SIMULATION_RESET}
 
 
 class SituationProcess:
-    def __init__(self, platform_url: str, assistant: str) -> None:
+    def __init__(self, platform_url: str, assistant: str, tables: str = LEARNED) -> None:
         self.platform_url = platform_url
         self.ids = IdAllocator()
         self.factory = EventFactory(self.ids)
-        self.monitor = SituationMonitor(self.ids)
+        self.monitor = SituationMonitor(self.ids, tables)
         self.bus = BusClient(platform_url)
         self.now = 0.0
         self.scenario: str | None = None
@@ -107,12 +108,19 @@ def main() -> None:
     parser.add_argument("--platform", default=DEFAULT_PLATFORM)
     parser.add_argument("--config", type=Path, default=HERE / "config.yaml")
     parser.add_argument("--assistant", choices=["scripted", "off"], default=None)
+    parser.add_argument(
+        "--tables", choices=[LEARNED, HANDWRITTEN], default=None,
+        help="tablas de las facetas: las aprendidas congeladas (por defecto) o las del vídeo",
+    )  # fmt: skip
     args = parser.parse_args()
     config = yaml.safe_load(args.config.read_text(encoding="utf-8")) or {}
     assistant = args.assistant or str(config.get("assistant", "off"))
+    tables = args.tables or str(config.get("tables", LEARNED))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-    log.info("situation monitor, assistant=%s, platform=%s", assistant, args.platform)
-    asyncio.run(SituationProcess(args.platform, assistant).run())
+    log.info(
+        "situation monitor, tables=%s, assistant=%s, platform=%s", tables, assistant, args.platform
+    )
+    asyncio.run(SituationProcess(args.platform, assistant, tables).run())
 
 
 if __name__ == "__main__":

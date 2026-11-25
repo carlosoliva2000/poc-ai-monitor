@@ -1,6 +1,7 @@
 """Monitor de situación sobre un `events.jsonl`, sin plataforma (pruebas y revisión).
 
-uv run --project ai-module-py python -m ai_module.situation.replay runs/demo/events.jsonl
+uv run --project ai-module-py python -m ai_module.situation.replay \\
+    runs/demo/events.jsonl [learned|handwritten]
 """
 
 import gzip
@@ -10,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from ..outbox import format_t
+from .facets import LEARNED
 from .monitor import SituationMonitor
 
 WORLD_DOMAINS = ("air", "env")
@@ -26,9 +28,9 @@ def read_events(path: Path) -> list[dict[str, Any]]:
         return [json.loads(line) for line in handle if line.strip()]
 
 
-def replay(path: Path) -> list[tuple[float, dict[str, Any]]]:
+def replay(path: Path, tables: str = LEARNED) -> list[tuple[float, dict[str, Any]]]:
     """Los `IncidentUpdated` (instante, payload) que publicaría el monitor con este fichero."""
-    monitor = SituationMonitor()
+    monitor = SituationMonitor(tables=tables)
     out: list[tuple[float, dict[str, Any]]] = []
     for event in read_events(path):
         if is_world(event):
@@ -54,7 +56,8 @@ def describe(update: dict[str, Any]) -> str:
 
 
 def main() -> None:
-    for _, update in replay(Path(sys.argv[1])):
+    path, *rest = sys.argv[1:]
+    for _, update in replay(Path(path), rest[0] if rest else LEARNED):
         print(describe(update))
 
 

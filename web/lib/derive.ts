@@ -87,7 +87,6 @@ export type Derived = {
   pending: Envelope[]
   report: Envelope<{ run_id: string; markdown: string; alerts_count: number }> | null
   /** Motivo de la última pausa si el reproductor sigue pausado por ella. */
-  pauseReason: 'user' | 'waiting_agent' | null
   t0Ms: number | null
 }
 
@@ -111,7 +110,6 @@ export function derive(events: Envelope[]): Derived {
   let lastWaypoint = 'BASE'
   let missionDone = false
   let report: Derived['report'] = null
-  let pauseReason: Derived['pauseReason'] = null
   let t0Ms: number | null = null
   const order: string[] = []
 
@@ -199,13 +197,6 @@ export function derive(events: Envelope[]): Derived {
       case 'ReportGenerated':
         report = e as Derived['report']
         break
-      case 'SimulationPaused':
-        pauseReason = (e.payload as { reason: 'user' | 'waiting_agent' }).reason
-        break
-      case 'SimulationResumed':
-      case 'SimulationStarted':
-        pauseReason = null
-        break
     }
     if (RESPONSE_EVENTS.has(e.type) && e.source === 'ai-monitor' && e.causation_id) {
       const list = responses.get(e.causation_id) ?? []
@@ -242,7 +233,6 @@ export function derive(events: Envelope[]): Derived {
     responses,
     pending: detectionEvents.filter((e) => !responses.has(e.event_id)),
     report,
-    pauseReason,
     t0Ms,
   }
 }

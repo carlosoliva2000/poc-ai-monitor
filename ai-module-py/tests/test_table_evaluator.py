@@ -110,5 +110,5 @@ def test_malformed_tables_fail(tmp_path: Path, rules: str, error: str) -> None:
 def test_the_hash_is_the_sha256_of_the_file(tmp_path: Path) -> None:
     import hashlib
 
-    tables = load_tables()
+    tables = load_tables(Path(__file__).parent / "data" / "decision_table_e6.yaml")
     assert tables.sha256 == hashlib.sha256(tables.path.read_bytes()).hexdigest()

@@ -227,15 +227,13 @@ def test_publish_valid_and_rejected(client: TestClient) -> None:
         assert player(client).bus.timeline.get("det-0002") is None
 
 
-def test_control_speed_wait_agent_and_validation(client: TestClient) -> None:
+def test_control_speed_and_validation(client: TestClient) -> None:
     with client.websocket_connect("/ws") as ws:
         ws.receive_json()
         hello(ws)
         control(ws, "load", "nominal")
         state = [m for m in control(ws, "speed", 8.0) if m["op"] == "state"][-1]
         assert state["speed"] == 8.0
-        state = [m for m in control(ws, "wait_agent", True) if m["op"] == "state"][-1]
-        assert state["wait_agent"] is True
         errors = [m for m in control(ws, "speed", 3) if m["op"] == "error"]
         assert errors and errors[0]["message"].startswith("invalid message")
         assert control(ws, "play", None)[-1]["status"] == "running"
@@ -286,49 +284,6 @@ def test_interactive_and_faults_over_the_websocket(client: TestClient) -> None:
             "active_faults"
         ] == []
         assert state["interactive"] is True
-
-
-def test_wait_agent_through_the_websocket(client: TestClient) -> None:
-    with client.websocket_connect("/ws") as ws, client.websocket_connect("/ws") as ai:
-        ws.receive_json()
-        ai.receive_json()
-        hello(ws)
-        hello(ai, "ai-module")
-        control(ws, "load", "nominal")
-        control(ws, "wait_agent", True)
-        control(ws, "play")
-        player(client).advance(30.0)
-        ai.send_json({"op": "publish", "event": detection_message(1)})
-        states = [m for m in drain(ws) if m["op"] == "state"]
-        assert states[-1]["status"] == "paused"
-        reply = {
-            "event_id": "ai-0001",
-            "topic": topic_for(EventType.ANOMALY_DETECTED),
-            "type": "AnomalyDetected",
-            "source": "ai-monitor",
-            "asset": "d1",
-            "sim_time": 30.0,
-            "event_time": "2026-10-20T10:00:30Z",
-            "causation_id": "det-0001",
-            "ephemeral": False,
-            "payload": {
-                "alert_id": "ai-0001",
-                "detection_ids": ["det-0001"],
-                "cause": "WIND",
-                "severity": "low",
-                "confidence": 0.8,
-                "summary": "wind",
-                "explanation": "x",
-                "recommendation": "y",
-                "evidence_event_ids": ["gps-000001"],
-                "supersedes": None,
-                "as_of_sim_time": 30.0,
-                "fallback": False,
-            },
-        }
-        ai.send_json({"op": "publish", "event": reply})
-        states = [m for m in drain(ws) if m["op"] == "state"]
-        assert states[-1]["status"] == "running"
 
 
 # --- REST ------------------------------------------------------------------------------------
@@ -404,31 +359,6 @@ def test_timeline_has_no_time_cut_and_filters(client: TestClient) -> None:
     last = client.get("/api/timeline", params={"type": "PositionUpdated", "limit": 2}).json()
     assert len(last["events"]) == 2 and last["truncated"] is True
     assert client.get("/api/timeline", params={"type": "Nope"}).status_code == 422
-
-
-def test_tools_endpoint(client: TestClient) -> None:
-    err = client.post("/api/tools/get_events", json={"source": "gps"}).json()
-    assert err == {"ok": False, "error": "no scenario is loaded"}
-    with client.websocket_connect("/ws") as ws:
-        ws.receive_json()
-        hello(ws)
-        control(ws, "load", "demo")
-        control(ws, "play")
-        player(client).advance(40.5)
-    ok = client.post(
-        "/api/tools/get_events", json={"source": "gps", "last_n": 3, "until": 1e9}
-    ).json()
-    assert ok["ok"] is True
-    assert [e["sim_time"] for e in ok["result"]["events"]] == [38.0, 39.0, 40.0]
-    assert client.post("/api/tools/get_flight_summary").json()["ok"] is True
-    metrics = client.post("/api/tools/get_track_metrics", json={"since": 0, "until": 9999}).json()
-    assert metrics["ok"] and metrics["result"]["until"] == pytest.approx(40.5)
-    for body in ({"source": "sim"}, {"since": "tomorrow"}, {"source": "gps", "last_n": "x"}):
-        bad = client.post("/api/tools/get_events", json=body).json()
-        assert bad["ok"] is False and bad["error"].startswith("invalid arguments")
-    assert client.post("/api/tools/nope", json={}).json()["ok"] is False
-    assert client.post("/api/tools/get_events", content="{x").json()["ok"] is False
-    assert client.post("/api/tools/get_events", json=[1]).json()["ok"] is False
 
 
 def test_clock_runs_the_player_in_real_time(runs_dir: Path) -> None:

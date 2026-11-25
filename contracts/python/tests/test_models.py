@@ -1,4 +1,4 @@
-"""Casos válidos y no válidos de los modelos (sobre, payloads, WebSocket, API y tools)."""
+"""Casos válidos y no válidos de los modelos (sobre, payloads, WebSocket y API)."""
 
 from typing import Any
 
@@ -12,12 +12,6 @@ from poc_contracts.envelope import Envelope, EventDraft
 from poc_contracts.payloads import AnomalyDetected, DetectionRaised, FaultCleared, FaultInjected
 from poc_contracts.run_files import Label
 from poc_contracts.scenario import FaultConfig
-from poc_contracts.tools import (
-    GetEventsArgs,
-    PublishAlertArgs,
-    PublishAlertResult,
-    TrackMetrics,
-)
 from poc_contracts.ws import ClientMessage, ServerMessage
 
 CLIENT = TypeAdapter(ClientMessage)
@@ -151,7 +145,6 @@ def test_anomaly_limits() -> None:
         {"op": "control", "action": "step", "value": None},
         {"op": "control", "action": "speed", "value": 16},
         {"op": "control", "action": "speed", "value": 0.5},
-        {"op": "control", "action": "wait_agent", "value": True},
         {"op": "control", "action": "interactive", "value": True},
         {
             "op": "control",
@@ -178,7 +171,6 @@ def test_valid_client_messages(message: dict[str, Any]) -> None:
         {"op": "subscribe", "patterns": ["citadel.>.evt"]},
         {"op": "publish", "event": position_draft(seq=1)},
         {"op": "control", "action": "speed", "value": 3},
-        {"op": "control", "action": "wait_agent", "value": "yes"},
         {"op": "control", "action": "load"},
         {"op": "control", "action": "interactive", "value": "yes"},
         {
@@ -204,7 +196,7 @@ def test_invalid_client_messages(message: dict[str, Any]) -> None:
 def test_server_messages() -> None:
     state = {
         "op": "state", "status": "running", "scenario": "demo", "run_id": "20261020-101500",
-        "sim_time": 61.0, "speed": 4.0, "wait_agent": True, "interactive": True,
+        "sim_time": 61.0, "speed": 4.0, "interactive": True,
         "active_faults": [{"source": "gps", "mode": "loss", "origin": "manual"}],
         "cursor": 212, "total_events": 913,
     }  # fmt: skip
@@ -221,7 +213,7 @@ def test_server_messages() -> None:
         SERVER.validate_python({**state, "muted_sources": ["radar"]})
 
 
-# --- API y tools -----------------------------------------------------------------------------
+# --- API -----------------------------------------------------------------------------
 
 
 def test_scenarios_response() -> None:
@@ -232,50 +224,6 @@ def test_scenarios_response() -> None:
             ]
         }
     )
-
-
-def test_get_events_args() -> None:
-    assert GetEventsArgs.model_validate({"source": "gps"}).last_n == 10
-    assert GetEventsArgs.model_validate({"source": "gps", "last_n": 500}).last_n == 50
-    assert GetEventsArgs.model_validate({"source": "gps", "last_n": 0}).last_n == 1
-    for bad in ({"source": "sim"}, {"source": "gps", "type": "Nope"}):
-        with pytest.raises(ValidationError):
-            GetEventsArgs.model_validate(bad)
-    assert GetEventsArgs.model_validate({}).source is None  # v0.17: sin `source`, todas
-
-
-def test_publish_alert_args_and_result() -> None:
-    args: dict[str, Any] = {
-        "detection_ids": ["det-0002"], "cause": "WIND", "severity": "low", "confidence": 0.8,
-        "summary": "s", "explanation": "e", "recommendation": "r", "evidence_event_ids": ["gps-1"],
-    }  # fmt: skip
-    assert PublishAlertArgs.model_validate(args).supersedes is None
-    with pytest.raises(ValidationError):
-        PublishAlertArgs.model_validate({**args, "evidence_event_ids": []})
-    result = TypeAdapter(PublishAlertResult)
-    assert result.validate_python({"ok": True, "alert_id": "ai-0003"}).alert_id == "ai-0003"
-    assert result.validate_python({"ok": False, "errors": ["x"]}).errors == ["x"]
-
-
-def test_track_metrics_without_radar() -> None:
-    """Sin radar no se inventa nada: todo lo que depende del radar es null y `samples` es real."""
-    metrics = TrackMetrics.model_validate(
-        {
-            "since": 120.0, "until": 150.0,
-            "gps_deviation_from_plan_m": {"mean": 3.1, "max": 5.0, "trend": "stable"},
-            "radar_deviation_from_plan_m": None, "gps_radar_distance_m": None,
-            "drift_direction_deg": 182.0,
-            "course_deg": {"gps": 95.0, "radar": None},
-            "bearing_to_next_waypoint_deg": 71.0, "next_waypoint": "WP2",
-            "mean_speed_mps": {"gps": 14.6, "radar": None},
-            "wind": None, "gps_radar": None, "gps_max_step_m": 0.5,
-            "samples": {"gps": 30, "radar": 0},
-            "gps_available": True, "radar_available": False,
-            "last_seen_sim_time": {"gps": 150.0, "radar": 119.0},
-            "first_event_ids": ["gps-000120"], "last_event_ids": ["gps-000150"],
-        }
-    )  # fmt: skip
-    assert not metrics.radar_available and metrics.samples.radar == 0
 
 
 # --- Fallos: mute y loss ---------------------------------------------------------------------
