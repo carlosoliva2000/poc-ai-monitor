@@ -151,3 +151,17 @@ test('v1.1: el texto del asistente es el de la última revisión interpretable',
   const report = { ...base, event_id: 'ai-r', topic: 't', type: 'ReportGenerated', source: 'ai-report', seq: 99, sim_time: 500, causation_id: null, payload: {} } as unknown as Envelope
   assert.deepEqual(incidents([...next, report], t0 + 60000)[0].text, { state: 'none' })
 })
+
+test('E7c: «pending…» sin plazo solo para los tipos de los que el asistente ya ha escrito', () => {
+  const t0 = Date.parse('2026-10-20T10:00:00.000Z')
+  const events = [
+    inc('inc-0001', 1, { change: 'opened', kind: 'WIND' }, '2026-10-20T10:00:00.000Z'),
+    text('inc-0001', 1, 'open', 'Wind.'),
+    inc('inc-0002', 1, { change: 'opened', kind: 'BATTERY_LOW', name: 'Battery low' }, '2026-10-20T10:00:00.000Z'),
+    inc('inc-0003', 1, { change: 'opened', kind: 'WIND' }, '2026-10-20T10:00:00.000Z'),
+  ]
+  const late = incidents(events, t0 + 60000)
+  assert.equal(late.find((i) => i.id === 'inc-0003')?.text.state, 'pending') // sí escribe del viento: llegará
+  assert.equal(late.find((i) => i.id === 'inc-0002')?.text.state, 'none') // el asistente no escribe de la batería
+  assert.equal(incidents(events, t0 + 1000).find((i) => i.id === 'inc-0002')?.text.state, 'pending') // dentro del plazo
+})

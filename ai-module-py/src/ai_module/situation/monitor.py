@@ -1,59 +1,60 @@
 """Núcleo del monitor de situación, sin red: características → estado de cada faceta (tablas
-aprendidas congeladas, o las escritas a mano como alternativa) → tipo de incidente → seguidor →
-payloads de `IncidentUpdated`. Determinista: lo usan el proceso en directo (`__main__`) y la
+aprendidas congeladas, o las escritas a mano como alternativa) → catálogo de incidentes → seguidor
+→ payloads de `IncidentUpdated`. Determinista: lo usan el proceso en directo (`__main__`) y la
 reproducción sobre `events.jsonl` (`replay.py`).
 
 Los umbrales están en las tablas, nunca en el código, y no hay disparos por tiempo ni por el nombre
-del escenario. El tipo de incidente sale todavía de la tabla `incident_kind` del vídeo (provisional
-hasta que el catálogo de incidentes la sustituya).
+del escenario. Qué incidente abre cada combinación de estados es política (`catalog.py`,
+`policy.yaml`).
 """
 
 from typing import Any
 
 from poc_contracts.enums import DecidedBy, IncidentChange, IncidentKind, IncidentState
 
-from ..decision.table import DecisionTables, load_tables
 from ..ids import IdAllocator
+from .catalog import NOT_APPLICABLE, NOT_OBSERVABLE, hijack_level
+from .engine import IncidentEngine, cause_kind
 from .facets import LEARNED, FacetEngine, Snapshot, make_engine
 from .features import FeatureExtractor, FeatureRow
-from .policy import HERE, Policy, evidence_item, load_policy
-from .tracker import Incident, Tracker
+from .policy import Policy, evidence_item, load_policy
+from .tracker import Incident
 
-CAUSE_FACET = "drone.cause"
 # Valores que crecen mientras dura un incidente (metros y segundos): una evidencia se refresca
 # cuando uno se duplica respecto a lo publicado.
-DRIFT_FEATURES = ("route_dev_m", "radar_route_dev_m", "radar_dev_m", "gps_dev_m", "tele_gap_s")
-DRIFT_FACTOR = 2.0
-# Fuente de las evidencias de cada faceta (la de la situación depende de quién mide la desviación)
-FACET_EVIDENCE = {
-    "gps.integrity": "gnss",
-    "link.availability": "link",
-    "environment.wind": "autopilot",
-}
+DISTANCE_FEATURES = ("route_dev_m", "radar_route_dev_m", "radar_dev_m", "gps_dev_m")
+DRIFT_FEATURES = (*DISTANCE_FEATURES, "tele_gap_s")
+DRIFT_FLOOR = (
+    20.0  # una distancia por debajo de esto (m) no cuenta como «se duplica»; un hueco, 3 s
+)
+GAP_FLOOR = 3.0
+# Fuente de los eventos que sostienen cada faceta (la de la situación depende de quién mide)
+FACET_SOURCE = {
+    "gps.availability": "gps", "gps.quality": "gnss", "gps.integrity": "gnss",
+    "link.availability": "link", "link.quality": "link", "radar.availability": "radar",
+    "meteo.availability": "meteo", "battery.availability": "battery", "battery.level": "battery",
+    "battery.endurance": "battery", "environment.wind": "autopilot", "drone.mode": "autopilot",
+}  # fmt: skip
+COMPARABLE = {"deviated": "off_route", "returning": "off_route"}
 
 
 class SituationMonitor:
     def __init__(
-        self,
-        ids: IdAllocator | None = None,
-        tables: str = LEARNED,
-        policy: Policy | None = None,
-        kind_table: DecisionTables | None = None,
+        self, ids: IdAllocator | None = None, tables: str = LEARNED, policy: Policy | None = None
     ) -> None:
         self.ids = ids or IdAllocator()
-        self.engine: FacetEngine = make_engine(tables)
-        self.kind_tables = kind_table or load_tables(HERE / "tables.yaml")
+        self.facets: FacetEngine = make_engine(tables)
         self.policy = policy or load_policy()
         self.features = FeatureExtractor()
-        self.tracker = Tracker(self.ids, self.policy.base_severity, self.policy.rank)
+        self.incidents = IncidentEngine(self.ids, self.policy)
+        self.tracker = self.incidents.tracker
         self.reset()
 
     def reset(self) -> None:
         self.features.reset()
-        self.engine.reset()
-        self.tracker.reset()
-        self._published: dict[str, str] = {}  # estado de las facetas de las últimas evidencias
-        self._published_values: dict[str, float] = {}  # distancias y huecos de esas evidencias
+        self.facets.reset()
+        self.incidents.reset()
+        self._published: dict[str, dict[str, Any]] = {}  # lo último publicado de cada incidente
         self.last = Snapshot()
 
     def set_plan(self, waypoints: list[dict[str, Any]]) -> None:
@@ -73,45 +74,38 @@ class SituationMonitor:
         return out
 
     def step(self, row: FeatureRow) -> list[tuple[float, dict[str, Any]]]:
-        snap = self.engine.evaluate(row)
-        situation = snap.states["drone.situation"]
-        kind_inputs = {
-            "link": snap.states["link.availability"],
-            "radar_route_dev_m": row.radar_route_dev_m,
-            "gps_integrity": snap.states["gps.integrity"],
-            "situation": situation,
-            "wind": snap.states["environment.wind"],
-        }
-        rule = self.kind_tables["incident_kind"].evaluate(kind_inputs)
-        snap.kind_rule, snap.kind_inputs, snap.kind = rule, kind_inputs, str(rule.then["kind"])
-        candidate = None if snap.kind == "none" else IncidentKind(snap.kind)
+        snap = self.facets.evaluate(row)
         self.last = snap
-        transitions = self.tracker.step(row.t, candidate, situation == "on_route")
-        if not transitions and self.tracker.current is not None and self._evidence_changed(snap):
-            transitions = [self.tracker.revise(row.t, IncidentChange.EVIDENCE)]
-        if transitions:
-            last = transitions[-1]
-            closed = last.state == IncidentState.CLOSED
-            self._published = {} if closed else self._facet_states(last, snap)
-            self._published_values = {} if closed else self._drift_values(snap)
-        return [(inc.as_of, self.payload(inc, snap, row)) for inc in transitions]
+        transitions = self.incidents.step(row.t, snap.states, snap.confidence)
+        done = {inc.family for inc in transitions}
+        for family, inc in list(self.tracker.current.items()):
+            if family in done or family in self.incidents.held:
+                continue
+            reason = self._refresh_reason(inc, snap)
+            if reason == "drift":
+                revised = self.tracker.escalate(family, row.t)
+                transitions.append(
+                    revised or self.tracker.revise(family, row.t, IncidentChange.EVIDENCE)
+                )
+            elif reason:  # facetas, confianza o hueco de telemetría
+                transitions.append(self.tracker.revise(family, row.t, IncidentChange.EVIDENCE))
+        payloads = [(inc.as_of, self.payload(inc, snap, row)) for inc in transitions]
+        for inc in transitions:
+            if inc.state == IncidentState.CLOSED:
+                self._published.pop(inc.incident_id, None)
+            else:
+                self._published[inc.incident_id] = self._snapshot_of(inc, snap)
+        return payloads
 
-    def _evidence_changed(self, snap: Snapshot) -> bool:
-        """Las evidencias de un incidente abierto se actualizan, no cada segundo, cuando:
-        - cambia el estado de alguna de sus facetas (p. ej. situation on_route → deviated;
-          `returning` cuenta como fuera de ruta: sin parpadeo entre 15 y 25 m), o
-        - una distancia o un hueco de telemetría se duplica respecto a lo publicado (el secuestro
-          sigue «deviated» mientras el dron pasa de 130 m a 600 m)."""
-        incident = self.tracker.current
-        assert incident is not None
-        states = self._comparable(self._facet_states(incident, snap))
-        if states != self._comparable(self._published):
-            return True
-        return any(
-            before > 0 and now >= DRIFT_FACTOR * before
-            for feature, before in self._published_values.items()
-            if (now := self._drift_values(snap).get(feature)) is not None
-        )
+    # --- evidencias vivas --------------------------------------------------------------------
+
+    def _facet_states(self, inc: Incident) -> dict[str, str]:
+        states = self.incidents.view.states
+        return {
+            facet: COMPARABLE.get(states[facet], states[facet])
+            for facet in self.policy.facets(inc.kind, inc.subject)
+            if states.get(facet) not in (None, NOT_APPLICABLE, NOT_OBSERVABLE)
+        }
 
     @staticmethod
     def _drift_values(snap: Snapshot) -> dict[str, float]:
@@ -124,61 +118,98 @@ class SituationMonitor:
                     values[feature] = max(values.get(feature, 0.0), float(value))
         return values
 
-    @staticmethod
-    def _comparable(states: dict[str, str]) -> dict[str, str]:
-        return {f: "off_route" if s in ("deviated", "returning") else s for f, s in states.items()}
-
-    def _facet_states(self, inc: Incident, snap: Snapshot) -> dict[str, str]:
+    def _snapshot_of(self, inc: Incident, snap: Snapshot) -> dict[str, Any]:
         return {
-            facet: snap.states[facet]
-            for facet in self.policy.kinds[inc.kind].facets
-            if facet in snap.states
+            "states": self._facet_states(inc),
+            "values": self._drift_values(snap),
+            "confidence": inc.confidence,
         }
 
+    def _refresh_reason(self, inc: Incident, snap: Snapshot) -> str | None:
+        """Por qué hay que refrescar las evidencias de un incidente abierto (no cada segundo):
+        cambia el estado de alguna de sus facetas (`returning` cuenta como fuera de ruta: sin
+        parpadeo entre 15 y 25 m), cambia su confianza, o una distancia o un hueco de telemetría se
+        duplica respecto a lo publicado (el secuestro sigue «deviated» de 130 m a 600 m)."""
+        before = self._published.get(inc.incident_id)
+        if before is None:
+            return "facets"
+        if self._facet_states(inc) != before["states"]:
+            return "facets"
+        if inc.confidence != before["confidence"]:
+            return "confidence"
+        if "drone.situation" not in self.policy.facets(inc.kind, inc.subject) and inc.kind not in (
+            IncidentKind.LINK_LOSS,
+            IncidentKind.HIJACK,
+        ):
+            return None
+        now = self._drift_values(snap)
+        factor = self.policy.defaults.drift_factor
+        grown = [
+            feature
+            for feature, old in before["values"].items()
+            if old >= (DRIFT_FLOOR if feature in DISTANCE_FEATURES else GAP_FLOOR)
+            and now.get(feature, 0.0) >= factor * old
+        ]
+        if not grown:
+            return None
+        return "drift" if any(f in DISTANCE_FEATURES for f in grown) else "gap"
+
+    # --- payload -----------------------------------------------------------------------------
+
     def payload(self, inc: Incident, snap: Snapshot, row: FeatureRow) -> dict[str, Any]:
-        kind_policy = self.policy.kinds[inc.kind]
+        policy = self.policy.kinds[inc.kind]
+        facets = self.policy.facets(inc.kind, inc.subject)
+        states = self.incidents.view.states
         evidence = [
             evidence_item(facet, snap.rules[facet], snap.inputs[facet])
-            for facet in kind_policy.facets
-            if facet in snap.rules
+            for facet in facets
+            if facet in snap.rules and states.get(facet) not in (NOT_APPLICABLE, NOT_OBSERVABLE)
         ]
-        if inc.state == IncidentState.OPEN and snap.kind == inc.kind.value:
-            assert snap.kind_rule is not None
-            evidence.append(evidence_item(CAUSE_FACET, snap.kind_rule, snap.kind_inputs))
         ids: list[str] = []
-        for facet in kind_policy.facets:
-            source = FACET_EVIDENCE.get(facet) or snap.deviation_source
+        for facet in facets:
+            source = FACET_SOURCE.get(facet) or snap.deviation_source
             event_id = row.evidence_ids.get(source or "")
             if event_id and event_id not in ids:
                 ids.append(event_id)
-        context: list[dict[str, Any]] = []
-        if snap.deviation_source:
-            context.append({"feature": "deviation_source", "value": snap.deviation_source})
-        notable = snap.states.get("environment.wind") in ("notable", "beyond_limit")
-        if inc.kind != IncidentKind.WIND and notable and snap.wind_est_mps is not None:
-            context.append({"feature": "wind_est_mps", "value": round(snap.wind_est_mps, 1)})
         return {
             "incident_id": inc.incident_id,
             "revision": inc.revision,
             "kind": inc.kind.value,
-            "name": kind_policy.name,
+            "subject": inc.subject,
+            "name": self.policy.name(inc.kind, inc.subject),
             "state": inc.state.value,
             "severity": inc.severity.value,
-            "confidence": self._confidence(inc),
+            "confidence": inc.confidence,
             "opened_at": inc.opened_at,
             "as_of_sim_time": inc.as_of,
             "change": inc.change.value,
             "evidence": evidence,
-            "context": context,
-            "checks": kind_policy.checks,
+            "context": self._context(inc, snap, row),
+            "checks": policy.checks,
             "evidence_event_ids": ids,
             "decided_by": DecidedBy.TABLE.value,
-            "table": self.engine.table_name,
+            "table": self.facets.table_name,
         }
 
-    def _confidence(self, inc: Incident) -> str:
-        """Confianza fija por fila de la tabla del tipo (la primera fila de ese tipo)."""
-        for rule in self.kind_tables["incident_kind"].rules:
-            if rule.then["kind"] == inc.kind.value:
-                return str(rule.then["confidence"])
-        return "possible"
+    def _context(self, inc: Incident, snap: Snapshot, row: FeatureRow) -> list[dict[str, Any]]:
+        """Lo que no decide pero ayuda a leer el incidente (la web lo enseña aparte)."""
+        view = self.incidents.view
+        facets = self.policy.facets(inc.kind, inc.subject)
+        context: list[dict[str, Any]] = []
+        if snap.deviation_source and "drone.situation" in facets:
+            context.append({"feature": "deviation_source", "value": snap.deviation_source})
+        notable = snap.states.get("environment.wind") in ("notable", "beyond_limit")
+        if inc.kind != IncidentKind.WIND and notable and snap.wind_est_mps is not None:
+            context.append({"feature": "wind_est_mps", "value": round(snap.wind_est_mps, 1)})
+        if inc.kind == IncidentKind.LINK_LOSS and hijack_level(view) == 1:
+            context.append({"feature": "suspected_cause", "value": "HIJACK (probable)"})
+        if inc.kind == IncidentKind.UNDETERMINED:
+            kind = cause_kind(view.state("drone.cause"))
+            if kind is not None:
+                context.append({"feature": "possible_cause", "value": f"{kind.value} (possible)"})
+        if inc.kind in (IncidentKind.LINK_LOSS, IncidentKind.HIJACK):
+            context.append({"feature": "telemetry_gap_s", "value": round(row.tele_gap_s)})
+        pct = row.values.get("battery_pct")
+        if inc.family == "battery" and pct is not None:
+            context.append({"feature": "battery_pct", "value": round(pct, 1)})
+        return context

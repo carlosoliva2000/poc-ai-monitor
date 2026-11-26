@@ -1,48 +1,177 @@
-# Política de incidentes: nombre, severidad base, qué comprobar y qué facetas se enseñan como
-# evidencias. Es política, no dato aprendido: la decide una persona y queda escrita aquí.
-# PROVISIONAL para el vídeo del 19/11/2026 (severidad sin escalado por tiempo; confianza fija por
-# fila en tables.yaml).
+# Política de incidentes del monitor de situación: es política (la escribimos nosotros), no un dato
+# aprendido. Dice qué tipos hay, a qué familia pertenecen, su severidad base, qué comprobar y qué
+# facetas se enseñan como evidencias. Cuándo se abre cada tipo está en `catalog.py`.
 #
-# La severidad baja un nivel en recuperación. El nombre solo cambia hacia un tipo más grave
-# (`rank`, de menos a más), sin cerrar el incidente.
+# Una **familia** es un conjunto de tipos que se excluyen entre sí: hay como mucho un incidente
+# abierto por familia, y el nombre solo cambia hacia un tipo más grave **de su familia** (el orden
+# de la lista, de menos a más), sin cerrar el incidente. `UNDETERMINED` puede pasar a la causa que
+# se confirma (`undetermined_becomes`).
 
-rank: [UNDETERMINED, WIND, LINK_LOSS, GPS_SPOOFING, HIJACK]
+# Valores de partida del seguidor y de la severidad (los k y m se eligen en validación con
+# tools/situation/calibrate.py). Se pueden pisar por tipo con `k_open` y `m_close` en `kinds`.
+defaults:
+  k_open: 5             # instantes seguidos con el mismo candidato para abrir o cambiar de nombre
+  m_close: 10           # instantes seguidos normales para cerrar
+  bounce_s: 15          # tras pasar a recuperación no se reabre antes (rebote tras acabar la causa)
+  escalate_after_s: 120 # un incidente abierto tanto tiempo sin mejorar sube un nivel de severidad
+  drift_factor: 2.0     # una distancia o un hueco de telemetría que se duplica refresca la tarjeta
+  confidence_cuts: {confirmed: 0.9, probable: 0.6}   # solo informativo: los niveles ya vienen en las filas
 
+families:
+  control: [LINK_DEGRADED, LINK_LOSS, HIJACK]
+  gnss: [GPS_DEGRADED, GPS_NO_FIX, DEAD_RECKONING]
+  spoofing: [GPS_SPOOFING]
+  wind: [WIND]
+  battery: [FAILSAFE, BATTERY_LOW, CANNOT_REACH_HOME, BATTERY_CRITICAL]
+  radar: [RADAR_OUT_OF_RANGE]
+  source: [SOURCE_SILENT]       # una por fuente: la familia efectiva es `source:<fuente>`
+  undetermined: [UNDETERMINED]
+
+# Cuando se confirma una de estas causas, un `UNDETERMINED` abierto cambia de nombre a ella.
+undetermined_becomes: [WIND, DEAD_RECKONING, GPS_SPOOFING, HIJACK]
+# Familias que explican una desviación: con una abierta, la desviación no es «sin determinar».
+explains_deviation: [control, gnss, spoofing, wind]
+
+# Por tipo: `name`, `severity` (base), `recovery` (pasa a «en recuperación» al acabar la causa y
+# cierra al volver a ruta; si no, cierra a los m instantes sin causa), `escalate_on_deviation`
+# (sube un nivel cuando el dron empieza a desviarse), `facets` (evidencias), `decided_by` (facetas
+# y estados que dan la confianza del incidente) y `checks` (qué comprobar). `{subject}` en un
+# nombre o una faceta se sustituye por el sujeto.
 kinds:
-  WIND:
-    name: Wind beyond limit
-    severity: low
-    facets: [environment.wind, drone.situation]
-    checks:
-      - Compare the onboard wind estimate with the weather station
-      - Watch that the drone gets back to the route when the wind drops
-  GPS_SPOOFING:
-    name: GPS spoofing
-    severity: high
-    facets: [gps.integrity, drone.situation]
-    checks:
-      - Compare the GPS position with the radar track
-      - Check C/N0 and AGC of the GPS receiver
-      - Do not trust the GPS position until both agree again
-  LINK_LOSS:
-    name: Command link lost
-    severity: medium
-    facets: [link.availability, drone.situation]
-    checks:
-      - Check our ground station and the command link
-      - Follow the drone on the radar while there is no telemetry
   HIJACK:
     name: Hijack
     severity: high
-    facets: [link.availability, drone.situation]
+    recovery: true
+    facets: [link.availability, drone.cause, drone.mode, drone.situation]
+    decided_by: {drone.cause: [foreign_control], drone.mode: [foreign_control]}
     checks:
       - Check our ground station and the command link
       - Follow the drone on the radar and report its position
       - Warn the chain of command
+  LINK_LOSS:
+    name: Command link lost
+    severity: medium
+    recovery: true
+    facets: [link.availability, drone.situation]
+    decided_by: {link.availability: [lost]}
+    checks:
+      - Check our ground station and the command link
+      - Follow the drone on the radar while there is no telemetry
+  LINK_DEGRADED:
+    name: Command link degraded
+    severity: low
+    k_open: 8             # parpadea unos segundos cerca de su umbral
+    facets: [link.quality]
+    decided_by: {link.quality: [degraded]}
+    checks:
+      - Check the command link and the distance to the base
+  GPS_SPOOFING:
+    name: GPS spoofing
+    severity: high
+    recovery: true
+    facets: [gps.integrity, drone.situation]
+    decided_by: {gps.integrity: [spoofed]}
+    checks:
+      - Compare the GPS position with the radar track
+      - Check C/N0 and AGC of the GPS receiver
+      - Do not trust the GPS position until both agree again
+  GPS_DEGRADED:
+    name: GPS degraded
+    severity: low
+    facets: [gps.quality]
+    decided_by: {gps.quality: [degraded]}
+    checks:
+      - Check the GPS receiver (satellites and HDOP)
+      - Look for interference near the drone
+  GPS_NO_FIX:
+    name: GPS position lost
+    severity: medium
+    recovery: true
+    facets: [gps.availability, drone.situation]
+    decided_by: {gps.availability: [no_fix]}
+    checks:
+      - Follow the drone on the radar while the GPS has no fix
+      - Watch the drift: the drone navigates by dead reckoning
+  DEAD_RECKONING:
+    name: Dead-reckoning drift
+    severity: medium
+    recovery: true
+    facets: [gps.availability, drone.cause, drone.situation]
+    decided_by: {drone.cause: [dead_reckoning]}
+    checks:
+      - Follow the drone on the radar and compare it with the route
+      - Wait for the GPS fix to come back
+  WIND:
+    name: Wind beyond limit
+    severity: low
+    k_open: 8             # el estimador da unos segundos de viento falso al arrancar
+    recovery: true
+    escalate_on_deviation: true
+    facets: [environment.wind, drone.cause, drone.situation]
+    decided_by: {environment.wind: [beyond_limit], drone.cause: [wind]}
+    checks:
+      - Compare the onboard wind estimate with the weather station
+      - Watch that the drone gets back to the route when the wind drops
+  SOURCE_SILENT:
+    name: "{subject} silent"
+    severity: low
+    k_open: 5
+    facets: ["{subject}.availability"]
+    decided_by: {gps.availability: [no_data], radar.availability: [no_data], meteo.availability: [no_data], battery.availability: [no_data]}
+    checks:
+      - Check the source and its connection
+    subjects:
+      gps: {name: GPS silent, severity: medium, facet: gps.availability}
+      radar: {name: Radar silent, severity: medium, facet: radar.availability}
+      meteo: {name: Weather station silent, severity: low, facet: meteo.availability}
+      battery: {name: Battery telemetry silent, severity: low, facet: battery.availability}
+  RADAR_OUT_OF_RANGE:
+    name: Drone beyond radar range
+    severity: low
+    facets: [radar.availability]
+    decided_by: {radar.availability: [out_of_range]}
+    checks:
+      - Compare the plan with the radar range
+      - Use the drone telemetry while the radar does not see it
+  BATTERY_LOW:
+    name: Battery low
+    severity: low
+    facets: [battery.level]
+    decided_by: {battery.level: [low]}
+    checks:
+      - Plan the way back before the failsafe level
+  BATTERY_CRITICAL:
+    name: Battery critical
+    severity: high
+    facets: [battery.level, drone.mode]
+    decided_by: {battery.level: [critical]}
+    checks:
+      - Choose a landing point now
+  CANNOT_REACH_HOME:
+    name: Cannot reach home
+    severity: medium
+    facets: [battery.endurance, battery.level]
+    decided_by: {battery.endurance: [cannot_reach_home]}
+    checks:
+      - Send the drone back now, or choose a landing point
+      - Check the wind on the way back
+  FAILSAFE:
+    name: "Drone failsafe: {subject}"
+    severity: medium
+    facets: [drone.mode, link.availability, battery.level]
+    decided_by: {drone.mode: [failsafe_hold, failsafe_return, failsafe_land]}
+    checks:
+      - Find out why the failsafe triggered: link, battery or something else
+    subjects:
+      failsafe_return: {name: "Drone failsafe: returning home", severity: medium}
+      failsafe_hold: {name: "Drone failsafe: holding position", severity: medium}
+      failsafe_land: {name: "Drone failsafe: landing", severity: high}
   UNDETERMINED:
     name: Undetermined deviation
     severity: medium
-    facets: [drone.situation, gps.integrity, environment.wind, link.availability]
+    recovery: true
+    facets: [drone.situation, drone.cause]
+    decided_by: {}
     checks:
       - Compare the GPS position with the radar track
       - Check the wind and the command link

@@ -14,6 +14,8 @@ export type InjectedKind = 'wind' | 'spoofing' | 'jamming' | 'hijack' | 'fault'
 export type Injected = {
   key: string
   kind: InjectedKind
+  /** Solo en un fallo: la fuente y el tipo (`mute` o `loss`), para saber qué incidente cuenta como verlo. */
+  fault?: { source: string; mode: string }
   label: string
   start: number
   /** `null` si sigue en curso en el último instante conocido. */
@@ -27,13 +29,22 @@ export type InjectedRow = {
   delay: number | null
 }
 
-/** Qué incidentes cuentan como ver cada cosa inyectada (el secuestro abre como enlace perdido). */
+/** Qué incidentes cuentan como ver cada cosa inyectada (el secuestro abre como enlace perdido; una
+ *  interferencia sale como GPS degradado, sin fix o a estima según su fuerza). */
 const SEEN_AS: Record<InjectedKind, IncidentKind[]> = {
   wind: ['WIND'],
   spoofing: ['GPS_SPOOFING'],
-  jamming: ['GPS_DEGRADED'],
+  jamming: ['GPS_DEGRADED', 'GPS_NO_FIX', 'DEAD_RECKONING'],
   hijack: ['LINK_LOSS', 'HIJACK'],
   fault: [],
+}
+
+/** ¿Esta revisión es el incidente que ve el fallo? Silenciar una fuente es «fuente sin datos» con su sujeto (el
+ *  enlace, enlace perdido) y la pérdida del GPS, sin fix o navegación a estima. */
+function seesFault(fault: { source: string; mode: string }, kind: IncidentKind, subject: string | null | undefined): boolean {
+  if (fault.mode === 'loss') return kind === 'GPS_NO_FIX' || kind === 'DEAD_RECKONING'
+  if (fault.source === 'link') return kind === 'LINK_LOSS' || kind === 'HIJACK'
+  return kind === 'SOURCE_SILENT' && subject === fault.source
 }
 
 /** Tramos consecutivos de muestras que cumplen `on`; el último queda abierto (`end: null`) si sigue. */
@@ -80,7 +91,7 @@ export function injectedEpisodes(truth: TruthFile | null, events: Envelope[]): I
     const p = e.payload as { source: string; mode: string }
     const id = `${p.source}-${p.mode}`
     if (e.type === 'FaultInjected') {
-      const item: Injected = { key: `fault-${id}-${e.sim_time}`, kind: 'fault', label: `${FAULT_LABEL[p.source] ?? p.source} ${p.mode === 'loss' ? 'loss' : 'muted'}`, start: e.sim_time, end: null }
+      const item: Injected = { key: `fault-${id}-${e.sim_time}`, kind: 'fault', fault: { source: p.source, mode: p.mode }, label: `${FAULT_LABEL[p.source] ?? p.source} ${p.mode === 'loss' ? 'loss' : 'muted'}`, start: e.sim_time, end: null }
       started.set(id, item)
       out.push(item)
     } else {
@@ -101,7 +112,7 @@ export function injectedVsDetected(injected: Injected[], incidents: IncidentView
       incidents.find((i) => {
         if (taken.has(i.id)) return false
         const opened = i.opened.payload.opened_at
-        const seen = i.revisions.some((r) => kinds.includes(r.payload.kind))
+        const seen = i.revisions.some((r) => (item.fault ? seesFault(item.fault, r.payload.kind, r.payload.subject) : kinds.includes(r.payload.kind)))
         return seen && opened >= item.start - 5 && opened <= (item.end ?? Infinity) + MATCH_SLACK_S
       }) ?? null
     if (incident) taken.add(incident.id)

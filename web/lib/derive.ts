@@ -374,8 +374,8 @@ export type IncidentView = {
  * Los incidentes de la ejecución (v1.1): el último `IncidentUpdated` por `incident_id` con su
  * historia, y el texto del asistente (`IncidentEnriched`) de su última revisión interpretable.
  * `nowMs` (reloj de pared) sirve para decir «pending…» mientras el texto puede llegar: siempre
- * si el asistente ya ha contestado alguna vez en la ejecución, y si no, durante `TEXT_PENDING_MS`
- * desde que se publicó la revisión. En orden de apertura.
+ * si el asistente ya ha escrito sobre un incidente de ese tipo en la ejecución, y si no, durante
+ * `TEXT_PENDING_MS` desde que se publicó la revisión. En orden de apertura.
  */
 export function incidents(events: Envelope[], nowMs?: number): IncidentView[] {
   const byId = new Map<string, Envelope<IncidentUpdated>[]>()
@@ -394,7 +394,13 @@ export function incidents(events: Envelope[], nowMs?: number): IncidentView[] {
       reportDone = true
     }
   }
-  const assistantSeen = texts.size > 0
+  // El asistente (con textos preparados, hasta el LLM de la E7d) no cubre todos los tipos: «pending…»
+  // sin plazo solo para los tipos de los que ya ha escrito algo en la ejecución; para el resto, el
+  // plazo de `TEXT_PENDING_MS` y después nada.
+  const kindsWithText = new Set<IncidentKind>()
+  for (const [id, list] of byId) {
+    if ([...texts.keys()].some((key) => key.startsWith(`${id}#`))) kindsWithText.add(list[list.length - 1].payload.kind)
+  }
   const out: IncidentView[] = []
   for (const [id, list] of byId) {
     const revisions = [...list].sort((a, b) => a.payload.revision - b.payload.revision)
@@ -412,7 +418,7 @@ export function incidents(events: Envelope[], nowMs?: number): IncidentView[] {
     const recent = nowMs !== undefined && nowMs - Date.parse(target.ingestion_time) < TEXT_PENDING_MS
     let text: IncidentText = { state: 'none' }
     if (found) text = { state: 'published', enrichment: found }
-    else if (!reportDone && (assistantSeen || recent)) text = { state: 'pending' }
+    else if (!reportDone && (kindsWithText.has(latest.payload.kind) || recent)) text = { state: 'pending' }
     out.push({ id, kind: latest.payload.kind, latest, opened: revisions[0], revisions, path, open: latest.payload.state !== ('closed' satisfies IncidentState), text })
   }
   return out.sort((a, b) => a.opened.payload.opened_at - b.opened.payload.opened_at)

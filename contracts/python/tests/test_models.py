@@ -371,7 +371,7 @@ def test_sensor_episodes_are_optional_in_the_scenario() -> None:
 def test_alert_enriched_is_written_by_the_llm_and_its_hypothesis_is_bounded() -> None:
     """E6 (v0.19): la interpretación del híbrido; la hipótesis no es un diagnóstico."""
     from poc_contracts.payloads import AlertEnriched
-    from poc_contracts.topics import EVENT_SPECS, TOOL_SOURCE_TO_ENVELOPE_SOURCE
+    from poc_contracts.topics import EVENT_SPECS
 
     base = {"alert_id": "ai-0003", "text": "t", "decided_by": "llm", "as_of_sim_time": 84.0,
             "alert_status": "open"}  # fmt: skip
@@ -385,7 +385,6 @@ def test_alert_enriched_is_written_by_the_llm_and_its_hypothesis_is_bounded() ->
         AlertEnriched(**{**base, "decided_by": "table"}, hypothesis=None)
     spec = EVENT_SPECS[EventType.ALERT_ENRICHED]
     assert spec.source == "ai-enricher" and not spec.ephemeral
-    assert spec.source not in TOOL_SOURCE_TO_ENVELOPE_SOURCE.values()  # ninguna tool lo devuelve
 
 
 def test_incident_events_v1_1() -> None:
@@ -398,7 +397,13 @@ def test_incident_events_v1_1() -> None:
             "as_of_sim_time": 138.0, "change": "opened", "evidence": [], "context": [],
             "checks": [], "evidence_event_ids": [], "decided_by": "table",
             "table": "t"}  # fmt: skip
-    IncidentUpdated(**base)
+    assert IncidentUpdated(**base).subject is None  # v1.3: opcional
+    IncidentUpdated(**{**base, "kind": "SOURCE_SILENT", "subject": "radar"})
+    IncidentUpdated(**{**base, "kind": "FAILSAFE", "subject": "failsafe_return"})
+    with pytest.raises(ValidationError):
+        IncidentUpdated(**{**base, "kind": "BATTERY"})  # fuera en la v1.3
+    with pytest.raises(ValidationError):
+        IncidentUpdated(**{**base, "subject": ""})
     for bad in ({"revision": 2}, {"change": "state"}, {"decided_by": "llm"},
                 {"as_of_sim_time": 100.0}, {"state": "closed"}):  # fmt: skip
         with pytest.raises(ValidationError):

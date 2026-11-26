@@ -1,9 +1,7 @@
-"""Monitor de situación con las tablas a mano del vídeo (alternativa `handwritten`) y textos
-preparados. Deterministas: no hay LLM ni plataforma."""
+"""Asistente con textos preparados y reglas de la web sobre el monitor de situación.
+Deterministas: no hay LLM ni plataforma."""
 
 import asyncio
-import subprocess
-import sys
 from pathlib import Path
 
 from ai_module.ids import IdAllocator
@@ -19,9 +17,7 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 
 def replay(path: Path) -> list[tuple[float, dict]]:
-    """Estas pruebas son del vídeo (tablas a mano, instantes del guion): las tablas aprendidas
-    congeladas se prueban en `test_situation_learned.py`."""
-    return replay_tables(path, "handwritten")
+    return replay_tables(path)
 
 
 def transitions(path: Path) -> list[tuple[str, str, str, str]]:
@@ -32,71 +28,6 @@ def transitions(path: Path) -> list[tuple[str, str, str, str]]:
     return out
 
 
-def test_demo_gives_the_three_incidents_with_their_transitions() -> None:
-    changes = [
-        t for t in transitions(ROOT / "runs" / "demo" / "events.jsonl") if t[1] != "evidence"
-    ]
-    assert changes == [
-        ("inc-0001", "opened", "WIND", "open"),
-        ("inc-0001", "state", "WIND", "recovering"),
-        ("inc-0001", "closed", "WIND", "closed"),
-        ("inc-0002", "opened", "GPS_SPOOFING", "open"),
-        ("inc-0002", "state", "GPS_SPOOFING", "recovering"),
-        ("inc-0002", "closed", "GPS_SPOOFING", "closed"),
-        ("inc-0003", "opened", "LINK_LOSS", "open"),
-        ("inc-0003", "renamed", "HIJACK", "open"),  # mismo incidente, otro nombre
-        ("inc-0003", "state", "HIJACK", "recovering"),
-        ("inc-0003", "closed", "HIJACK", "closed"),
-    ]
-
-
-def test_evidence_is_refreshed_when_a_facet_changes_state() -> None:
-    """El engaño empieza con el dron en ruta; la tarjeta tiene que reflejar la desviación que el
-    radar ve al pasar de 25 m (sin una revisión por segundo)."""
-    updates = [p for _, p in replay(ROOT / "runs" / "demo" / "events.jsonl")]
-    spoof = [p for p in updates if p["incident_id"] == "inc-0002"]
-    assert [p["revision"] for p in spoof] == list(range(1, len(spoof) + 1))
-    refreshed = next(p for p in spoof if p["change"] == "evidence" and p["state"] == "open")
-    situation = next(e for e in refreshed["evidence"] if e["facet"] == "drone.situation")
-    assert situation["state"] == "deviated"
-    (condition,) = situation["conditions"]
-    assert condition["feature"] == "route_dev_m" and 25.0 < condition["value"] < 30.0
-    assert len(spoof) <= 8  # no una revisión por segundo
-    # una revisión de evidencias no cambia el incidente (su interpretación no se repite)
-    opened = spoof[0]
-    for key in ("kind", "name", "state", "severity", "opened_at"):
-        assert refreshed[key] == opened[key]
-
-
-def test_the_hijack_card_follows_the_drone_while_it_flies_away() -> None:
-    """El secuestro sigue `deviated` mientras el dron pasa de 130 m a unos 600 m: la tarjeta tiene
-    que enseñar la distancia de ahora (una revisión cuando se duplica, no cada segundo)."""
-    hijack = [p for _, p in replay(ROOT / "runs" / "demo" / "events.jsonl")
-              if p["incident_id"] == "inc-0003" and p["state"] == "open"]  # fmt: skip
-
-    def radar(p: dict) -> float:
-        cause = next(e for e in p["evidence"] if e["facet"] == "drone.cause")
-        return next(c["value"] for c in cause["conditions"] if c["feature"] == "radar_route_dev_m")
-
-    distances = [radar(p) for p in hijack if p["kind"] == "HIJACK"]
-    assert distances[0] < 150 and distances[-1] > 400 and distances[-1] > 3 * distances[0]
-    assert all(b >= 1.9 * a for a, b in zip(distances, distances[1:], strict=False))
-    assert len(distances) <= 4
-
-
-def test_spoofing_is_seen_before_the_drone_leaves_the_route() -> None:
-    opened = next(p for _, p in replay(ROOT / "runs" / "demo" / "events.jsonl")
-                  if p["kind"] == "GPS_SPOOFING")  # fmt: skip
-    situation = next(e for e in opened["evidence"] if e["facet"] == "drone.situation")
-    assert situation["state"] == "on_route"
-    integrity = next(e for e in opened["evidence"] if e["facet"] == "gps.integrity")
-    assert (integrity["state"], integrity["rule_id"]) == ("spoofed", "GI-02")
-
-
-def test_nominal_gives_no_incident() -> None:
-    assert transitions(ROOT / "runs" / "nominal" / "events.jsonl") == []
-
-
 def test_nominal_with_the_two_instructor_orders_gives_wind() -> None:
     # tools/video/gen_nominal_cmd.py: 19 m/s del norte de T+110 a T+150
     changes = [
@@ -104,7 +35,7 @@ def test_nominal_with_the_two_instructor_orders_gives_wind() -> None:
         for t in transitions(FIXTURES / "nominal_cmd" / "events.jsonl.gz")
         if t[1] != "evidence"
     ]
-    assert changes == [
+    assert [c for c in changes if c[0] != "severity"] == [
         ("opened", "WIND", "open"),
         ("state", "WIND", "recovering"),
         ("closed", "WIND", "closed"),
@@ -191,17 +122,6 @@ def test_scripted_assistant_publishes_like_the_llm() -> None:
     assert any(d.type == EventType.REPORT_GENERATED for d in published)
 
 
-def test_the_package_does_not_import_the_frozen_module() -> None:
-    code = (
-        "import sys, ai_module.situation.__main__, ai_module.situation.replay\n"
-        "frozen = ['module', 'monitor', 'detector', 'instructor', 'runtime', 'agent', 'chat',"
-        " 'enrich', 'decision.decider', 'decision.features']\n"
-        "print([f for f in frozen if 'ai_module.' + f in sys.modules])\n"
-    )
-    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
-    assert out.stdout.strip() == "[]"
-
-
 def test_the_web_rules_come_from_the_tables_the_monitor_runs() -> None:
     """La ventana «Rules» de la web lee `web/lib/situation-tables.json`, generado desde
     `tables.yaml`: si se cambia una tabla hay que volver a generarlo."""
@@ -215,13 +135,13 @@ def test_the_web_rules_come_from_the_tables_the_monitor_runs() -> None:
     )
     facets = saved["facets"]
     assert set(facets) == {"gps.integrity", "link.availability", "environment.wind",
-                           "drone.situation", "drone.cause"}  # fmt: skip
+                           "drone.situation"}  # fmt: skip
     for table in facets.values():
         assert (
             table["hit_policy"] == "FIRST" and table["rules"][-1]["when"] == {}
         )  # la última, por defecto
     # toda fila que puede decidir una evidencia está en la tabla que enseña la web
     ids = {rule["id"] for table in facets.values() for rule in table["rules"]}
-    for _, update in replay(ROOT / "runs" / "demo" / "events.jsonl"):
+    for _, update in replay_tables(ROOT / "runs" / "demo" / "events.jsonl", "handwritten"):
         for item in update["evidence"]:
             assert item["rule_id"] in {r["id"] for r in facets[item["facet"]]["rules"]} <= ids

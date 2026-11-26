@@ -1,4 +1,5 @@
-"""Cliente asíncrono del bus de la plataforma por WebSocket (`/ws`) y HTTP (`/api/tools`).
+"""Cliente asíncrono del bus de la plataforma por WebSocket (`/ws`). Solo lee y publica eventos:
+no hay tools HTTP (v1.3).
 
 Uso típico:
 
@@ -9,9 +10,7 @@ Uso típico:
 
 Al conectar manda `hello` como `ai-module` y se suscribe a `DEFAULT_PATTERNS` (mundo, IA, operador
 y ciclo de vida de la ejecución; no los fallos inyectados ni el modo interactivo). Si se cae la
-conexión, `events()` reconecta solo con una espera creciente y vuelve a suscribirse; después de
-cada conexión llama a `on_connected` (la usa el módulo para pedir el plan de la misión por HTTP si
-arranca con la simulación ya en marcha).
+conexión, `events()` reconecta solo con una espera creciente y vuelve a suscribirse.
 
 Cliente de la librería `websockets` (API asíncrona moderna, `websockets.asyncio.client`).
 """
@@ -19,11 +18,9 @@ Cliente de la librería `websockets` (API asíncrona moderna, `websockets.asynci
 import asyncio
 import json
 import logging
-import urllib.error
-import urllib.request
 from collections.abc import AsyncIterator, Awaitable, Callable
 from types import TracebackType
-from typing import Annotated, Any
+from typing import Annotated
 
 from pydantic import Field, TypeAdapter, ValidationError
 from websockets.asyncio.client import ClientConnection, connect
@@ -87,54 +84,6 @@ def ws_url_from_platform(platform_url: str) -> str:
     return base if base.endswith("/ws") else base + "/ws"
 
 
-def _post_tool(platform_url: str, name: str, args: dict[str, Any], timeout_s: float) -> Any:
-    request = urllib.request.Request(
-        f"{platform_url.rstrip('/')}/api/tools/{name}",
-        data=json.dumps(args).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=timeout_s) as response:
-        return json.loads(response.read())
-
-
-async def call_platform_tool(
-    platform_url: str, name: str, args: dict[str, Any], timeout_s: float = 10.0
-) -> Any:
-    """`POST /api/tools/{name}`: devuelve el `result`; lanza `PlatformToolError` si la plataforma
-    responde `ok: false` o no responde."""
-    try:
-        body = await asyncio.to_thread(_post_tool, platform_url, name, args, timeout_s)
-    except (OSError, urllib.error.URLError, ValueError) as exc:
-        raise PlatformToolError(f"the platform does not respond: {exc}") from exc
-    if not isinstance(body, dict) or not body.get("ok"):
-        message = body.get("error") if isinstance(body, dict) else None
-        raise PlatformToolError(str(message or f"unexpected response: {body!r}"))
-    return body.get("result")
-
-
-class PlatformToolError(Exception):
-    """Una tool de datos de la plataforma ha fallado (mensaje en inglés)."""
-
-
-async def fetch_mission_plan(platform_url: str, timeout_s: float = 5.0) -> dict[str, Any] | None:
-    """Pide el plan a la tool `get_mission_plan` (`POST /api/tools/get_mission_plan`).
-
-    Devuelve el `result` (el payload de `MissionPlanned` más `next_waypoint`) o `None` si la
-    llamada falla o responde `ok: false` (p. ej. todavía no hay escenario cargado).
-    """
-    try:
-        body = await asyncio.to_thread(_post_tool, platform_url, "get_mission_plan", {}, timeout_s)
-    except (OSError, urllib.error.URLError, ValueError) as exc:
-        log.warning("get_mission_plan failed: %s", exc)
-        return None
-    if not isinstance(body, dict) or not body.get("ok"):
-        log.info("get_mission_plan not available: %s", body)
-        return None
-    result = body.get("result")
-    return result if isinstance(result, dict) else None
-
-
 class BusClient:
     """Conexión al bus con reconexión simple."""
 
@@ -146,14 +95,12 @@ class BusClient:
         patterns: tuple[str, ...] = DEFAULT_PATTERNS,
         backoff: Callable[[int], float] = default_backoff,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
-        on_connected: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self.platform_url = platform_url
         self.ws_url = ws_url or ws_url_from_platform(platform_url)
         self.patterns = list(patterns)
         self._backoff = backoff
         self._sleep = sleep
-        self._on_connected = on_connected
         self._ws: ClientConnection | None = None
         self._closed = False
         self.sim_time: float | None = None  # `sim_time` del último mensaje `state`
@@ -194,8 +141,6 @@ class BusClient:
             self._ws = ws
             self.connections += 1
             log.info("connected to %s", self.ws_url)
-            if self._on_connected is not None:
-                await self._on_connected()
         if self._ws is None:
             raise ConnectionError("client closed")
         return self._ws

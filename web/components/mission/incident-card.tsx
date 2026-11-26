@@ -93,7 +93,7 @@ export function IncidentCard({ incident, simTime }: Props) {
           </ul>
         </div>
       )}
-      <Interpretation text={incident.text} />
+      <Interpretation text={incident.text} undetermined={p.kind === 'UNDETERMINED'} />
       <History incident={incident} />
     </div>
   )
@@ -104,6 +104,7 @@ export function IncidentCard({ incident, simTime }: Props) {
       data-testid="incident-card"
       data-incident={incident.id}
       data-kind={p.kind}
+      data-subject={p.subject ?? undefined}
       data-state={p.state}
     >
       {closed ? (
@@ -122,7 +123,7 @@ export function IncidentCard({ incident, simTime }: Props) {
           {body}
         </>
       )}
-      {rules && <RulesDialog facet={rules.facet} matched={rules.rule} onClose={() => setRules(null)} />}
+      {rules && <RulesDialog facet={rules.facet} matched={rules.rule} table={p.table} onClose={() => setRules(null)} />}
     </article>
   )
 }
@@ -179,7 +180,7 @@ function History({ incident }: { incident: IncidentView }) {
       <ol className="mt-1 flex flex-col gap-0.5 font-mono text-[11px] text-muted-foreground">
         {incident.revisions.map((r) => (
           <li key={r.event_id}>
-            {formatT(r.payload.as_of_sim_time)} · {r.payload.change === 'evidence' ? 'evidence updated' : r.payload.change} · {KIND_LABEL[r.payload.kind]} · {r.payload.state} · {SEVERITY_LABEL[r.payload.severity]}
+            {formatT(r.payload.as_of_sim_time)} · {r.payload.change === 'evidence' ? 'evidence updated' : r.payload.change} · {r.payload.name} · {r.payload.state} · {SEVERITY_LABEL[r.payload.severity]}
           </li>
         ))}
       </ol>
@@ -188,8 +189,8 @@ function History({ incident }: { incident: IncidentView }) {
 }
 
 /** La interpretación del asistente, aparte y marcada: no es lo que decidió el incidente. */
-function Interpretation({ text }: { text: IncidentText }) {
-  if (text.state === 'none') return null
+function Interpretation({ text, undetermined }: { text: IncidentText; undetermined: boolean }) {
+  if (text.state === 'none') return undetermined ? <NoHypothesis /> : null
   return (
     <div className="flex flex-col gap-1 border-l-2 border-muted-foreground/40 pl-2" data-testid="interpretation">
       <span className="flex items-baseline gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -213,8 +214,18 @@ function Interpretation({ text }: { text: IncidentText }) {
               Hypothesis (LLM, not a diagnosis): {KIND_LABEL[text.enrichment.hypothesis.kind]} · {text.enrichment.hypothesis.confidence} · evidence {text.enrichment.hypothesis.evidence_event_ids.join(', ')}
             </p>
           )}
+          {undetermined && !text.enrichment.hypothesis && <NoHypothesis />}
         </>
       )}
     </div>
+  )
+}
+
+/** «Sin determinar» no tiene causa: la hipótesis queda vacía hasta que el asistente (LLM) pueda proponer una. */
+function NoHypothesis() {
+  return (
+    <p className="rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground" data-testid="no-hypothesis">
+      Hypothesis: none. The cause is not determined; nothing here is a diagnosis.
+    </p>
   )
 }

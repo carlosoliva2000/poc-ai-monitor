@@ -185,3 +185,26 @@ Lista de Carlos del 25/11/2026, al cerrar la E7a. Nada de esto se hace ahora.
 - **Referencia del modo con un dron rápido y un GPS lento:** el cambio de modo llega a nuestro lado hasta un periodo tarde (error ∝ velocidad × periodo); el punto de espera se ancla ahora donde el dron se para, pero el tramo a casa en `failsafe_return` y el cambio de tramo en misión siguen usando el primer mensaje. Convendría un evento de cambio de modo con su instante.
 - **Los 25/15 m de «desviado» y «en ruta» no escalan con el dron:** a 28 m/s el dron pasa más tiempo cerca del umbral. No se cambia la definición; si se quisiera relativa (p. ej. a la velocidad o al radio de giro), hay que regenerar etiquetas y datos.
 - **Regla de la situación:** la causa activa sale de cuatro facetas aprendidas (su error se arrastra); si se aprende un indicador de «causa activa» propio, se puede medir cuánto se pierde.
+
+## E7c · monitor de situación (26/11/2026)
+Lo que sale de la E7c y **no se hace ahora**. Las tablas congeladas no se tocan; lo de las tablas es para la E8 (evaluación a ciegas).
+
+**Para la E8 (tablas y datos):**
+- **`GPS_DEGRADED` en la generalización:** 71 falsos en 115 h (precisión por segundo de `gps.quality` 0,51 con otros receptores). Con las tablas actuales no se puede arreglar sin romper el hash.
+- **`BATTERY_LOW` no sale nunca con su nombre** (2 de 38 en la generalización): la tabla de `battery.endurance` da «no llega a casa» 30–40 s antes que la verdad y el nombre solo cambia hacia más grave. Una salida de política (que el catálogo permita volver atrás o abrir con el nombre que decida la batería) cambiaría el orden de la familia; no se ha hecho.
+- **El nombre de `HIJACK` llega tarde** (23 s de mediana en validación, 43 s en generalización) o no llega (15 de 67 secuestros de generalización se quedan en `LINK_LOSS`): `drone.cause` y `drone.mode` rara vez coinciden con fila confirmada.
+- **`drone.cause` lee «spoofed position» el primer segundo de un episodio de viento** (la estación aún no ha registrado la ráfaga) y la tarjeta de `WIND` lo enseña como evidencia. Es de la tabla.
+- **`tools/training/hand_tables.py` crea el extractor y después le asigna los activos de la variante** (el mismo fallo que tuvo `tools/situation/lib.py`, ya corregido con `variant_monitor()`): las ventanas de frescura se calculan al construirlo, así que la comparación con las tablas a mano está sesgada en las variantes con otros periodos. Rehacer esa comparación con el extractor creado con los activos de la variante. Las cifras de la E7b no se han rehecho.
+- **`situation_rule.py` dice `MARGIN_K = 1.0` y `tables_freeze.json` dice `margin_k: 0.5`** (la evaluación de la E7b usó 0,5; el monitor lee el fichero de congelación). Que los dos digan lo mismo en la próxima congelación.
+- **El inventario de activos del monitor es uno solo (`assets.yaml`)**: en `endurance` el radar alcanza 8000 m y el monitor supone 6000. En el despliegue saldrá del inventario real; mientras tanto, un escenario con otros activos necesita otro `assets.yaml`.
+
+**Para la E7d (asistente con LLM):**
+- Los textos preparados solo cubren `demo` y `nominal` y cinco tipos de incidente (viento, engaño, enlace perdido, secuestro, sin determinar). Un incidente de otro tipo no tiene interpretación (la web dice «pending…» 8 s y después nada).
+- `UNDETERMINED` lleva la hipótesis vacía; el asistente podrá proponer una (marcada como hipótesis, nunca como diagnóstico).
+- Retirar `agent/profiles.py` y la dependencia `openai` si la E7d no los usa tal cual (`serve.sh` los necesita hasta entonces).
+
+**Del monitor:**
+- `export_dmn.py` escribe las tablas congeladas en DMN sin haberlas validado con un motor DMN real.
+- Las revisiones de evidencias de un incidente largo (3 por incidente en `demo`) siguen siendo muchas para la tarjeta; se podrían agrupar.
+- Las entradas que son banderas 0/1 (`mode_hold`, `gps_fix_3d`…) se leen como sí/no en la web; el resto de entradas aprendidas son cocientes que un operador no entiende sin ayuda («1,5 es una vez y media el límite del dron»). Un texto de ayuda por entrada, en la ventana de reglas.
+- Las entradas de `tools/experiments/` (matrices, `text_metrics.py`, `texts.py`) y `test_run_matrix.py` de la sección de la E6 ya no existen: la herramienta se retiró con el módulo antiguo.

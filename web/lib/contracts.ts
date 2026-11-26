@@ -119,7 +119,10 @@ export type AlertEnriched = {
 }
 /** v1.1: tipo de incidente del monitor de situación. `UNDETERMINED` es una salida del sistema
  *  con confianza baja, no una etiqueta de la verdad. */
-export type IncidentKind = 'WIND' | 'GPS_SPOOFING' | 'HIJACK' | 'LINK_LOSS' | 'GPS_DEGRADED' | 'DEAD_RECKONING' | 'BATTERY' | 'UNDETERMINED'
+export type IncidentKind =
+  | 'WIND' | 'GPS_SPOOFING' | 'HIJACK' | 'LINK_LOSS' | 'LINK_DEGRADED' | 'GPS_DEGRADED' | 'GPS_NO_FIX'
+  | 'DEAD_RECKONING' | 'SOURCE_SILENT' | 'RADAR_OUT_OF_RANGE' | 'BATTERY_LOW' | 'BATTERY_CRITICAL'
+  | 'CANNOT_REACH_HOME' | 'FAILSAFE' | 'UNDETERMINED'
 export type IncidentState = 'open' | 'recovering' | 'closed'
 export type IncidentChange = 'opened' | 'state' | 'renamed' | 'severity' | 'evidence' | 'closed'
 export type ConfidenceLevel = 'confirmed' | 'probable' | 'possible'
@@ -134,6 +137,8 @@ export type IncidentUpdated = {
   incident_id: string
   revision: number
   kind: IncidentKind
+  /** v1.3: la fuente (SOURCE_SILENT) o el modo (FAILSAFE); null en el resto. */
+  subject?: string | null
   name: string
   state: IncidentState
   severity: Severity

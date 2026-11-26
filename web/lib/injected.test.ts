@@ -14,8 +14,8 @@ const truth: TruthFile = {
   ],
 }
 const fault = (type: string, t: number): Envelope => ({ event_id: `${type}${t}`, type, sim_time: t, payload: { source: 'radar', mode: 'mute', origin: 'manual' } }) as unknown as Envelope
-const incident = (id: string, kinds: string[], opened: number): IncidentView =>
-  ({ id, opened: { payload: { opened_at: opened } }, revisions: kinds.map((kind) => ({ payload: { kind } })) }) as unknown as IncidentView
+const incident = (id: string, kinds: string[], opened: number, subject: string | null = null): IncidentView =>
+  ({ id, opened: { payload: { opened_at: opened } }, revisions: kinds.map((kind) => ({ payload: { kind, subject } })) }) as unknown as IncidentView
 
 test('lo inyectado sale de la verdad y de los fallos', () => {
   const list = injectedEpisodes(truth, [fault('FaultInjected', 1), fault('FaultCleared', 3)])
@@ -34,4 +34,21 @@ test('cada cosa inyectada con el incidente que la vio y el retraso; sin incident
   assert.equal(byKind.hijack.delay, 2)
   assert.equal(byKind.spoofing.incident, null) // nadie lo vio
   assert.equal(byKind.spoofing.delay, null)
+})
+
+test('un fallo lo ve el incidente de su fuente: silenciar es «fuente sin datos» con su sujeto, no cualquiera', () => {
+  const events = [fault('FaultInjected', 1), fault('FaultCleared', 3)] // radar mute
+  const list = injectedEpisodes(null, events)
+  const wrong = injectedVsDetected(list, [incident('inc-1', ['SOURCE_SILENT'], 2, 'meteo')])
+  assert.equal(wrong[0].incident, null)
+  const right = injectedVsDetected(list, [incident('inc-1', ['SOURCE_SILENT'], 2, 'meteo'), incident('inc-2', ['SOURCE_SILENT'], 4, 'radar')])
+  assert.equal(right[0].incident?.id, 'inc-2')
+  assert.equal(right[0].delay, 3)
+})
+
+test('una interferencia puede salir como GPS degradado, sin fix o a estima', () => {
+  const jam: TruthFile = { ...truth, wind: [], trajectory: [sample(0), sample(1, { emitters_active: ['jammer-1'] }), sample(2, { emitters_active: ['jammer-1'] }), sample(3)] }
+  const rows = injectedVsDetected(injectedEpisodes(jam, []), [incident('inc-1', ['GPS_DEGRADED', 'GPS_NO_FIX'], 2)])
+  assert.equal(rows[0].injected.kind, 'jamming')
+  assert.equal(rows[0].incident?.id, 'inc-1')
 })

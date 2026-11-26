@@ -9,18 +9,14 @@ from typing import Any
 
 from ..decision.table import DecisionTable, DecisionTables, load_tables
 from .facets import HAND_FACET_TABLES
-from .monitor import CAUSE_FACET
 from .policy import HERE
-
-CAUSE_TABLE = "incident_kind"
 
 
 def build(tables: DecisionTables | None = None) -> dict[str, Any]:
     """Cada faceta de las evidencias con su tabla completa, con las filas en orden de evaluación."""
     tables = tables or load_tables(HERE / "tables.yaml")
-    names = {**HAND_FACET_TABLES, CAUSE_FACET: CAUSE_TABLE}
     facets: dict[str, Any] = {}
-    for facet, name in names.items():
+    for facet, name in HAND_FACET_TABLES.items():
         facets[facet] = table_json(name, tables[name])
     return {"facets": facets}
 

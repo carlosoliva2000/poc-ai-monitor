@@ -56,15 +56,22 @@
       "type": "object"
     },
     "IncidentKind": {
-      "description": "Tipo de incidente del monitor de situación (v1.1). Coincide con las causas de\n`states.jsonl`, más `LINK_LOSS`, `GPS_DEGRADED` y `BATTERY` (sin causa de desviación) y\n`UNDETERMINED` (salida del sistema con confianza baja, no una etiqueta de la verdad).",
+      "description": "Tipo de incidente del monitor de situación (v1.1; catálogo ampliado en la v1.3). Los tipos\nde causa de desviación coinciden con las causas de `states.jsonl`; el resto sale de las demás\nfacetas; `UNDETERMINED` es una salida del sistema cuando la confianza es baja, no una etiqueta\nde la verdad. `SOURCE_SILENT` y `FAILSAFE` llevan un `subject` (la fuente o el modo).",
       "enum": [
         "WIND",
         "GPS_SPOOFING",
         "HIJACK",
         "LINK_LOSS",
+        "LINK_DEGRADED",
         "GPS_DEGRADED",
+        "GPS_NO_FIX",
         "DEAD_RECKONING",
-        "BATTERY",
+        "SOURCE_SILENT",
+        "RADAR_OUT_OF_RANGE",
+        "BATTERY_LOW",
+        "BATTERY_CRITICAL",
+        "CANNOT_REACH_HOME",
+        "FAILSAFE",
         "UNDETERMINED"
       ],
       "title": "IncidentKind",

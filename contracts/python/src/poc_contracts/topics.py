@@ -6,7 +6,7 @@ Forma del topic: `citadel.pub.evt.<domain>.<routing>.<event>.v1` (`contracts/eve
 import re
 from dataclasses import dataclass
 
-from .enums import ClientKind, ConversationId, EventType, ToolSource
+from .enums import ClientKind, ConversationId, EventType
 
 NAMESPACE = "citadel"
 CLASSIFICATION = "pub"
@@ -83,19 +83,6 @@ CHAT_SOURCES: dict[ConversationId, str] = {
 # `source` del sobre de `OperatorMessage` cuando no es el del operador: el chat del instructor no
 # comparte fuente con el del monitor para que `get_events` (`operator`) nunca lo devuelva.
 OPERATOR_SOURCES: dict[ConversationId, str] = {ConversationId.INSTRUCTOR: "web-instructor"}
-
-# Parámetro `source` de la tool `get_events` -> `source` del sobre.
-TOOL_SOURCE_TO_ENVELOPE_SOURCE: dict[ToolSource, str] = {
-    ToolSource.GPS: "d1-gps",
-    ToolSource.RADAR: "radar-1",
-    ToolSource.METEO: "meteo-1",
-    ToolSource.LINK: "d1-link",
-    ToolSource.BATTERY: "d1-bat",
-    ToolSource.MISSION: "d1-mission",
-    ToolSource.DETECTOR: "ai-detector",
-    ToolSource.MONITOR: "ai-monitor",
-    ToolSource.OPERATOR: "web-operator",
-}
 
 # Dominios en los que puede publicar cada cliente del WebSocket.
 CLIENT_DOMAINS: dict[ClientKind, frozenset[str]] = {

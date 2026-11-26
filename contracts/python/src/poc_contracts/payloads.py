@@ -388,6 +388,7 @@ class IncidentUpdated(Payload):
     incident_id: str = Field(min_length=1)
     revision: int = Field(ge=1)
     kind: IncidentKind
+    subject: str | None = Field(default=None, min_length=1)
     name: str = Field(min_length=1, max_length=60)
     state: IncidentState
     severity: Severity

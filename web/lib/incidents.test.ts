@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { describeCondition, describeContext, evidenceRows, formatDuration } from './incidents.ts'
+import { describeCell, describeCondition, describeContext, evidenceRows, facetLabel, formatDuration, valueLabel } from './incidents.ts'
 
 test('las condiciones se leen con su valor y su umbral', () => {
   assert.equal(describeCondition({ feature: 'cn0_rise_db', op: '>=', threshold: 4, value: 8.14 }), 'C/N0 over reference +8.1 dB ≥ 4')
@@ -22,7 +22,7 @@ test('las evidencias y el contexto se pintan con palabras, sin nombres internos'
   assert.deepEqual(rows.map((r) => [r.facet, r.state, r.rule]), [
     ['Drone vs route', 'on route', 'DS-05'],
     ['Wind', 'beyond limit', 'EW-02'],
-    ['Decisive rule', 'Hijack', 'IK-01'],
+    ['Cause of the deviation', 'Hijack', 'IK-01'],
   ])
   assert.equal(describeContext({ feature: 'wind_est_mps', value: 2.64 }), 'Estimated wind 2.6 m/s')
   assert.equal(describeContext({ feature: 'deviation_source', value: 'radar' }), 'Deviation measured by the radar')
@@ -33,4 +33,23 @@ test('duraciones', () => {
   assert.equal(formatDuration(45.4), '45 s')
   assert.equal(formatDuration(72), '1 min 12 s')
   assert.equal(formatDuration(125), '2 min 05 s')
+})
+
+test('las facetas y los estados nuevos del catálogo salen con palabras', () => {
+  assert.equal(facetLabel('battery.endurance'), 'Battery endurance')
+  assert.equal(facetLabel('drone.cause'), 'Cause of the deviation')
+  assert.equal(valueLabel('cannot_reach_home'), 'cannot reach home')
+  assert.equal(valueLabel('failsafe_return'), 'failsafe: returning home')
+  assert.equal(describeCell('wind_est_over_limit', '> 1'), 'Estimated wind over the drone limit > 1')
+  assert.equal(describeCondition({ feature: 'tele_gap_p', op: '>=', threshold: 3, value: 7.5 }), 'No drone telemetry for 7.5 periods ≥ 3')
+  assert.equal(describeContext({ feature: 'possible_cause', value: 'HIJACK (possible)' }), 'Possible cause HIJACK (possible)')
+  assert.equal(describeContext({ feature: 'telemetry_gap_s', value: 31 }), 'No telemetry for 31 s')
+  assert.equal(describeContext({ feature: 'battery_pct', value: 14.2 }), 'Battery 14.2 %')
+})
+
+test('las banderas del modo y los datos que faltan en una condición', () => {
+  assert.equal(describeCondition({ feature: 'mode_hold', op: '<=', threshold: 0.5, value: null }), 'Holding position: no data')
+  assert.equal(describeCondition({ feature: 'mode_land', op: '>', threshold: 0.5, value: 1 }), 'Landing: yes')
+  assert.equal(describeCondition({ feature: 'mode_return', op: '!=', threshold: null, value: 1 }), 'Returning home: has data')
+  assert.equal(describeCondition({ feature: 'cn0_vs_nominal_db', op: '>', threshold: -3.649999976158142, value: 7.23 }), 'C/N0 vs nominal +7.2 dB > −3.65')
 })

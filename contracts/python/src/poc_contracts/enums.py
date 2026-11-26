@@ -22,35 +22,6 @@ class AutopilotMode(StrEnum):
     FAILSAFE_LAND = "failsafe_land"
 
 
-class ToolSource(StrEnum):
-    """Valores del parámetro `source` de `get_events` (nunca el dominio `sim`)."""
-
-    GPS = "gps"
-    RADAR = "radar"
-    METEO = "meteo"
-    LINK = "link"
-    BATTERY = "battery"
-    MISSION = "mission"
-    DETECTOR = "detector"
-    MONITOR = "monitor"
-    OPERATOR = "operator"
-
-
-class EventSource(StrEnum):
-    """`source` de `get_events` (v0.17): las fuentes de `ToolSource` o `all` (todas a la vez)."""
-
-    ALL = "all"
-    GPS = "gps"
-    RADAR = "radar"
-    METEO = "meteo"
-    LINK = "link"
-    BATTERY = "battery"
-    MISSION = "mission"
-    DETECTOR = "detector"
-    MONITOR = "monitor"
-    OPERATOR = "operator"
-
-
 class EventType(StrEnum):
     """Tipos de evento (último segmento del topic sin la versión)."""
 
@@ -140,17 +111,25 @@ class AlertStatus(StrEnum):
 
 
 class IncidentKind(StrEnum):
-    """Tipo de incidente del monitor de situación (v1.1). Coincide con las causas de
-    `states.jsonl`, más `LINK_LOSS`, `GPS_DEGRADED` y `BATTERY` (sin causa de desviación) y
-    `UNDETERMINED` (salida del sistema con confianza baja, no una etiqueta de la verdad)."""
+    """Tipo de incidente del monitor de situación (v1.1; catálogo ampliado en la v1.3). Los tipos
+    de causa de desviación coinciden con las causas de `states.jsonl`; el resto sale de las demás
+    facetas; `UNDETERMINED` es una salida del sistema cuando la confianza es baja, no una etiqueta
+    de la verdad. `SOURCE_SILENT` y `FAILSAFE` llevan un `subject` (la fuente o el modo)."""
 
     WIND = "WIND"
     GPS_SPOOFING = "GPS_SPOOFING"
     HIJACK = "HIJACK"
     LINK_LOSS = "LINK_LOSS"
+    LINK_DEGRADED = "LINK_DEGRADED"
     GPS_DEGRADED = "GPS_DEGRADED"
+    GPS_NO_FIX = "GPS_NO_FIX"
     DEAD_RECKONING = "DEAD_RECKONING"
-    BATTERY = "BATTERY"
+    SOURCE_SILENT = "SOURCE_SILENT"
+    RADAR_OUT_OF_RANGE = "RADAR_OUT_OF_RANGE"
+    BATTERY_LOW = "BATTERY_LOW"
+    BATTERY_CRITICAL = "BATTERY_CRITICAL"
+    CANNOT_REACH_HOME = "CANNOT_REACH_HOME"
+    FAILSAFE = "FAILSAFE"
     UNDETERMINED = "UNDETERMINED"
 
 
