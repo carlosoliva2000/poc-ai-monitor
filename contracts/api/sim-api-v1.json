@@ -926,8 +926,8 @@
     }
   },
   "info": {
-    "description": "Simulator of the CITADEL exercise platform. Read-only data per asset (own JSON format, REST plus Server-Sent Events), exercise control and instructor injects. No authentication: do not expose it outside a trusted network.",
-    "title": "CITADEL exercise simulator API",
+    "description": "Exercise simulator with a multirotor drone, a radar, a weather station and a ground station. Per-asset data in its own JSON format (REST and Server-Sent Events), exercise control and instructor injects.",
+    "title": "Drone exercise simulator API",
     "version": "1.0.0"
   },
   "openapi": "3.1.0",

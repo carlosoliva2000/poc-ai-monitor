@@ -56,9 +56,9 @@ HEARTBEAT_S = 1.0
 POLL_S = 0.05
 BATCH = 500
 DESCRIPTION = (
-    "Simulator of the CITADEL exercise platform. Read-only data per asset (own JSON format, "
-    "REST plus Server-Sent Events), exercise control and instructor injects. "
-    "No authentication: do not expose it outside a trusted network."
+    "Exercise simulator with a multirotor drone, a radar, a weather station and a ground "
+    "station. Per-asset data in its own JSON format (REST and Server-Sent Events), exercise "
+    "control and instructor injects."
 )
 _ERRORS: dict[int | str, dict[str, Any]] = {404: {"model": ApiError}, 409: {"model": ApiError}}
 _SSE: dict[int | str, dict[str, Any]] = {
@@ -96,7 +96,7 @@ def _sse(event: str, data: str, event_id: int | None = None) -> bytes:
 def create_sim_api(player: Player, feed: Feed, scenarios_dir: Path) -> FastAPI:
     """La subaplicación de `/api/v1` (se monta en la plataforma; tiene su propio OpenAPI)."""
     api = FastAPI(
-        title="CITADEL exercise simulator API",
+        title="Drone exercise simulator API",
         version=API_VERSION,
         description=DESCRIPTION,
         servers=[{"url": "/api/v1"}],
