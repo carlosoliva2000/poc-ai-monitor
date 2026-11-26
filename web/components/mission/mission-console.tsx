@@ -7,6 +7,7 @@ import { usePlatform, useTruth } from '@/hooks/use-platform'
 import { derive } from '@/lib/derive'
 import { eventsForView, reviveView, type View } from '@/lib/view'
 import type { Conversation, Proposal } from '@/lib/contracts'
+import { PLATFORM_WS } from '@/lib/contracts'
 import { activeWind, EMPTY_FORM, formFromParams, remaining, type WindForm } from '@/lib/instructor'
 import { AgentConsole } from './agent-console'
 import { DroneMap } from './drone-map'
@@ -80,7 +81,7 @@ export function MissionConsole() {
       )}
       {connection === 'closed' && (
         <p className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive" role="alert">
-          No connection to the platform (ws://127.0.0.1:8100/ws). Retrying…
+          No connection to the platform ({PLATFORM_WS}). Retrying…
         </p>
       )}
 

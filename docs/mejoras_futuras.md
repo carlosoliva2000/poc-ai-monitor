@@ -221,3 +221,23 @@ Lo que sale de la E7d y **no se hace ahora**. Los prompts están congelados (`ag
 - Las revisiones de evidencias de un incidente largo (3 por incidente en `demo`) siguen siendo muchas para la tarjeta; se podrían agrupar.
 - Las entradas que son banderas 0/1 (`mode_hold`, `gps_fix_3d`…) se leen como sí/no en la web; el resto de entradas aprendidas son cocientes que un operador no entiende sin ayuda («1,5 es una vez y media el límite del dron»). Un texto de ayuda por entrada, en la ventana de reglas.
 - Las entradas de `tools/experiments/` (matrices, `text_metrics.py`, `texts.py`) y `test_run_matrix.py` de la sección de la E6 ya no existen: la herramienta se retiró con el módulo antiguo.
+
+## D1a · API del simulador (26/11/2026)
+Lo que sale de la D1a y **no se hace ahora**. La API no tiene autenticación ni se escucha fuera de `localhost`.
+
+**Para la D1b (despliegue en CITADEL):**
+- **Workers, mediadores y NATS:** el adaptador de `tools/sim_api/adapter.py` es el esqueleto del mediador (mezcla de assets con marcas de agua y reconstrucción de eventos); falta el SDK, el registro de contratos y una cola de errores.
+- **Describir el flujo SSE en AsyncAPI** (lo propuso el equipo de la taxonomía para los contratos): decidir si compensa frente al OpenAPI y la guía actuales.
+- **Configuración de la web en ejecución:** las `NEXT_PUBLIC_*` se fijan al construir; un contenedor necesita leerla al arrancar (un `config.json` servido o un proxy).
+- **El monitor lee `assets.yaml`, no el inventario:** el σ del GPS del escenario es 1,5 m y `assets.yaml` dice 1,53 (el medido); al pasar el monitor al inventario cambian las características. Hay que decidir cuál vale.
+- **Dónde va el chat de IA** (web del simulador o zona común) y quién publica los textos y los incidentes en el bus.
+- **Orden entre assets en el bus:** cada asset tiene su orden; el adaptador reordena con los `heartbeat`. Con NATS hay que decidir si el orden se reconstruye en el mediador o en quien consume.
+- **Autenticación y TLS** de la API, y límites (clientes SSE simultáneos, tamaño de página).
+- **Varios drones:** las rutas por id lo admiten, pero hoy hay un solo dron `d1`, un radar, una estación meteorológica y una estación de tierra fijos.
+
+**De la API:**
+- **El modo interactivo se puede encender sin escenario** (no hace nada: cada carga lo apaga); solo las demás órdenes dan «no scenario is loaded».
+- **`types` filtra también el ciclo de vida** (`RunStarted`…): hay que pedirlo por su nombre.
+- **Retención fija** (200 000 mensajes por asset, dos ejecuciones); sin configuración ni persistencia: al reiniciar la plataforma el histórico se pierde (el timeline sigue volcándose a `runs/<escenario>/<run_id>/`).
+- **Sondeo del flujo:** el SSE lee del registro cada 50 ms; con muchos clientes convendría despertarlos por evento.
+- **Los ejemplos de `experiments/d1a/`** (`ejemplos.md` y `ejemplos.sh`) solo están en `results/`: `experiments/**` está en `.gitignore`.

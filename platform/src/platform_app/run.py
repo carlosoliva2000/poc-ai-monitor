@@ -48,7 +48,8 @@ from .viewer_state import clock
 
 log = logging.getLogger("run")
 
-DEFAULT_PORT = 8100
+DEFAULT_PORT = int(os.environ.get("POC_PLATFORM_PORT") or 8100)
+DEFAULT_HOST = os.environ.get("POC_PLATFORM_HOST") or "127.0.0.1"
 AI_READY_MARKER = "connected"  # línea de log del monitor cuando ya está suscrito
 AI_READY_TIMEOUT_S = 20.0
 PLATFORM_READY_TIMEOUT_S = 30.0
@@ -89,12 +90,12 @@ def http_get(url: str, timeout: float = 2.0) -> dict | None:
         return None
 
 
-def start_platform(port: int) -> subprocess.Popen:
-    if http_get(f"http://127.0.0.1:{port}/api/state") is not None:
+def start_platform(port: int, host: str = DEFAULT_HOST) -> subprocess.Popen:
+    if http_get(f"http://{host}:{port}/api/state") is not None:
         raise SystemExit(
             f"el puerto {port} ya está en uso (¿hay una plataforma en marcha? usa --platform)"
         )
-    command = [sys.executable, "-m", "platform_app.app", "--port", str(port)]
+    command = [sys.executable, "-m", "platform_app.app", "--host", host, "--port", str(port)]
     proc = subprocess.Popen(
         command, cwd=REPO_ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
@@ -102,7 +103,7 @@ def start_platform(port: int) -> subprocess.Popen:
     while time.monotonic() < deadline:
         if proc.poll() is not None:
             raise SystemExit("la plataforma ha terminado al arrancar")
-        if http_get(f"http://127.0.0.1:{port}/api/state") is not None:
+        if http_get(f"http://{host}:{port}/api/state") is not None:
             return proc
         time.sleep(0.2)
     proc.terminate()
@@ -410,6 +411,7 @@ def main() -> int:
         "--platform", help="URL de una plataforma ya en marcha (si no, arranca una)"
     )
     parser.add_argument("--no-ai", action="store_true", help="no arrancar el monitor")
+    parser.add_argument("--host", default=DEFAULT_HOST, help="dirección de la plataforma")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument(
         "--timeout", type=float, default=900.0, help="segundos de reloj por escenario"
@@ -431,10 +433,10 @@ def main() -> int:
         llm = False
 
     platform_proc = ai_proc = assistant_proc = instructor_proc = None
-    url = args.platform or f"http://127.0.0.1:{args.port}"
+    url = args.platform or f"http://{args.host}:{args.port}"
     try:
         if args.platform is None:
-            platform_proc = start_platform(args.port)
+            platform_proc = start_platform(args.port, args.host)
         if monitor:
             ai_proc = start_ai_module(url, tables=args.tables)
         if llm:

@@ -39,7 +39,7 @@ def _fake_main(monkeypatch: pytest.MonkeyPatch, *, vllm_up: bool, assistant_fail
 
     calls: dict[str, list] = {"started": [], "stopped": []}
     monkeypatch.setattr(run, "http_get", lambda url, timeout=2.0: {} if vllm_up else None)
-    monkeypatch.setattr(run, "start_platform", lambda port: "platform")
+    monkeypatch.setattr(run, "start_platform", lambda port, host="127.0.0.1": "platform")
     monkeypatch.setattr(
         run, "start_ai_module", lambda url, tables: calls["started"].append("monitor") or "monitor"
     )

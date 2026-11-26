@@ -291,7 +291,9 @@ export type TruthFile = {
   wind: { t: number; speed_mps: number; from_deg: number }[]
 }
 
-export const PLATFORM_HTTP = 'http://127.0.0.1:8100/api'
-export const PLATFORM_WS = 'ws://127.0.0.1:8100/ws'
+/** Dirección de la plataforma: se fija al construir la web (`NEXT_PUBLIC_PLATFORM_URL`). */
+export const PLATFORM_URL = (process.env.NEXT_PUBLIC_PLATFORM_URL || 'http://127.0.0.1:8100').replace(/\/+$/, '')
+export const PLATFORM_HTTP = `${PLATFORM_URL}/api`
+export const PLATFORM_WS = `${PLATFORM_URL.replace(/^http/, 'ws')}/ws`
 export const SPEEDS = [0.5, 1, 2, 4, 8, 16] as const
 export const SOURCES: SensorSource[] = ['gps', 'radar', 'meteo', 'link', 'battery']

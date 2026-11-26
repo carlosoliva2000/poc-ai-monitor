@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from dataclasses import asdict
@@ -39,15 +40,6 @@ from poc_contracts.run_files import PlanFile, TruthFile
 from poc_contracts.topics import client_can_publish, topic_domain, topic_matches
 from poc_contracts.ws import (
     ClientMessage,
-    ControlFault,
-    ControlInstructor,
-    ControlInteractive,
-    ControlLoad,
-    ControlPause,
-    ControlPlay,
-    ControlReset,
-    ControlSpeed,
-    ControlStep,
     ErrorMessage,
     EventMessage,
     Hello,
@@ -60,18 +52,26 @@ from poc_contracts.ws import (
 )
 
 from .bus import Bus
+from .control import apply_control, generated_duration
 from .generator.scenario_io import list_scenarios, load_scenario
 from .paths import RUNS_DIR, SCENARIOS_DIR
 from .player import Player, PlayerError
+from .sim_api.feed import Feed
+from .sim_api.routes import create_sim_api
 from .timeline import Timeline
 
 log = logging.getLogger(__name__)
 
-HOST = "127.0.0.1"
-PORT = 8100
+HOST = os.environ.get("POC_PLATFORM_HOST") or "127.0.0.1"
+PORT = int(os.environ.get("POC_PLATFORM_PORT") or 8100)
 STATE_PERIOD_S = 0.5
 TRUTH_PERIOD_S = 0.1  # la posición real va a la web 10 veces por segundo de reloj
-WEB_ORIGINS = ["http://127.0.0.1:3000", "http://localhost:3000"]
+DEFAULT_WEB_ORIGINS = ["http://127.0.0.1:3000", "http://localhost:3000"]
+WEB_ORIGINS = [
+    o.strip()
+    for o in (os.environ.get("POC_WEB_ORIGINS") or ",".join(DEFAULT_WEB_ORIGINS)).split(",")
+    if o.strip()
+]
 _MESSAGE = TypeAdapter(ClientMessage)
 
 
@@ -142,38 +142,6 @@ def _describe(exc: ValidationError) -> str:
     )
 
 
-def _generated_duration(runs_dir: Path, name: str) -> float | None:
-    """Duración del escenario generado (`sim_time` del último evento), o `None` si no existe."""
-    path = runs_dir / name / "events.jsonl"
-    if not path.exists():
-        return None
-    lines = path.read_text(encoding="utf-8").splitlines()
-    return float(json.loads(lines[-1])["sim_time"]) if lines else None
-
-
-def _handle_control(player: Player, message: Any) -> None:
-    match message:
-        case ControlLoad():
-            player.load(message.value)
-        case ControlPlay():
-            player.play()
-        case ControlPause():
-            player.pause()
-        case ControlStep():
-            player.step()
-        case ControlReset():
-            player.reset()
-        case ControlSpeed():
-            player.set_speed(message.value)
-        case ControlInteractive():
-            player.set_interactive(message.value)
-        case ControlFault():
-            f = message.value
-            player.fault(f.source, f.mode, f.active)
-        case ControlInstructor():
-            player.instructor(message.value)
-
-
 def _handle_message(app: FastAPI, client: Client, text: str) -> None:
     """Valida y ejecuta un mensaje del cliente; los errores vuelven como `error`."""
     bus: Bus = app.state.bus
@@ -227,7 +195,7 @@ def _handle_message(app: FastAPI, client: Client, text: str) -> None:
         client.send(ErrorMessage(message="only clients of type web can send control"))
         return
     try:
-        _handle_control(player, message)
+        apply_control(player, message)
     except PlayerError as exc:
         client.send(ErrorMessage(message=str(exc)))
     except Exception as exc:
@@ -268,6 +236,7 @@ def create_app(
     runs_dir: Path = RUNS_DIR,
     scenarios_dir: Path = SCENARIOS_DIR,
     run_clock: bool = True,
+    web_origins: list[str] | None = None,
 ) -> FastAPI:
     """Crea la aplicación. `run_clock=False` desactiva el reloj de pared (las pruebas avanzan el
     reproductor a mano)."""
@@ -295,7 +264,10 @@ def create_app(
     app = FastAPI(title="poc-ai-monitor platform", lifespan=lifespan)
     app.state.bus, app.state.player, app.state.hub = bus, player, hub
     app.add_middleware(
-        CORSMiddleware, allow_origins=WEB_ORIGINS, allow_methods=["*"], allow_headers=["*"]
+        CORSMiddleware,
+        allow_origins=web_origins or WEB_ORIGINS,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     api = APIRouter(prefix="/api")
@@ -304,7 +276,7 @@ def create_app(
     def scenarios() -> ScenariosResponse:
         infos = []
         for name in list_scenarios(scenarios_dir):
-            duration = _generated_duration(runs_dir, name)
+            duration = generated_duration(runs_dir, name)
             infos.append(
                 ScenarioInfo(
                     name=name,
@@ -347,6 +319,9 @@ def create_app(
         return TimelineResponse(events=found, truncated=truncated).model_dump(mode="json")
 
     app.include_router(api)
+    feed = Feed(bus)
+    app.state.feed = feed
+    app.mount("/api/v1", create_sim_api(player, feed, scenarios_dir))
 
     @app.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:
@@ -371,12 +346,13 @@ def create_app(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Platform: player, bus, API and WebSocket")
+    parser.add_argument("--host", default=HOST, help=f"address to listen on (default {HOST})")
     parser.add_argument("--port", type=int, default=PORT, help=f"port (default {PORT})")
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
-    uvicorn.run(create_app(), host=HOST, port=args.port, log_level="info")
+    uvicorn.run(create_app(), host=args.host, port=args.port, log_level="info")
 
 
 if __name__ == "__main__":

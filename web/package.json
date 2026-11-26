@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NEXT_TELEMETRY_DISABLED=1 next dev -H 127.0.0.1 -p 3000",
+    "dev": "NEXT_TELEMETRY_DISABLED=1 next dev -H ${WEB_HOST:-127.0.0.1} -p ${WEB_PORT:-3000}",
     "build": "NEXT_TELEMETRY_DISABLED=1 next build",
-    "start": "NEXT_TELEMETRY_DISABLED=1 next start -H 127.0.0.1 -p 3000",
-    "demo": "export NEXT_TELEMETRY_DISABLED=1 && next build && next start -H 127.0.0.1 -p 3000",
+    "start": "NEXT_TELEMETRY_DISABLED=1 next start -H ${WEB_HOST:-127.0.0.1} -p ${WEB_PORT:-3000}",
+    "demo": "export NEXT_TELEMETRY_DISABLED=1 && next build && next start -H ${WEB_HOST:-127.0.0.1} -p ${WEB_PORT:-3000}",
     "typecheck": "tsc --noEmit",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"lib/**/*.test.ts\"",
     "capture": "node scripts/capture.mjs"

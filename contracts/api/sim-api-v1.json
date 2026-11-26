@@ -1,0 +1,1963 @@
+{
+  "components": {
+    "schemas": {
+      "ActiveFault": {
+        "additionalProperties": false,
+        "description": "Un fallo en curso: la fuente, el tipo y quién lo activó.",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/FaultMode"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/FaultOrigin"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SensorSource"
+          }
+        },
+        "required": [
+          "source",
+          "mode",
+          "origin"
+        ],
+        "title": "ActiveFault",
+        "type": "object"
+      },
+      "ApiError": {
+        "additionalProperties": false,
+        "description": "Cuerpo de los errores 404 y 409 (los de validación son los 422 de FastAPI).",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ApiError",
+        "type": "object"
+      },
+      "AssetInfo": {
+        "additionalProperties": false,
+        "description": "Un asset del inventario, con su configuración (lo que se sabe de él de antemano).",
+        "properties": {
+          "config": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "title": "Config",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "message_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Message Types",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AssetType"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "subject",
+          "message_types",
+          "config"
+        ],
+        "title": "AssetInfo",
+        "type": "object"
+      },
+      "AssetMessage": {
+        "additionalProperties": false,
+        "description": "Un mensaje de un asset, en su formato propio (sin topics, `source` ni `ephemeral`).",
+        "properties": {
+          "asset_id": {
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "received_utc": {
+            "title": "Received Utc",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "sim_time": {
+            "title": "Sim Time",
+            "type": "number"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "time_utc": {
+            "title": "Time Utc",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "run_id",
+          "asset_id",
+          "subject",
+          "type",
+          "id",
+          "sim_time",
+          "time_utc",
+          "received_utc",
+          "data"
+        ],
+        "title": "AssetMessage",
+        "type": "object"
+      },
+      "AssetState": {
+        "additionalProperties": false,
+        "description": "Respuesta de `GET /assets/{id}/state`: el último mensaje de cada tipo.",
+        "properties": {
+          "asset_id": {
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "last": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AssetMessage"
+            },
+            "title": "Last",
+            "type": "object"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "sim_time": {
+            "title": "Sim Time",
+            "type": "number"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asset_id",
+          "run_id",
+          "status",
+          "sim_time",
+          "last"
+        ],
+        "title": "AssetState",
+        "type": "object"
+      },
+      "AssetType": {
+        "enum": [
+          "drone",
+          "radar",
+          "weather_station",
+          "ground_station"
+        ],
+        "title": "AssetType",
+        "type": "string"
+      },
+      "AssetsResponse": {
+        "additionalProperties": false,
+        "description": "Respuesta de `GET /assets`.",
+        "properties": {
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/AssetInfo"
+            },
+            "title": "Assets",
+            "type": "array"
+          },
+          "scenario_loaded": {
+            "title": "Scenario Loaded",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "scenario_loaded",
+          "assets"
+        ],
+        "title": "AssetsResponse",
+        "type": "object"
+      },
+      "CommandIssuer": {
+        "description": "Quién emite un comando: el panel, el LLM del instructor (confirmado) o el escenario.",
+        "enum": [
+          "panel",
+          "llm",
+          "scenario"
+        ],
+        "title": "CommandIssuer",
+        "type": "string"
+      },
+      "FaultControl": {
+        "additionalProperties": false,
+        "description": "Valor de `control` → `fault`: activa (`active: true`) o termina un fallo de una fuente.\n\nSolo con el modo interactivo encendido. `loss` solo existe para el GPS.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/FaultMode"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SensorSource"
+          }
+        },
+        "required": [
+          "source",
+          "mode",
+          "active"
+        ],
+        "title": "FaultControl",
+        "type": "object"
+      },
+      "FaultMode": {
+        "description": "Tipo de fallo: `mute` (la fuente no se publica) o `loss` (solo GPS: pérdida de señal).",
+        "enum": [
+          "mute",
+          "loss"
+        ],
+        "title": "FaultMode",
+        "type": "string"
+      },
+      "FaultOrigin": {
+        "enum": [
+          "manual",
+          "scenario"
+        ],
+        "title": "FaultOrigin",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "Inject": {
+        "additionalProperties": false,
+        "description": "Una anomalía programada del ejercicio (una etiqueta de `labels.json`).",
+        "properties": {
+          "end_s": {
+            "minimum": 0.0,
+            "title": "End S",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "start_s": {
+            "minimum": 0.0,
+            "title": "Start S",
+            "type": "number"
+          },
+          "type": {
+            "$ref": "#/components/schemas/LabelType"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "source",
+          "start_s",
+          "end_s"
+        ],
+        "title": "Inject",
+        "type": "object"
+      },
+      "InjectsResponse": {
+        "additionalProperties": false,
+        "description": "Lo programado en el ejercicio (la verdad: solo por la parte del instructor).",
+        "properties": {
+          "injects": {
+            "items": {
+              "$ref": "#/components/schemas/Inject"
+            },
+            "title": "Injects",
+            "type": "array"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "run_id",
+          "injects"
+        ],
+        "title": "InjectsResponse",
+        "type": "object"
+      },
+      "InstructorCommandName": {
+        "description": "Comandos del instructor (v0.18). Más adelante caben otros sin romper el evento.",
+        "enum": [
+          "set_wind",
+          "cancel_wind"
+        ],
+        "title": "InstructorCommandName",
+        "type": "string"
+      },
+      "InstructorControl": {
+        "additionalProperties": false,
+        "description": "Valor de `control` → `instructor`: lo que manda la web (panel o propuesta confirmada).",
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/InstructorCommandName"
+          },
+          "issued_by": {
+            "$ref": "#/components/schemas/CommandIssuer"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WindCommandParams"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "required": [
+          "command",
+          "params",
+          "issued_by",
+          "text"
+        ],
+        "title": "InstructorControl",
+        "type": "object"
+      },
+      "InteractiveRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "title": "Value",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "InteractiveRequest",
+        "type": "object"
+      },
+      "LabelType": {
+        "description": "Tipo de anomalía de `labels.json`.",
+        "enum": [
+          "wind",
+          "hijack",
+          "gps_spoofing",
+          "source_silent",
+          "gps_loss",
+          "gps_degraded",
+          "link_degraded"
+        ],
+        "title": "LabelType",
+        "type": "string"
+      },
+      "LoadRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "scenario": {
+            "title": "Scenario",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scenario"
+        ],
+        "title": "LoadRequest",
+        "type": "object"
+      },
+      "MessagesPage": {
+        "additionalProperties": false,
+        "description": "Respuesta de `GET /assets/{id}/messages`: una página con cursor numérico (`seq`).",
+        "properties": {
+          "asset_id": {
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/AssetMessage"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "next": {
+            "title": "Next",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "asset_id",
+          "messages",
+          "next",
+          "has_more"
+        ],
+        "title": "MessagesPage",
+        "type": "object"
+      },
+      "PlayerState": {
+        "additionalProperties": false,
+        "description": "Estado del reproductor, común al mensaje `state` y a `GET /api/state`.",
+        "properties": {
+          "active_faults": {
+            "items": {
+              "$ref": "#/components/schemas/ActiveFault"
+            },
+            "title": "Active Faults",
+            "type": "array"
+          },
+          "cursor": {
+            "title": "Cursor",
+            "type": "integer"
+          },
+          "interactive": {
+            "title": "Interactive",
+            "type": "boolean"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "scenario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenario"
+          },
+          "sim_time": {
+            "title": "Sim Time",
+            "type": "number"
+          },
+          "speed": {
+            "title": "Speed",
+            "type": "number"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlayerStatus"
+          },
+          "total_events": {
+            "title": "Total Events",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "scenario",
+          "run_id",
+          "sim_time",
+          "speed",
+          "interactive",
+          "active_faults",
+          "cursor",
+          "total_events"
+        ],
+        "title": "PlayerState",
+        "type": "object"
+      },
+      "PlayerStatus": {
+        "enum": [
+          "idle",
+          "running",
+          "paused",
+          "finished"
+        ],
+        "title": "PlayerStatus",
+        "type": "string"
+      },
+      "ScenarioInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "duration_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration S"
+          },
+          "generated": {
+            "title": "Generated",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "generated",
+          "duration_s"
+        ],
+        "title": "ScenarioInfo",
+        "type": "object"
+      },
+      "ScenariosResponse": {
+        "additionalProperties": false,
+        "description": "Respuesta de `GET /api/scenarios`.",
+        "properties": {
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioInfo"
+            },
+            "title": "Scenarios",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scenarios"
+        ],
+        "title": "ScenariosResponse",
+        "type": "object"
+      },
+      "SensorSource": {
+        "description": "Fuentes que se pueden silenciar y en las que puede saltar `SOURCE_SILENT`.",
+        "enum": [
+          "gps",
+          "radar",
+          "meteo",
+          "link",
+          "battery"
+        ],
+        "title": "SensorSource",
+        "type": "string"
+      },
+      "SpeedRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "SpeedRequest",
+        "type": "object"
+      },
+      "TruthEmitter": {
+        "additionalProperties": false,
+        "description": "Emisor o estación ajena con posición: solo en la verdad y en la vista del instructor.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "x": {
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "x",
+          "y"
+        ],
+        "title": "TruthEmitter",
+        "type": "object"
+      },
+      "TruthFile": {
+        "additionalProperties": false,
+        "description": "Verdad del vuelo. El agente nunca la ve.",
+        "properties": {
+          "duration_s": {
+            "title": "Duration S",
+            "type": "number"
+          },
+          "emitters": {
+            "items": {
+              "$ref": "#/components/schemas/TruthEmitter"
+            },
+            "title": "Emitters",
+            "type": "array"
+          },
+          "trajectory": {
+            "items": {
+              "$ref": "#/components/schemas/TruthSample"
+            },
+            "title": "Trajectory",
+            "type": "array"
+          },
+          "wind": {
+            "items": {
+              "$ref": "#/components/schemas/TruthWind"
+            },
+            "title": "Wind",
+            "type": "array"
+          }
+        },
+        "required": [
+          "duration_s",
+          "trajectory",
+          "wind"
+        ],
+        "title": "TruthFile",
+        "type": "object"
+      },
+      "TruthSample": {
+        "additionalProperties": false,
+        "description": "Estado real cada segundo (verdad ampliada, v1.0). `course_deg`: rumbo sobre el suelo;\n`heading_deg`: el del morro. El resto es lo que hace falta para etiquetar y evaluar:\n`leg_index` (índice del waypoint pendiente en la ruta), `ref_dist_m` (distancia real a la\nreferencia del modo: el tramo pendiente en misión), `est_x`/`est_y` (estima del dron),\n`mode` (modo del autopiloto), `link_up` (llegan los paquetes del dron a nuestra estación),\n`battery_soc` (carga real, %), `gps_sigma_m` (σ real de la posición del receptor), `cn0_dbhz`\n(C/N0 real) y `emitters_active` (ids de los emisores activos).",
+        "properties": {
+          "battery_soc": {
+            "title": "Battery Soc",
+            "type": "number"
+          },
+          "cn0_dbhz": {
+            "title": "Cn0 Dbhz",
+            "type": "number"
+          },
+          "course_deg": {
+            "title": "Course Deg",
+            "type": "number"
+          },
+          "emitters_active": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Emitters Active",
+            "type": "array"
+          },
+          "est_x": {
+            "title": "Est X",
+            "type": "number"
+          },
+          "est_y": {
+            "title": "Est Y",
+            "type": "number"
+          },
+          "gps_sigma_m": {
+            "title": "Gps Sigma M",
+            "type": "number"
+          },
+          "heading_deg": {
+            "title": "Heading Deg",
+            "type": "number"
+          },
+          "leg_index": {
+            "title": "Leg Index",
+            "type": "integer"
+          },
+          "link_up": {
+            "title": "Link Up",
+            "type": "boolean"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "ref_dist_m": {
+            "title": "Ref Dist M",
+            "type": "number"
+          },
+          "speed_mps": {
+            "title": "Speed Mps",
+            "type": "number"
+          },
+          "t": {
+            "title": "T",
+            "type": "number"
+          },
+          "x": {
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "t",
+          "x",
+          "y",
+          "speed_mps",
+          "heading_deg",
+          "course_deg",
+          "leg_index",
+          "ref_dist_m",
+          "est_x",
+          "est_y",
+          "mode",
+          "link_up",
+          "battery_soc",
+          "gps_sigma_m",
+          "cn0_dbhz",
+          "emitters_active"
+        ],
+        "title": "TruthSample",
+        "type": "object"
+      },
+      "TruthWind": {
+        "additionalProperties": false,
+        "description": "Viento real medio cada segundo, con `from_deg` de procedencia.",
+        "properties": {
+          "from_deg": {
+            "title": "From Deg",
+            "type": "number"
+          },
+          "speed_mps": {
+            "title": "Speed Mps",
+            "type": "number"
+          },
+          "t": {
+            "title": "T",
+            "type": "number"
+          }
+        },
+        "required": [
+          "t",
+          "speed_mps",
+          "from_deg"
+        ],
+        "title": "TruthWind",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WindCommandParams": {
+        "additionalProperties": false,
+        "description": "Los mismos parámetros que un episodio de viento del escenario, más la duración.\n\n`from_deg` y `speed_mps` empujan al dron; `ramp_s` suaviza la subida y la bajada.\n`duration_s: null` = hasta nuevo aviso. Sin racha desde el contrato v1.0.",
+        "properties": {
+          "duration_s": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1800.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration S"
+          },
+          "from_deg": {
+            "maximum": 360.0,
+            "minimum": 0.0,
+            "title": "From Deg",
+            "type": "number"
+          },
+          "ramp_s": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 120.0,
+            "title": "Ramp S",
+            "type": "number"
+          },
+          "speed_mps": {
+            "maximum": 40.0,
+            "minimum": 0.0,
+            "title": "Speed Mps",
+            "type": "number"
+          }
+        },
+        "required": [
+          "from_deg",
+          "speed_mps",
+          "ramp_s",
+          "duration_s"
+        ],
+        "title": "WindCommandParams",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Simulator of the CITADEL exercise platform. Read-only data per asset (own JSON format, REST plus Server-Sent Events), exercise control and instructor injects. No authentication: do not expose it outside a trusted network.",
+    "title": "CITADEL exercise simulator API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/assets": {
+      "get": {
+        "operationId": "assets_assets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Asset inventory with its configuration",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/assets/{asset_id}": {
+      "get": {
+        "operationId": "asset_assets__asset_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Asset",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/assets/{asset_id}/messages": {
+      "get": {
+        "operationId": "asset_messages_assets__asset_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exclusive: messages with seq > since",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "default": -1,
+              "description": "Exclusive: messages with seq > since",
+              "minimum": -1,
+              "title": "Since",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "maximum": 10000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Comma-separated message types",
+            "in": "query",
+            "name": "types",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated message types",
+              "title": "Types"
+            }
+          },
+          {
+            "description": "Default: the current run",
+            "in": "query",
+            "name": "run_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Default: the current run",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagesPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "History of a run, paged by seq",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/assets/{asset_id}/state": {
+      "get": {
+        "operationId": "asset_state_assets__asset_id__state_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Asset State",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/assets/{asset_id}/stream": {
+      "get": {
+        "operationId": "asset_stream_assets__asset_id__stream_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated message types",
+            "in": "query",
+            "name": "types",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated message types",
+              "title": "Types"
+            }
+          },
+          {
+            "description": "Replay seq > since, then go live",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": -1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Replay seq > since, then go live",
+              "title": "Since"
+            }
+          },
+          {
+            "in": "header",
+            "name": "last-event-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "`text/event-stream`. `event: message` (id = seq, data = AssetMessage), `event: heartbeat` (no id, data = Heartbeat) and `event: gap` (data = Gap). Resume with `Last-Event-ID` or `since`."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Live stream (SSE)",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/exercise": {
+      "get": {
+        "operationId": "exercise_exercise_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Exercise state",
+        "tags": [
+          "exercise"
+        ]
+      }
+    },
+    "/exercise/interactive": {
+      "put": {
+        "operationId": "interactive_exercise_interactive_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InteractiveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Interactive",
+        "tags": [
+          "exercise"
+        ]
+      }
+    },
+    "/exercise/load": {
+      "post": {
+        "operationId": "load_exercise_load_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Load",
+        "tags": [
+          "exercise"
+        ]
+      }
+    },
+    "/exercise/pause": {
+      "post": {
+        "operationId": "pause_exercise_pause_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Pause",
+        "tags": [
+          "exercise"
+        ]
+      }
+    },
+    "/exercise/play": {
+      "post": {
+        "operationId": "play_exercise_play_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Play",
+        "tags": [
+          "exercise"
+        ]
+      }
+    },
+    "/exercise/reset": {
+      "post": {
+        "operationId": "reset_exercise_reset_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Reset",
+        "tags": [
+          "exercise"
+        ]
+      }
+    },
+    "/exercise/scenarios": {
+      "get": {
+        "operationId": "scenarios_exercise_scenarios_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenariosResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Scenarios",
+        "tags": [
+          "exercise"
+        ]
+      }
+    },
+    "/exercise/speed": {
+      "put": {
+        "operationId": "speed_exercise_speed_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Speed",
+        "tags": [
+          "exercise"
+        ]
+      }
+    },
+    "/exercise/step": {
+      "post": {
+        "operationId": "step_exercise_step_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Step",
+        "tags": [
+          "exercise"
+        ]
+      }
+    },
+    "/instructor/commands": {
+      "post": {
+        "operationId": "command_instructor_commands_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstructorControl"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wind command (interactive mode only)",
+        "tags": [
+          "instructor"
+        ]
+      }
+    },
+    "/instructor/faults": {
+      "post": {
+        "operationId": "fault_instructor_faults_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FaultControl"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start or end a fault (interactive mode only)",
+        "tags": [
+          "instructor"
+        ]
+      }
+    },
+    "/instructor/injects": {
+      "get": {
+        "operationId": "injects_instructor_injects_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InjectsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "What the exercise schedules",
+        "tags": [
+          "instructor"
+        ]
+      }
+    },
+    "/instructor/stream": {
+      "get": {
+        "operationId": "instructor_stream_instructor_stream_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": -1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "header",
+            "name": "last-event-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "`text/event-stream`. `event: message` (id = seq, data = AssetMessage), `event: heartbeat` (no id, data = Heartbeat) and `event: gap` (data = Gap). Resume with `Last-Event-ID` or `since`."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Instructor events (SSE): faults, commands, injects, interactive mode",
+        "tags": [
+          "instructor"
+        ]
+      }
+    },
+    "/instructor/truth": {
+      "get": {
+        "operationId": "truth_instructor_truth_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TruthFile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Ground truth",
+        "tags": [
+          "instructor"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ]
+}
