@@ -22,10 +22,12 @@ from .enums import (
     FaultMode,
     FaultOrigin,
     GpsFix,
+    HypothesisTarget,
     IncidentChange,
     IncidentKind,
     IncidentState,
     InstructorCommandName,
+    LabelType,
     PauseReason,
     Rule,
     SensorSource,
@@ -214,6 +216,23 @@ class InstructorCommand(Payload, CommandBody):
 
 
 # --- Del detector ----------------------------------------------------------------------------
+
+
+class Inject(Payload):
+    """Una anomalía programada del ejercicio (una etiqueta de `labels.json`)."""
+
+    id: str
+    type: LabelType
+    source: str | None
+    start_s: float = Field(ge=0)
+    end_s: float = Field(ge=0)
+
+
+class ExerciseInjects(Payload):
+    """Lo que el ejercicio tiene programado (v1.4), para el proceso del instructor: la
+    plataforma lo publica tras `SimulationStarted`, en el dominio `sim`. **El alumno no lo ve.**"""
+
+    injects: list[Inject]
 
 
 class DetectionWindow(Payload):
@@ -416,13 +435,48 @@ class IncidentUpdated(Payload):
         return self
 
 
+HYPOTHESIS_CAUSES = frozenset(
+    {
+        IncidentKind.WIND,
+        IncidentKind.GPS_SPOOFING,
+        IncidentKind.HIJACK,
+        IncidentKind.DEAD_RECKONING,
+    }
+)
+
+
+class RankedCause(Payload):
+    """Una causa de la hipótesis (v1.4): qué la apoya y qué falta para darla por buena."""
+
+    kind: IncidentKind
+    supports: list[str] = Field(max_length=3)
+    missing: list[str] = Field(max_length=3)
+
+    @model_validator(mode="after")
+    def _check_kind(self) -> "RankedCause":
+        if self.kind not in HYPOTHESIS_CAUSES:
+            raise ValueError(f"{self.kind} is not a cause a hypothesis can name")
+        return self
+
+
+class HypothesisCheck(Payload):
+    """Qué comprobar (v1.4): la fuente (lista cerrada) y la frase para el operador."""
+
+    target: HypothesisTarget
+    text: str = Field(min_length=1)
+
+
 class IncidentHypothesis(Payload):
     """Hipótesis del asistente sobre un incidente `UNDETERMINED` (v1.1): **no es un
-    diagnóstico**. Tipo de la lista (nunca `UNDETERMINED`), confianza `possible`."""
+    diagnóstico**. Tipo de la lista (nunca `UNDETERMINED`), confianza `possible`. v1.4 (aditiva):
+    `ranked` (causas ordenadas; `kind` es la primera) y `checks` (qué comprobar), vacías en las
+    hipótesis de la v1.1."""
 
     kind: IncidentKind
     confidence: ConfidenceLevel
     evidence_event_ids: list[str] = Field(min_length=1)
+    ranked: list[RankedCause] = Field(default_factory=list, max_length=3)
+    checks: list[HypothesisCheck] = Field(default_factory=list, max_length=4)
 
     @model_validator(mode="after")
     def _check_kind(self) -> "IncidentHypothesis":
@@ -430,6 +484,12 @@ class IncidentHypothesis(Payload):
             raise ValueError("a hypothesis names a kind other than UNDETERMINED")
         if self.confidence != ConfidenceLevel.POSSIBLE:
             raise ValueError("a hypothesis is only possible")
+        if self.ranked:
+            kinds = [c.kind for c in self.ranked]
+            if kinds[0] != self.kind:
+                raise ValueError("kind is the first of the ranked causes")
+            if len(set(kinds)) != len(kinds):
+                raise ValueError("a cause appears once in the ranking")
         return self
 
 
@@ -445,6 +505,8 @@ class IncidentEnriched(Payload):
     role: EnrichRole
     decided_by: DecidedBy
     as_of_sim_time: float = Field(ge=0)
+    model: str | None = None  # v1.4: con qué modelo y qué prompts se escribió (huella)
+    prompt_sha: str | None = None
 
     @model_validator(mode="after")
     def _check_role(self) -> "IncidentEnriched":
@@ -475,6 +537,15 @@ class ReportGenerated(Payload):
     run_id: str
     markdown: str
     alerts_count: int
+
+
+class DebriefGenerated(Payload):
+    """Debriefing del instructor (v1.4): lo inyectado frente a lo detectado, con la verdad.
+    Va en `ai.instructor`, que la vista del alumno no recibe."""
+
+    run_id: str
+    markdown: str
+    injects_count: int
 
 
 # --- Del chat --------------------------------------------------------------------------------
@@ -576,6 +647,8 @@ PAYLOAD_MODELS: dict[EventType, type[Payload]] = {
     EventType.INCIDENT_UPDATED: IncidentUpdated,
     EventType.INCIDENT_ENRICHED: IncidentEnriched,
     EventType.REPORT_GENERATED: ReportGenerated,
+    EventType.DEBRIEF_GENERATED: DebriefGenerated,
+    EventType.EXERCISE_INJECTS: ExerciseInjects,
     EventType.OPERATOR_MESSAGE: OperatorMessage,
     EventType.AGENT_REPLY: AgentReply,
     EventType.AGENT_REPLY_CHUNK: AgentReplyChunk,

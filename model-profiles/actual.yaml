@@ -1,8 +1,6 @@
-# Perfil por defecto: «agents.yaml sin cambios». Desde la Fase 10 es Qwen3-14B-AWQ sin razonamiento
-# (lo que antes era qwen3-14b-t0); lo que fija es el servidor, el muestreo y el razonamiento salen de
-# agents.yaml. La referencia antigua (Qwen2.5) es el perfil qwen2.5-14b.
+# Perfil por defecto: Qwen3-14B-AWQ sin razonamiento. serve.sh solo lee la sección `server`.
 # Ficha: https://huggingface.co/Qwen/Qwen3-14B-AWQ
-description: Qwen/Qwen3-14B-AWQ, sin razonamiento, la configuración por defecto de agents.yaml
+description: Qwen/Qwen3-14B-AWQ, sin razonamiento, el modelo por defecto del asistente
 server:
   model: Qwen/Qwen3-14B-AWQ
   tool_call_parser: hermes

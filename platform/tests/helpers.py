@@ -29,5 +29,5 @@ def published_drafts(player: Player) -> list[dict]:
     return [
         e.model_dump(mode="json", exclude={"seq", "ingestion_time"})
         for e in player.bus.timeline.all()
-        if not e.event_id.startswith("plr-")
+        if not e.event_id.startswith(("plr-", "inj-"))
     ]

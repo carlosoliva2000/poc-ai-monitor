@@ -149,7 +149,7 @@ def test_load_play_step_and_subscription_filter(client: TestClient) -> None:
         hello(ws, "web", "citadel.pub.evt.sim.>", "citadel.pub.evt.air.d1.MissionPlanned.v1")
         messages = control(ws, "load", "nominal")
         events = [m["event"] for m in messages if m["op"] == "event"]
-        assert [e["type"] for e in events] == ["SimulationStarted"]
+        assert [e["type"] for e in events] == ["SimulationStarted", "ExerciseInjects"]
         assert events[0]["seq"] == 1 and events[0]["payload"]["scenario"] == "nominal"
         states = [m for m in messages if m["op"] == "state"]
         assert states[-1]["scenario"] == "nominal" and states[-1]["status"] == "idle"

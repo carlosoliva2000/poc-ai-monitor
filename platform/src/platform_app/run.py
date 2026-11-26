@@ -14,7 +14,9 @@ informe, hasta `SimulationFinished` (y `ReportGenerated`, si el asistente lo pub
         --ask monitor:398:"Why do you think the drone is being hijacked?"
 
 `--tables learned|handwritten` elige las tablas de las facetas (por defecto, las aprendidas
-congeladas) y `--assistant scripted|off` el asistente (`off`: sin textos, chats ni informe).
+congeladas). Con el monitor arranca también el asistente LLM (textos, chats, informe y, para el
+instructor, órdenes y debriefing) contra el vLLM local (`--vllm-url`); `--no-llm` lo deja fuera.
+Si vLLM no responde lo dice y sigue solo con el monitor (arráncalo con `tools/vllm/serve.sh start`).
 `--ask CONVERSACIÓN:CUÁNDO:TEXTO` manda una pregunta al chat (`monitor` o `report`) cuando el
 `sim_time` llega a CUÁNDO (segundos) o, con `end`, cuando se ha publicado el informe; imprime la
 respuesta según llega.
@@ -38,7 +40,7 @@ from websockets.exceptions import WebSocketException
 from websockets.sync.client import ClientConnection, connect
 
 from poc_contracts.enums import ConversationId, EventType
-from poc_contracts.topics import topic_for
+from poc_contracts.topics import source_for, topic_for
 
 from .generator.scenario_io import list_scenarios
 from .paths import REPO_ROOT
@@ -51,7 +53,8 @@ AI_READY_MARKER = "connected"  # línea de log del monitor cuando ya está suscr
 AI_READY_TIMEOUT_S = 20.0
 PLATFORM_READY_TIMEOUT_S = 30.0
 RECV_TIMEOUT_S = 0.5
-REPORT_TIMEOUT_S = 15.0  # el asistente preparado publica el informe unos 4 s después
+REPORT_TIMEOUT_S = 90.0  # el asistente espera unos 3 s tras el final y escribe el informe
+DEFAULT_VLLM_URL = "http://127.0.0.1:8000/v1"
 SETTLE_S = 2.0  # tras el informe, para que lleguen los últimos eventos al timeline
 
 
@@ -106,11 +109,30 @@ def start_platform(port: int) -> subprocess.Popen:
     raise SystemExit("la plataforma no responde")
 
 
-def start_ai_module(platform_url: str, *, tables: str, assistant: str) -> subprocess.Popen:
+def start_assistant(platform_url: str) -> subprocess.Popen:
+    """Arranca el asistente LLM del alumno (proceso aparte) y espera a que esté conectado."""
+    command = ["uv", "run", "--project", str(REPO_ROOT / "ai-module-py"), "python", "-m",
+               "ai_module.assistant", "--platform", platform_url,
+               "--runs-dir", str(REPO_ROOT / "runs")]  # fmt: skip
+    return _start(command, "the assistant")
+
+
+def start_instructor_assistant(platform_url: str) -> subprocess.Popen:
+    """Arranca el asistente del instructor (traductor y chat con la verdad), proceso aparte."""
+    command = ["uv", "run", "--project", str(REPO_ROOT / "ai-module-py"), "python", "-m",
+               "ai_module.instructor", "--platform", platform_url,
+               "--runs-dir", str(REPO_ROOT / "runs")]  # fmt: skip
+    return _start(command, "the instructor assistant")
+
+
+def start_ai_module(platform_url: str, *, tables: str) -> subprocess.Popen:
     """Arranca el monitor de situación (proceso aparte) y espera a que esté conectado."""
     command = ["uv", "run", "--project", str(REPO_ROOT / "ai-module-py"), "python", "-m",
-               "ai_module.situation", "--platform", platform_url, "--tables", tables,
-               "--assistant", assistant]  # fmt: skip
+               "ai_module.situation", "--platform", platform_url, "--tables", tables]  # fmt: skip
+    return _start(command, "the situation monitor")
+
+
+def _start(command: list[str], name: str) -> subprocess.Popen:
     proc = subprocess.Popen(
         command, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         bufsize=1,
@@ -133,11 +155,9 @@ def start_ai_module(platform_url: str, *, tables: str, assistant: str) -> subpro
     while not ready.wait(0.2):
         if proc.poll() is not None:  # p. ej. las tablas congeladas han cambiado
             time.sleep(0.3)  # deja que el hilo recoja las últimas líneas
-            raise SystemExit("the situation monitor stopped at startup:\n" + "\n".join(tail))
+            raise SystemExit(f"{name} stopped at startup:\n" + "\n".join(tail))
         if time.monotonic() > deadline:
-            log.warning(
-                "the situation monitor did not report being connected in %.0f s", AI_READY_TIMEOUT_S
-            )
+            log.warning("%s did not report being connected in %.0f s", name, AI_READY_TIMEOUT_S)
             break
     return proc
 
@@ -195,7 +215,7 @@ def _operator_message(ask: Ask, number: int, sim_time: float, t0: datetime) -> d
         "event_id": f"ops-{number:04d}",
         "topic": topic_for(EventType.OPERATOR_MESSAGE, conversation),
         "type": EventType.OPERATOR_MESSAGE.value,
-        "source": "web-operator",
+        "source": source_for(EventType.OPERATOR_MESSAGE, conversation),
         "asset": None,
         "sim_time": sim_time,
         "event_time": event_time,
@@ -313,6 +333,8 @@ def run_scenario(
             print(event["payload"]["delta"], end="", flush=True)
         elif kind == "AgentReply":
             tools = ", ".join(event["payload"]["tool_calls"]) or "sin tools"
+            if event["payload"].get("proposal"):
+                tools += f"; propuesta: {event['payload']['proposal']}"
             if not streaming:
                 print(f"🤖 {event['payload']['conversation_id']}: {event['payload']['text']}",
                       end="")  # fmt: skip
@@ -373,16 +395,17 @@ def main() -> int:
     )  # fmt: skip
     parser.add_argument(
         "--ask", action="append", type=Ask.parse, default=[],
-        metavar="CONVERSACIÓN:CUÁNDO:TEXTO", help="pregunta al chat (monitor|report)",
+        metavar="CONVERSACIÓN:CUÁNDO:TEXTO", help="pregunta al chat (monitor|report|instructor)",
     )  # fmt: skip
     parser.add_argument(
         "--tables", choices=["learned", "handwritten"], default="learned",
         help="tablas de las facetas: aprendidas congeladas (por defecto) o las del vídeo",
     )  # fmt: skip
     parser.add_argument(
-        "--assistant", choices=["scripted", "off"], default="scripted",
-        help="asistente: textos preparados o ninguno (sin textos, chats ni informe)",
+        "--no-llm", action="store_true",
+        help="no arrancar el asistente LLM (sin textos, chats, informe ni debriefing)",
     )  # fmt: skip
+    parser.add_argument("--vllm-url", default=DEFAULT_VLLM_URL, help="el vLLM local")
     parser.add_argument(
         "--platform", help="URL de una plataforma ya en marcha (si no, arranca una)"
     )
@@ -397,16 +420,35 @@ def main() -> int:
     if not names:
         parser.error("indica --scenario NOMBRE (repetible) o --all")
     monitor = not args.no_ai
-    # el informe solo lo publica el asistente preparado y de algunos escenarios: se espera un rato
-    reports = monitor and args.assistant == "scripted"
+    llm = monitor and not args.no_llm
+    if llm and http_get(f"{args.vllm_url.rstrip('/')}/models") is None:
+        print(
+            f"AVISO: vLLM no responde en {args.vllm_url}. Sigo solo con el monitor: sin textos, "
+            "chats, informe ni debriefing. Arráncalo con `tools/vllm/serve.sh start` y repite, "
+            "o usa --no-llm para no ver este aviso.",
+            file=sys.stderr, flush=True,
+        )  # fmt: skip
+        llm = False
 
-    platform_proc = ai_proc = None
+    platform_proc = ai_proc = assistant_proc = instructor_proc = None
     url = args.platform or f"http://127.0.0.1:{args.port}"
     try:
         if args.platform is None:
             platform_proc = start_platform(args.port)
         if monitor:
-            ai_proc = start_ai_module(url, tables=args.tables, assistant=args.assistant)
+            ai_proc = start_ai_module(url, tables=args.tables)
+        if llm:
+            # si un proceso del asistente no arranca (p. ej. vLLM sirve otro modelo), se dice y el
+            # monitor sigue: el asistente nunca tumba al monitor
+            try:
+                assistant_proc = start_assistant(url)
+                instructor_proc = start_instructor_assistant(url)
+            except SystemExit as exc:
+                print(f"AVISO: el asistente no ha arrancado y sigo sin él:\n{exc}", file=sys.stderr)
+                llm = False
+                stop(instructor_proc)
+                stop(assistant_proc)
+                instructor_proc = assistant_proc = None
         ws_url = url.replace("http", "ws", 1).rstrip("/") + "/ws"
         with connect(ws_url, open_timeout=5) as ws:
             ws.send(json.dumps({"op": "hello", "client": "web"}))
@@ -415,7 +457,7 @@ def main() -> int:
                 print(f"\n== {name} (a {args.speed:g}×) ==", flush=True)
                 result = run_scenario(
                     ws, name, args.speed, args.interactive or bool(args.fault), args.fault,
-                    args.timeout, reports=reports, asks=args.ask,
+                    args.timeout, reports=llm, asks=args.ask,
                 )  # fmt: skip
                 opened = sum(e["payload"]["change"] == "opened" for e in result.incidents)
                 print(f"-- {name}: {opened} incidentes abiertos ({result.wall_s:.0f} s de reloj)")
@@ -423,6 +465,8 @@ def main() -> int:
         print(f"error de conexión: {exc}", file=sys.stderr)
         return 2
     finally:
+        stop(instructor_proc)
+        stop(assistant_proc)
         stop(ai_proc)
         stop(platform_proc)
     return 0

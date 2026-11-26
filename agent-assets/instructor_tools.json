@@ -1,0 +1,90 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "propose_wind",
+      "description": "Proposes a wind for the drone, for the instructor to confirm. Nothing is applied. The code converts the units and checks the ranges.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "from_direction": {
+            "type": "string",
+            "description": "Where the wind blows FROM: a compass point (N, NE, north-east...) or degrees (225). Copy what the instructor said."
+          },
+          "duration_s": {
+            "type": "number",
+            "description": "How long the wind lasts, in seconds. Only if the instructor said it."
+          },
+          "until_cancelled": {
+            "type": "boolean",
+            "description": "true if the wind lasts until cancelled. Only if the instructor said it."
+          },
+          "ramp_s": {
+            "type": "number",
+            "description": "Seconds the wind takes to rise and to fall. Only if the instructor said it."
+          },
+          "speed": {
+            "type": "string",
+            "description": "The wind speed exactly as the instructor said it: digits or words (\"19\", \"twenty\", \"12.5\"). Never convert it."
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "m/s",
+              "knots",
+              "km/h",
+              "mph"
+            ],
+            "description": "The unit the instructor used, as said. m/s if none was said."
+          }
+        },
+        "required": [
+          "from_direction",
+          "speed",
+          "unit"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "propose_cancel_wind",
+      "description": "Proposes removing the wind the instructor put, for the instructor to confirm.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "not_an_order",
+      "description": "The instructor's words are not a wind order.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "question",
+              "missing_speed",
+              "wrong_unit",
+              "other_command",
+              "ambiguous"
+            ]
+          },
+          "ask": {
+            "type": "string",
+            "description": "Only with ambiguous: one short question for the instructor."
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      }
+    }
+  }
+]

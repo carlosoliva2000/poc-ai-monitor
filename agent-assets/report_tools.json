@@ -1,0 +1,28 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "write_report",
+      "description": "Writes the text parts of the mission report. The facts, times and figures of each incident are written by the code; you only write sentences about them.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "summary": {"type": "string", "description": "Two or three sentences: what happened in the flight overall."},
+          "incidents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "number": {"type": "integer", "description": "The incident number, as listed."},
+                "note": {"type": "string", "description": "One or two sentences on what was seen in that incident."}
+              },
+              "required": ["number", "note"]
+            }
+          },
+          "recommendations": {"type": "array", "maxItems": 3, "items": {"type": "string"}, "description": "Up to three short recommendations for the operator."}
+        },
+        "required": ["summary", "incidents", "recommendations"]
+      }
+    }
+  }
+]

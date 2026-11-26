@@ -1,0 +1,81 @@
+# Configuración del asistente LLM (E7d): un solo servidor local y una entrada por papel.
+# Los prompts son ficheros de `prompts/`; su huella está en `prompts_freeze.json`.
+# Temperatura 0 en todos los papeles; `temperature` y `top_p` se envían siempre explícitos.
+
+llm:
+  base_url: http://127.0.0.1:8000/v1
+  api_key: EMPTY             # el vLLM local no la comprueba
+  model: Qwen/Qwen3-14B-AWQ  # el módulo comprueba al arrancar (GET /v1/models) que vLLM lo sirve
+  reasoning: false           # Qwen3 sin razonamiento: enable_thinking false en cada petición
+  top_k: 20
+  repetition_penalty: 1.05
+
+# Cola del LLM (una plaza por proceso): una interpretación que no ha empezado a los `expire_s`
+# segundos de reloj de pared de publicarse su revisión se descarta; un reintento solo si no han
+# pasado `retry_before_s`. `web_deadline_s` es el plazo de la web, que lo lleva en `lib/derive.ts`;
+# está aquí para que el informe lo cite.
+queue:
+  expire_s: 10
+  retry_before_s: 8
+  web_deadline_s: 10  # max(10 s, 2 × p90); medido: interpretaciones ≤ 1,7 s, hipótesis ≈ 5 s
+  chat_expire_s: 30
+  report_settle_s: 3  # tras el final del ejercicio, antes de escribir el informe
+
+# Regla «ahora frente a la apertura»: `strict` = rechaza una cifra que solo existe en la apertura
+# cuando la frase dice «now» o «currently»; `loose` = también con «is»/«are».
+now_rule: loose
+
+roles:
+  explain:
+    enabled: true
+    prompt: prompts/explain.md
+    temperature: 0
+    top_p: 1.0
+    max_tokens: 160
+    timeout_s: 12
+  hypothesis:
+    enabled: true
+    prompt: prompts/hypothesis.md
+    tools: assistant_tools.json
+    temperature: 0
+    top_p: 1.0
+    max_tokens: 450
+    timeout_s: 20
+  chat:
+    enabled: true
+    prompt: prompts/chat.md
+    temperature: 0
+    top_p: 1.0
+    max_tokens: 400
+    timeout_s: 30
+  translator:
+    enabled: true
+    prompt: prompts/translator.md
+    tools: instructor_tools.json
+    temperature: 0
+    top_p: 1.0
+    max_tokens: 200
+    timeout_s: 15
+  chat_instructor:
+    enabled: true
+    prompt: prompts/chat_instructor.md
+    temperature: 0
+    top_p: 1.0
+    max_tokens: 400
+    timeout_s: 30
+  report:
+    enabled: true
+    prompt: prompts/report.md
+    tools: report_tools.json
+    temperature: 0
+    top_p: 1.0
+    max_tokens: 900
+    timeout_s: 60
+  debrief:
+    enabled: true
+    prompt: prompts/debrief.md
+    tools: debrief_tools.json
+    temperature: 0
+    top_p: 1.0
+    max_tokens: 700
+    timeout_s: 60

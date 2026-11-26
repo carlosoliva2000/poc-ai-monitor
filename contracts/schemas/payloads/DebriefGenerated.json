@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "description": "Debriefing del instructor (v1.4): lo inyectado frente a lo detectado, con la verdad.\nVa en `ai.instructor`, que la vista del alumno no recibe.",
+  "properties": {
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "markdown": {
+      "title": "Markdown",
+      "type": "string"
+    },
+    "injects_count": {
+      "title": "Injects Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "run_id",
+    "markdown",
+    "injects_count"
+  ],
+  "title": "DebriefGenerated",
+  "type": "object"
+}

@@ -63,3 +63,17 @@ def test_ephemeral_and_client_domains() -> None:
     assert client_can_publish(ClientKind.WEB, "citadel.pub.evt.ops.monitor.OperatorMessage.v1")
     assert not client_can_publish(ClientKind.WEB, DETECTION)
     assert not client_can_publish(ClientKind.WEB, "citadel.pub.evt.sim.player.FaultInjected.v1")
+
+
+def test_ids_of_the_ai_module_may_carry_the_tag_of_their_process() -> None:
+    """v1.4: `ai-0001` sigue valiendo y `ai-a-0001` (una letra minúscula: el proceso) también;
+    así los procesos del módulo que comparten bus no se pisan los ids."""
+    from poc_contracts.enums import EventType
+    from poc_contracts.topics import matches_id_prefix
+
+    for good in ("ai-0001", "ai-m-0001", "ai-a-12345", "ai-i-0007"):
+        assert matches_id_prefix(good, EventType.INCIDENT_ENRICHED), good
+    assert matches_id_prefix("act-a-0001", EventType.AGENT_ACTIVITY)
+    assert matches_id_prefix("chk-i-0001", EventType.AGENT_REPLY_CHUNK)
+    for bad in ("ai-aa-0001", "ai-A-0001", "ai-a-", "ai--0001", "gps-a-0001"):
+        assert not matches_id_prefix(bad, EventType.INCIDENT_ENRICHED), bad

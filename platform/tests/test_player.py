@@ -70,7 +70,7 @@ def test_load_publishes_expected_values_and_waits_for_play(runs_dir: Path) -> No
     player = make_player(runs_dir)
     player.load("wind")
     started = player.bus.timeline.all()
-    assert [e.type for e in started] == [EventType.SIMULATION_STARTED]
+    assert [e.type for e in started] == [EventType.SIMULATION_STARTED, EventType.EXERCISE_INJECTS]
     expected = generate(load_scenario("wind"))
     assert started[0].payload == {
         "scenario": "wind",
@@ -80,7 +80,7 @@ def test_load_publishes_expected_values_and_waits_for_play(runs_dir: Path) -> No
     }
     assert player.state().status == PlayerStatus.IDLE
     player.advance(10)  # sin play no avanza
-    assert len(player.bus.timeline) == 1
+    assert len(player.bus.timeline) == 2
     player.play()
     assert player.state().status == PlayerStatus.RUNNING
     player.advance(5)
@@ -128,7 +128,11 @@ def test_step_publishes_one_event_and_pauses(runs_dir: Path) -> None:
         player.step()
         assert player.state().cursor == k + 1  # un evento del simulador por paso
         assert player.state().status == PlayerStatus.PAUSED
-        seen.append([e for e in player.bus.timeline.all() if not e.event_id.startswith("plr-")][-1])
+        seen.append(
+            [e for e in player.bus.timeline.all() if not e.event_id.startswith(("plr-", "inj-"))][
+                -1
+            ]
+        )
     assert [e.type.value for e in seen[:3]] == [
         "MissionPlanned",
         "MissionStarted",
@@ -190,12 +194,12 @@ def test_reset_reloads_with_new_run_id_and_clean_bus(runs_dir: Path) -> None:
     assert player.state().status == PlayerStatus.IDLE
     assert not player.state().interactive and player.state().speed == 4
     timeline = player.bus.timeline.all()
-    assert [e.seq for e in timeline] == [1, 2]
-    assert [(e.type, e.payload) for e in timeline][1] == (
+    assert [e.seq for e in timeline] == [1, 2, 3]
+    assert [(e.type, e.payload) for e in timeline][2] == (
         EventType.INTERACTIVE_MODE_CHANGED,
         {"interactive": False},
     )
-    assert [e.event_id for e in timeline] == ["plr-0001", "plr-0002"]
+    assert [e.event_id for e in timeline] == ["plr-0001", "inj-0001", "plr-0002"]
     assert player.state().cursor == 0 and player.sim_time == 0.0
     # la ejecución a medias dejó su timeline, con el SimulationReset al final
     old = runs_dir / "nominal" / str(first_run) / "timeline.jsonl"
@@ -209,12 +213,16 @@ def test_load_turns_interactive_off_and_says_so_in_the_new_timeline(runs_dir: Pa
     assert not player.state().interactive
     assert [e.type.value for e in player.bus.timeline.all()] == [
         "SimulationStarted",
+        "ExerciseInjects",
         "InteractiveModeChanged",
     ]
-    assert player.bus.timeline.all()[1].payload == {"interactive": False}
+    assert player.bus.timeline.all()[2].payload == {"interactive": False}
     # con el modo ya apagado, cargar no publica nada más
     player.load("wind")
-    assert [e.type.value for e in player.bus.timeline.all()] == ["SimulationStarted"]
+    assert [e.type.value for e in player.bus.timeline.all()] == [
+        "SimulationStarted",
+        "ExerciseInjects",
+    ]
     player.set_interactive(True)
     player.load("nominal")
     assert not player.state().interactive
@@ -308,7 +316,7 @@ def test_load_another_scenario_resets_the_bus(runs_dir: Path) -> None:
     player.run_to_end()
     player.load("wind")
     assert player.state().scenario == "wind"
-    assert [e.seq for e in player.bus.timeline.all()] == [1]
+    assert [e.seq for e in player.bus.timeline.all()] == [1, 2]  # SimulationStarted y lo programado
 
 
 # --- Modo interactivo y fallos manuales --------------------------------------------------------
@@ -468,3 +476,16 @@ def test_truth_never_passes_the_current_instant(runs_dir: Path) -> None:
 
 
 # --- Esperar al agente --------------------------------------------------------------------------
+
+
+def test_load_publishes_what_the_exercise_has_programmed(runs_dir: Path) -> None:
+    """v1.4: `ExerciseInjects` lleva las etiquetas del escenario, en el dominio `sim`."""
+    player = make_player(runs_dir)
+    player.load("wind")
+    inject = player.bus.timeline.all()[1]
+    assert inject.type == EventType.EXERCISE_INJECTS and inject.topic.endswith(
+        "sim.instructor.ExerciseInjects.v1"
+    )
+    labels = generate(load_scenario("wind")).labels.labels
+    assert [i["id"] for i in inject.payload["injects"]] == [label.id for label in labels]
+    assert inject.payload["injects"][0]["type"] == "wind"

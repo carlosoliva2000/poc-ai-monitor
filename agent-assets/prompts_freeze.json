@@ -1,0 +1,15 @@
+{
+  "prompts/chat.md": "c9fe1eca85dba6ae5ddc883c156e5a5a3b238d38d4ea01c84722bc796b783a4f",
+  "prompts/chat_instructor.md": "ba10043fbb7239406e0b5137f118b884e06d99793972c4bc3ca4ece3bc2ccc52",
+  "prompts/debrief.md": "a83a7d50c084d412cfa092cdf610677aed940a1df4127d00df635e71e08ab0d1",
+  "prompts/explain.md": "93f65edacb50b692033f47632e5d47a4c6a222fefb4e11add8bc9e934189c4a4",
+  "prompts/hypothesis.md": "83c280f608be29ab1f1784163bb267a08dc3921603a932971bfb83bc1df1685c",
+  "prompts/report.md": "8bdb7e7963592b75d4fcfb0b0d42336e07d68c0b6df78bdaeb667e62ca038d35",
+  "prompts/translator.md": "e5a15cfa02f9873dd618b4904b42a3e6e8e7235be050d04197c4fba1373228f5",
+  "assistant_tools.json": "0f342e55a3765b55949142671a9aac5ec2a0fdef34fcad418a62a336aed210aa",
+  "debrief_tools.json": "fbb658d8f5f17c9c7069f79e0f7ec39012b22cf97570b37555319c7cc6605716",
+  "instructor_tools.json": "17eeb4def98c00e14f7b804709b73abc5f15e62c66686e5654acabf7157b4a8c",
+  "report_tools.json": "93ba78bd71769a0cece3e42ca7af63c2e567e6cab7eaa3ea66e6850b4d03f073",
+  "glossary.yaml": "748541b93c6fdf309704aad554ebb2b9f8e5a23be75ab52c6ca31d244064cc1d",
+  "assistant.yaml": "a86b138b8471967243991c219ca686fd0a80e2a14df59c5e4ed960a2facfa520"
+}

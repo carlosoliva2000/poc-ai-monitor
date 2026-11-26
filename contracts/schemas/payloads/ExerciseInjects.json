@@ -1,0 +1,77 @@
+{
+  "$defs": {
+    "Inject": {
+      "additionalProperties": false,
+      "description": "Una anomalía programada del ejercicio (una etiqueta de `labels.json`).",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/LabelType"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source"
+        },
+        "start_s": {
+          "minimum": 0,
+          "title": "Start S",
+          "type": "number"
+        },
+        "end_s": {
+          "minimum": 0,
+          "title": "End S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "source",
+        "start_s",
+        "end_s"
+      ],
+      "title": "Inject",
+      "type": "object"
+    },
+    "LabelType": {
+      "description": "Tipo de anomalía de `labels.json`.",
+      "enum": [
+        "wind",
+        "hijack",
+        "gps_spoofing",
+        "source_silent",
+        "gps_loss",
+        "gps_degraded",
+        "link_degraded"
+      ],
+      "title": "LabelType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Lo que el ejercicio tiene programado (v1.4), para el proceso del instructor: la\nplataforma lo publica tras `SimulationStarted`, en el dominio `sim`. **El alumno no lo ve.**",
+  "properties": {
+    "injects": {
+      "items": {
+        "$ref": "#/$defs/Inject"
+      },
+      "title": "Injects",
+      "type": "array"
+    }
+  },
+  "required": [
+    "injects"
+  ],
+  "title": "ExerciseInjects",
+  "type": "object"
+}

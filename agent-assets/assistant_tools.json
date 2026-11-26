@@ -1,0 +1,41 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "propose_hypothesis",
+      "description": "Propose ranked possible causes for a deviation the monitor could not name, and what to check. A hypothesis, not a diagnosis.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "summary": {"type": "string", "description": "One or two plain sentences, 40 words at most."},
+          "ranked": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {"type": "string", "enum": ["WIND", "GPS_SPOOFING", "HIJACK", "DEAD_RECKONING"]},
+                "supports": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
+                "missing": {"type": "array", "maxItems": 3, "items": {"type": "string"}}
+              },
+              "required": ["kind", "supports", "missing"]
+            }
+          },
+          "checks": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string", "enum": ["gps", "receiver", "radar", "meteo", "link", "battery", "autopilot"]},
+                "text": {"type": "string"}
+              },
+              "required": ["target", "text"]
+            }
+          }
+        },
+        "required": ["summary", "ranked", "checks"]
+      }
+    }
+  }
+]

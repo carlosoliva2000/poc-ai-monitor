@@ -45,6 +45,7 @@ class EventType(StrEnum):
     FAULT_INJECTED = "FaultInjected"
     FAULT_CLEARED = "FaultCleared"
     INSTRUCTOR_COMMAND = "InstructorCommand"
+    EXERCISE_INJECTS = "ExerciseInjects"
     DETECTION_RAISED = "DetectionRaised"
     DETECTION_UPDATED = "DetectionUpdated"
     DETECTION_CLEARED = "DetectionCleared"
@@ -55,6 +56,7 @@ class EventType(StrEnum):
     INCIDENT_UPDATED = "IncidentUpdated"
     INCIDENT_ENRICHED = "IncidentEnriched"
     REPORT_GENERATED = "ReportGenerated"
+    DEBRIEF_GENERATED = "DebriefGenerated"
     OPERATOR_MESSAGE = "OperatorMessage"
     AGENT_REPLY = "AgentReply"
     AGENT_REPLY_CHUNK = "AgentReplyChunk"
@@ -167,6 +169,18 @@ class EnrichRole(StrEnum):
     HYPOTHESIS = "hypothesis"
 
 
+class HypothesisTarget(StrEnum):
+    """Qué fuente comprobar según una hipótesis (v1.4): lista cerrada, para poder medirla."""
+
+    GPS = "gps"
+    RECEIVER = "receiver"
+    RADAR = "radar"
+    METEO = "meteo"
+    LINK = "link"
+    BATTERY = "battery"
+    AUTOPILOT = "autopilot"
+
+
 class Trend(StrEnum):
     INCREASING = "increasing"
     DECREASING = "decreasing"
@@ -236,6 +250,9 @@ class AgentName(StrEnum):
     CHAT_MONITOR = "chat-monitor"
     CHAT_REPORT = "chat-report"
     CHAT_INSTRUCTOR = "chat-instructor"
+    ASSISTANT = "assistant"  # v1.4: interpretaciones e informe del asistente del alumno
+    TRANSLATOR = "translator"  # v1.4: traductor de órdenes del instructor
+    DEBRIEF = "debrief"  # v1.4: debriefing del instructor
 
 
 class ActivityState(StrEnum):

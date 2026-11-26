@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { formatT, SEVERITY_LABEL } from '@/lib/format'
-import type { IncidentState } from '@/lib/contracts'
+import type { IncidentEnriched, IncidentState } from '@/lib/contracts'
 import type { IncidentText, IncidentView } from '@/lib/derive'
 import { CONFIDENCE_LABEL, CONFIDENCE_TITLE, describeContext, evidenceRows, formatDuration, KIND_LABEL, STATE_LABEL, type EvidenceRow } from '@/lib/incidents'
 import type { EvidenceItem } from '@/lib/contracts'
@@ -191,6 +191,15 @@ function History({ incident }: { incident: IncidentView }) {
 /** La interpretación del asistente, aparte y marcada: no es lo que decidió el incidente. */
 function Interpretation({ text, undetermined }: { text: IncidentText; undetermined: boolean }) {
   if (text.state === 'none') return undetermined ? <NoHypothesis /> : null
+  if (text.state === 'missed') {
+    return (
+      <div className="flex flex-col gap-1 border-l-2 border-muted-foreground/40 pl-2" data-testid="interpretation">
+        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Interpretation (LLM)</span>
+        <span className="text-xs text-muted-foreground" data-testid="interpretation-missed">No interpretation: the assistant did not answer in time.</span>
+        {undetermined && <NoHypothesis />}
+      </div>
+    )
+  }
   return (
     <div className="flex flex-col gap-1 border-l-2 border-muted-foreground/40 pl-2" data-testid="interpretation">
       <span className="flex items-baseline gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -209,13 +218,41 @@ function Interpretation({ text, undetermined }: { text: IncidentText; undetermin
       ) : (
         <>
           <p className="text-sm leading-relaxed text-foreground text-pretty" data-testid="interpretation-text">{text.enrichment.text}</p>
-          {text.enrichment.hypothesis && (
-            <p className="rounded-sm bg-warning/15 px-1.5 py-0.5 text-xs text-foreground" data-testid="hypothesis">
-              Hypothesis (LLM, not a diagnosis): {KIND_LABEL[text.enrichment.hypothesis.kind]} · {text.enrichment.hypothesis.confidence} · evidence {text.enrichment.hypothesis.evidence_event_ids.join(', ')}
-            </p>
-          )}
+          {text.enrichment.hypothesis && <HypothesisBlock hypothesis={text.enrichment.hypothesis} />}
           {undetermined && !text.enrichment.hypothesis && <NoHypothesis />}
         </>
+      )}
+    </div>
+  )
+}
+
+/** La hipótesis estructurada del asistente (v1.4): causas ordenadas, lo que las apoya, lo que falta
+ *  y qué comprobar. Marcada como hipótesis: no es un diagnóstico. */
+function HypothesisBlock({ hypothesis }: { hypothesis: NonNullable<IncidentEnriched['hypothesis']> }) {
+  const ranked = hypothesis.ranked ?? []
+  const checks = hypothesis.checks ?? []
+  return (
+    <div className="flex flex-col gap-1 rounded-sm bg-warning/15 px-1.5 py-1 text-xs text-foreground" data-testid="hypothesis">
+      <span className="font-medium">Hypothesis (LLM, not a diagnosis)</span>
+      {ranked.length === 0 ? (
+        <span>{KIND_LABEL[hypothesis.kind]} · {hypothesis.confidence}</span>
+      ) : (
+        <ol className="list-decimal pl-4" data-testid="hypothesis-ranked">
+          {ranked.map((c) => (
+            <li key={c.kind}>
+              <span className="font-medium">{KIND_LABEL[c.kind]}</span>
+              {c.supports.length > 0 && <span> · supports: {c.supports.join('; ')}</span>}
+              {c.missing.length > 0 && <span className="text-muted-foreground"> · missing: {c.missing.join('; ')}</span>}
+            </li>
+          ))}
+        </ol>
+      )}
+      {checks.length > 0 && (
+        <ul className="list-disc pl-4" data-testid="hypothesis-checks">
+          {checks.map((c) => (
+            <li key={`${c.target}-${c.text}`}><span className="font-mono">{c.target}</span>: {c.text}</li>
+          ))}
+        </ul>
       )}
     </div>
   )

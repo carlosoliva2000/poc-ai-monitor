@@ -14,7 +14,10 @@
         "report",
         "chat-monitor",
         "chat-report",
-        "chat-instructor"
+        "chat-instructor",
+        "assistant",
+        "translator",
+        "debrief"
       ],
       "title": "AgentName",
       "type": "string"

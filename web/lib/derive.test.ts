@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AgentToolCall, Anomaly, Envelope } from './contracts.ts'
-import { callsByCause, chatEntries, derive, enrichmentViews, groupByWarning, incidents, linkState, TEXT_PENDING_MS, type ToolCallEvent } from './derive.ts'
+import { callsByCause, chatEntries, derive, enrichmentViews, groupByWarning, incidents, linkState, TEXT_DEADLINE_MS, type ToolCallEvent } from './derive.ts'
 
 const base = { asset: null, event_time: '2026-10-20T10:00:01Z', ingestion_time: '2026-10-20T10:00:01.000Z', ephemeral: false }
 const call = (id: string, cause: string, agent: AgentToolCall['agent'], index: number): ToolCallEvent => ({
@@ -133,35 +133,30 @@ test('v1.1: el texto del asistente es el de la última revisión interpretable',
   const open = inc('inc-0001', 1, { change: 'opened' }, '2026-10-20T10:00:00.000Z')
   const events = [open, inc('inc-0001', 2, { change: 'evidence' })]
   const t0 = Date.parse('2026-10-20T10:00:00.000Z')
-  // recién publicado y sin texto: pendiente; pasado el plazo y sin que el asistente haya contestado nunca: nada
+  // recién publicado y sin texto: pendiente; pasado el plazo sin texto: «missed»; sin reloj no se juzga
   assert.deepEqual(incidents(events, t0 + 1000)[0].text, { state: 'pending' })
-  assert.deepEqual(incidents(events, t0 + TEXT_PENDING_MS + 1000)[0].text, { state: 'none' })
-  assert.deepEqual(incidents(events)[0].text, { state: 'none' }) // sin reloj no se inventa un pendiente
-  // el texto de la revisión 1 vale aunque la 2 sea solo de evidencias
+  assert.deepEqual(incidents(events, t0 + TEXT_DEADLINE_MS + 1000)[0].text, { state: 'missed' })
+  assert.deepEqual(incidents(events)[0].text, { state: 'none' })
+  // el texto de la revisión 1 vale aunque la 2 sea solo de evidencias, y un texto tardío se enseña
   const done = incidents([...events, text('inc-0001', 1, 'open', 'Wind.')], t0 + 60000)[0].text
   assert.equal(done.state, 'published')
   assert.equal(done.state === 'published' && done.enrichment.text, 'Wind.')
   // un texto de otra ejecución (mismo id y revisión, otro instante) no se pega a este incidente
   const stale = { ...text('inc-0001', 1, 'open', 'Old.'), payload: { ...text('inc-0001', 1, 'open', 'Old.').payload, as_of_sim_time: 297 } }
   assert.deepEqual(incidents([...events, stale], t0 + 1000)[0].text, { state: 'pending' })
-  // una revisión nueva interpretable sin texto: pendiente (el asistente ya ha contestado antes)
-  const next = [...events, text('inc-0001', 1, 'open', 'Wind.'), inc('inc-0001', 3, { change: 'state', state: 'recovering' })]
-  assert.deepEqual(incidents(next, t0 + 60000)[0].text, { state: 'pending' })
+  // una revisión nueva interpretable sin texto: pendiente dentro del plazo, «missed» después
+  const next = [...events, text('inc-0001', 1, 'open', 'Wind.'), inc('inc-0001', 3, { change: 'state', state: 'recovering' }, '2026-10-20T10:01:00.000Z')]
+  assert.deepEqual(incidents(next, t0 + 60000 + 1000)[0].text, { state: 'pending' })
+  assert.deepEqual(incidents(next, t0 + 60000 + TEXT_DEADLINE_MS + 1)[0].text, { state: 'missed' })
   // con el informe ya publicado no llegará nada más
   const report = { ...base, event_id: 'ai-r', topic: 't', type: 'ReportGenerated', source: 'ai-report', seq: 99, sim_time: 500, causation_id: null, payload: {} } as unknown as Envelope
-  assert.deepEqual(incidents([...next, report], t0 + 60000)[0].text, { state: 'none' })
+  assert.deepEqual(incidents([...next, report], t0 + 60000 + 1000)[0].text, { state: 'missed' })
 })
 
-test('E7c: «pending…» sin plazo solo para los tipos de los que el asistente ya ha escrito', () => {
+test('E7d: el plazo es el mismo para todos los tipos de incidente', () => {
   const t0 = Date.parse('2026-10-20T10:00:00.000Z')
-  const events = [
-    inc('inc-0001', 1, { change: 'opened', kind: 'WIND' }, '2026-10-20T10:00:00.000Z'),
-    text('inc-0001', 1, 'open', 'Wind.'),
-    inc('inc-0002', 1, { change: 'opened', kind: 'BATTERY_LOW', name: 'Battery low' }, '2026-10-20T10:00:00.000Z'),
-    inc('inc-0003', 1, { change: 'opened', kind: 'WIND' }, '2026-10-20T10:00:00.000Z'),
-  ]
-  const late = incidents(events, t0 + 60000)
-  assert.equal(late.find((i) => i.id === 'inc-0003')?.text.state, 'pending') // sí escribe del viento: llegará
-  assert.equal(late.find((i) => i.id === 'inc-0002')?.text.state, 'none') // el asistente no escribe de la batería
-  assert.equal(incidents(events, t0 + 1000).find((i) => i.id === 'inc-0002')?.text.state, 'pending') // dentro del plazo
+  const kinds = [['WIND', 'Wind'], ['BATTERY_LOW', 'Battery low'], ['SOURCE_SILENT', 'Radar silent'], ['UNDETERMINED', 'Undetermined deviation']] as const
+  const events = kinds.map(([kind, name], i) => inc(`inc-000${i + 1}`, 1, { change: 'opened', kind, name }, '2026-10-20T10:00:00.000Z'))
+  for (const i of incidents(events, t0 + TEXT_DEADLINE_MS - 1)) assert.equal(i.text.state, 'pending')
+  for (const i of incidents(events, t0 + TEXT_DEADLINE_MS + 1)) assert.equal(i.text.state, 'missed')
 })

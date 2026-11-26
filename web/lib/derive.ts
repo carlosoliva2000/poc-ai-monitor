@@ -86,6 +86,8 @@ export type Derived = {
   /** Eventos de detección a los que el monitor aún no ha respondido. */
   pending: Envelope[]
   report: Envelope<{ run_id: string; markdown: string; alerts_count: number }> | null
+  /** v1.4: el debriefing del instructor (lleva la verdad: la vista del alumno no lo recibe). */
+  debrief: Envelope<{ run_id: string; markdown: string; injects_count: number }> | null
   /** Motivo de la última pausa si el reproductor sigue pausado por ella. */
   t0Ms: number | null
 }
@@ -110,6 +112,7 @@ export function derive(events: Envelope[]): Derived {
   let lastWaypoint = 'BASE'
   let missionDone = false
   let report: Derived['report'] = null
+  let debrief: Derived['debrief'] = null
   let t0Ms: number | null = null
   const order: string[] = []
 
@@ -197,6 +200,9 @@ export function derive(events: Envelope[]): Derived {
       case 'ReportGenerated':
         report = e as Derived['report']
         break
+      case 'DebriefGenerated':
+        debrief = e as Derived['debrief']
+        break
     }
     if (RESPONSE_EVENTS.has(e.type) && e.source === 'ai-monitor' && e.causation_id) {
       const list = responses.get(e.causation_id) ?? []
@@ -233,6 +239,7 @@ export function derive(events: Envelope[]): Derived {
     responses,
     pending: detectionEvents.filter((e) => !responses.has(e.event_id)),
     report,
+    debrief,
     t0Ms,
   }
 }
@@ -346,14 +353,16 @@ export function enrichmentViews(events: Envelope[]): (alert: Anomaly) => Enrichm
 
 /** v1.1: cambios de un incidente que el asistente interpreta (un `evidence` o un `severity` no). */
 export const INTERPRETED_CHANGES: ReadonlySet<IncidentChange> = new Set<IncidentChange>(['opened', 'state', 'renamed', 'closed'])
-/** Cuánto se espera, en reloj de pared desde que el bus publicó la revisión, a un asistente que
- *  aún no ha contestado antes de decir que no hay (con el asistente apagado no llega nunca). */
-export const TEXT_PENDING_MS = 8000
+/** Plazo (10 s = max(10 s, 2 × p90): en el ensayo con el LLM, interpretaciones ≤ 1,7 s y hipótesis ≈ 5 s; reloj de pared desde que el bus publicó la revisión) para el texto del asistente, el
+ *  mismo para todos los tipos de incidente: la tarjeta dice «pending…» hasta entonces y, si no ha
+ *  llegado, «No interpretation». Un texto que llega tarde se enseña igualmente. */
+export const TEXT_DEADLINE_MS = 10000
 
 /** Estado del texto del asistente sobre un incidente: de su última revisión interpretable. */
 export type IncidentText =
-  | { state: 'none' }
+  | { state: 'none' } // sin texto y sin reloj con que juzgarlo
   | { state: 'pending' }
+  | { state: 'missed' } // pasó el plazo sin texto (o el asistente está apagado)
   | { state: 'published'; enrichment: IncidentEnriched }
 
 export type IncidentView = {
@@ -373,9 +382,8 @@ export type IncidentView = {
 /**
  * Los incidentes de la ejecución (v1.1): el último `IncidentUpdated` por `incident_id` con su
  * historia, y el texto del asistente (`IncidentEnriched`) de su última revisión interpretable.
- * `nowMs` (reloj de pared) sirve para decir «pending…» mientras el texto puede llegar: siempre
- * si el asistente ya ha escrito sobre un incidente de ese tipo en la ejecución, y si no, durante
- * `TEXT_PENDING_MS` desde que se publicó la revisión. En orden de apertura.
+ * `nowMs` (reloj de pared) sirve para decir «pending…» durante `TEXT_DEADLINE_MS` desde que se
+ * publicó la revisión y «missed» después, igual para todos los tipos. En orden de apertura.
  */
 export function incidents(events: Envelope[], nowMs?: number): IncidentView[] {
   const byId = new Map<string, Envelope<IncidentUpdated>[]>()
@@ -394,13 +402,6 @@ export function incidents(events: Envelope[], nowMs?: number): IncidentView[] {
       reportDone = true
     }
   }
-  // El asistente (con textos preparados, hasta el LLM de la E7d) no cubre todos los tipos: «pending…»
-  // sin plazo solo para los tipos de los que ya ha escrito algo en la ejecución; para el resto, el
-  // plazo de `TEXT_PENDING_MS` y después nada.
-  const kindsWithText = new Set<IncidentKind>()
-  for (const [id, list] of byId) {
-    if ([...texts.keys()].some((key) => key.startsWith(`${id}#`))) kindsWithText.add(list[list.length - 1].payload.kind)
-  }
   const out: IncidentView[] = []
   for (const [id, list] of byId) {
     const revisions = [...list].sort((a, b) => a.payload.revision - b.payload.revision)
@@ -415,10 +416,12 @@ export function incidents(events: Envelope[], nowMs?: number): IncidentView[] {
     const candidate = texts.get(`${id}#${target.payload.revision}`)
     // solo vale el texto escrito para esta revisión (mismo instante): uno rezagado de otra ejecución no
     const found = candidate && candidate.as_of_sim_time === target.payload.as_of_sim_time ? candidate : undefined
-    const recent = nowMs !== undefined && nowMs - Date.parse(target.ingestion_time) < TEXT_PENDING_MS
     let text: IncidentText = { state: 'none' }
     if (found) text = { state: 'published', enrichment: found }
-    else if (!reportDone && (kindsWithText.has(latest.payload.kind) || recent)) text = { state: 'pending' }
+    else if (nowMs !== undefined) {
+      const waiting = nowMs - Date.parse(target.ingestion_time) < TEXT_DEADLINE_MS
+      text = waiting && !reportDone ? { state: 'pending' } : { state: 'missed' }
+    }
     out.push({ id, kind: latest.payload.kind, latest, opened: revisions[0], revisions, path, open: latest.payload.state !== ('closed' satisfies IncidentState), text })
   }
   return out.sort((a, b) => a.opened.payload.opened_at - b.opened.payload.opened_at)

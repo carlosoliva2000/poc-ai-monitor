@@ -169,6 +169,16 @@ export function AgentConsole({ events, data, chunks, activity, toolCalls, report
             ) : (
               <ReportNotice phase={reportPhase} finished={finished} />
             )}
+            {view === 'instructor' && data.debrief && (
+              <details open className="mt-3 rounded-md border border-warning/40 bg-warning/5 px-3 py-2" data-testid="debrief">
+                <summary className="cursor-pointer select-none font-mono text-xs text-muted-foreground">
+                  Instructor debriefing · {formatT(data.debrief.sim_time)} · {data.debrief.payload.injects_count} injected
+                </summary>
+                <div className="md-body mt-2">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.debrief.payload.markdown}</ReactMarkdown>
+                </div>
+              </details>
+            )}
           </div>
           {data.report && (
             <ChatPanel

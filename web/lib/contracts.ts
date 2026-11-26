@@ -153,7 +153,13 @@ export type IncidentUpdated = {
   decided_by: 'table'
   table: string
 }
-export type IncidentHypothesis = { kind: IncidentKind; confidence: 'possible'; evidence_event_ids: string[] }
+/** v1.4: qué fuente comprobar (lista cerrada, para poder medirla). */
+export type HypothesisTarget = 'gps' | 'receiver' | 'radar' | 'meteo' | 'link' | 'battery' | 'autopilot'
+export type RankedCause = { kind: IncidentKind; supports: string[]; missing: string[] }
+export type HypothesisCheck = { target: HypothesisTarget; text: string }
+/** Hipótesis del asistente sobre un `UNDETERMINED` (no es un diagnóstico). v1.4: `ranked` (la
+ *  primera es `kind`) y `checks` pueden ir vacíos (hipótesis de la v1.1). */
+export type IncidentHypothesis = { kind: IncidentKind; confidence: 'possible'; evidence_event_ids: string[]; ranked?: RankedCause[]; checks?: HypothesisCheck[] }
 /** v1.1: texto del asistente sobre una revisión de un incidente (fuente `ai-enricher`,
  *  `causation_id` = el `IncidentUpdated`). No cambia el incidente. */
 export type IncidentEnriched = {
@@ -165,7 +171,15 @@ export type IncidentEnriched = {
   role: 'explain' | 'hypothesis'
   decided_by: 'llm'
   as_of_sim_time: number
+  /** v1.4: modelo y huella de los prompts con que se escribió. */
+  model?: string | null
+  prompt_sha?: string | null
 }
+/** v1.4: lo programado en el ejercicio (la verdad: solo el proceso del instructor lo recibe). */
+export type Inject = { id: string; type: string; source: string | null; start_s: number; end_s: number }
+export type ExerciseInjects = { injects: Inject[] }
+/** v1.4: debriefing del instructor (`ai.instructor`), con la verdad. */
+export type DebriefGenerated = { run_id: string; markdown: string; injects_count: number }
 export type DetectionAcknowledged = {
   detection_id: string
   alert_id: string | null
@@ -182,7 +196,7 @@ export type Proposal = { command: InstructorCommandName; params: WindParams | nu
 export type AgentReply = { conversation_id: Conversation; reply_to: string; text: string; tool_calls: string[]; proposal?: Proposal | null }
 export type AgentReplyChunk = { conversation_id: Conversation; reply_to: string; delta: string }
 export type AgentActivity = {
-  agent: 'monitor' | 'report' | 'chat-monitor' | 'chat-report' | 'chat-instructor'
+  agent: 'monitor' | 'report' | 'chat-monitor' | 'chat-report' | 'chat-instructor' | 'assistant' | 'translator' | 'debrief'
   state: 'started' | 'finished'
   invocation_id: string
   causation_id: string | null

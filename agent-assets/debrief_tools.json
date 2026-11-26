@@ -1,0 +1,17 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "write_debrief",
+      "description": "Writes the text parts of the instructor's debriefing. The list of what was injected and what was detected is written by the code.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "summary": {"type": "string", "description": "Two or three sentences: how the system did against what was injected."},
+          "points": {"type": "array", "maxItems": 3, "items": {"type": "string"}, "description": "Up to three short points worth discussing with the student."}
+        },
+        "required": ["summary", "points"]
+      }
+    }
+  }
+]

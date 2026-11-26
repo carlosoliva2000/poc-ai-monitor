@@ -221,6 +221,21 @@ class Player:
                 "total_events": self.total_events,
             },
         )
+        # lo programado en el ejercicio (la verdad: solo el proceso del instructor lo recibe)
+        injects = [
+            {
+                "id": label.id,
+                "type": label.type.value,
+                "source": label.source.value if label.source else None,
+                "start_s": label.start_s,
+                "end_s": label.end_s,
+            }
+            for label in run.labels.labels
+        ]
+        # numeración propia (`inj-`): no mueve la de `plr-`
+        self.bus.publish(
+            make_event(config, EventType.EXERCISE_INJECTS, 0.0, 1, {"injects": injects})
+        )
         if was_interactive:  # queda registrado en el timeline nuevo que se ha apagado
             self._plr(EventType.INTERACTIVE_MODE_CHANGED, {"interactive": False})
         self._notify()

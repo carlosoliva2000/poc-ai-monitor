@@ -104,8 +104,24 @@ def alive(pid: int) -> bool:
     return Path(f"/proc/{pid}/stat").read_text().split()[2] != "Z"
 
 
-def test_dry_run_prints_the_command_and_starts_nothing(env: Env) -> None:
-    result = env.serve("start", "qwen3-14b-think", "--dry-run")
+def sample_profiles(tmp_path: Path) -> Path:
+    """Perfiles de ejemplo (distintos de `actual`): con razonamiento y de un modelo sin bajar."""
+    profiles = tmp_path / "sample-profiles"
+    profiles.mkdir()
+    think = {
+        "model": "Qwen/Qwen3-14B-AWQ",
+        "tool_call_parser": "hermes",
+        "reasoning_parser": "qwen3",
+    }
+    (profiles / "think.yaml").write_text(yaml.safe_dump({"server": think}))
+    big = {"model": "Qwen/Qwen3-30B-A3B-GPTQ-Int4", "tool_call_parser": "hermes"}
+    (profiles / "other.yaml").write_text(yaml.safe_dump({"server": big}))
+    return profiles
+
+
+def test_dry_run_prints_the_command_and_starts_nothing(env: Env, tmp_path: Path) -> None:
+    profiles = sample_profiles(tmp_path)
+    result = env.serve("start", "think", "--dry-run", MODEL_PROFILES_DIR=str(profiles))
     assert result.returncode == 0, result.stderr
     assert "--reasoning-parser qwen3" in result.stdout and "HF_HUB_OFFLINE=1" in result.stdout
     assert "--default-chat-template-kwargs" not in result.stdout
@@ -121,8 +137,8 @@ def test_a_forbidden_model_is_refused(env: Env, tmp_path: Path) -> None:
     assert result.returncode == 2 and "forbidden" in result.stderr
 
 
-def test_a_model_not_in_the_cache_is_not_downloaded(env: Env) -> None:
-    result = env.serve("start", "qwen3-30b-a3b-t0")
+def test_a_model_not_in_the_cache_is_not_downloaded(env: Env, tmp_path: Path) -> None:
+    result = env.serve("start", "other", MODEL_PROFILES_DIR=str(sample_profiles(tmp_path)))
     assert result.returncode == 4 and "not in the Hugging Face cache" in result.stderr
     assert env.pid() is None
 
@@ -134,7 +150,7 @@ def test_a_server_that_i_did_not_launch_is_never_touched(env: Env) -> None:
     )  # fmt: skip
     try:
         time.sleep(1)
-        start = env.serve("start", "qwen3-14b-t0")
+        start = env.serve("start", "actual")
         assert start.returncode == 3 and "did not launch" in start.stderr
         stop = env.serve("stop")
         assert stop.returncode == 3
@@ -143,17 +159,18 @@ def test_a_server_that_i_did_not_launch_is_never_touched(env: Env) -> None:
         foreign.kill()
 
 
-def test_start_reuse_refuse_a_second_one_and_stop(env: Env) -> None:
-    started = env.serve("start", "qwen3-14b-t0")
+def test_start_reuse_refuse_a_second_one_and_stop(env: Env, tmp_path: Path) -> None:
+    only = {"MODEL_PROFILES_DIR": str(sample_profiles(tmp_path))}
+    started = env.serve("start", "think", **only)
     assert started.returncode == 0, started.stdout + started.stderr
     pid = env.pid()
     assert pid and alive(pid)
-    assert (env.state / "vllm.profile").read_text().strip() == "qwen3-14b-t0"
-    assert list(env.state.glob("*_qwen3-14b-t0.json"))  # versión y tiempo hasta /health
-    assert "0.0-fake" in next(env.state.glob("*_qwen3-14b-t0.json")).read_text()
-    again = env.serve("start", "qwen3-14b-t0")
+    assert (env.state / "vllm.profile").read_text().strip() == "think"
+    assert list(env.state.glob("*_think.json"))  # versión y tiempo hasta /health
+    assert "0.0-fake" in next(env.state.glob("*_think.json")).read_text()
+    again = env.serve("start", "think", **only)
     assert again.returncode == 0 and "already running" in again.stdout
-    other = env.serve("start", "qwen3-14b-think")  # mismo modelo, pero un servidor cada vez
+    other = env.serve("start", "actual")  # mismo modelo, pero un servidor cada vez
     assert other.returncode == 3 and "stop it first" in other.stderr
     assert "my server is running" in env.serve("status").stdout
     stopped = env.serve("stop")
@@ -166,13 +183,13 @@ def test_stop_waits_for_the_gpu_and_fails_when_it_is_not_released(env: Env) -> N
     env.gpu.write_text("100\n")
     assert env.serve("gpu-idle").returncode == 0
     assert (env.state / "gpu_idle_mib").read_text().strip() == "100"
-    assert env.serve("start", "qwen3-14b-t0").returncode == 0
+    assert env.serve("start", "actual").returncode == 0
     env.gpu.write_text("20000\n")  # la GPU no se libera
     stopped = env.serve("stop")
     assert stopped.returncode == 7 and "GPU is not free" in stopped.stderr
     env.gpu.write_text("300\n")  # reposo (100) + margen (512): libre
     assert env.serve("stop").returncode == 0  # ya no hay servidor: nada que parar
-    again = env.serve("start", "qwen3-14b-t0")
+    again = env.serve("start", "actual")
     assert again.returncode == 0
     env.gpu.write_text("200\n")
     assert (
@@ -195,7 +212,7 @@ def test_the_server_that_dies_while_starting_is_reported(env: Env, tmp_path: Pat
             """
         )
     )
-    result = env.serve("start", "qwen3-14b-t0")
+    result = env.serve("start", "actual")
     assert result.returncode == 5 and "CUDA out of memory" in result.stdout + result.stderr
     assert env.pid() is None
 
@@ -265,3 +282,59 @@ def test_server_env_reaches_only_that_server(env: Env, tmp_path: Path) -> None:
     assert started.returncode == 0, started.stdout + started.stderr
     assert (env.state / "seen_env").read_text().strip() == "unset"  # no queda nada del anterior
     assert env.serve("stop").returncode == 0
+
+
+# Un perfil archivado de otro modelo (con parser de tools propio y secciones de formatos
+# anteriores): se copia a `model-profiles/` y `serve.sh` lo arranca sin tocar código.
+MINISTRAL = {
+    "description": "mistralai/Ministral-3-14B-Instruct-2512, sin razonamiento, sin visión",
+    "server": {
+        "model": "mistralai/Ministral-3-14B-Instruct-2512",
+        "tool_call_parser": "mistral",
+        "max_model_len": 16384,
+        "extra_args": ["--tokenizer-mode", "mistral"],
+    },
+    "llm": {"base_url": "http://127.0.0.1:8000/v1"},  # secciones de formatos anteriores: se ignoran
+    "sampling": {"temperature": 0},
+    "agents": {"monitor": {"max_invocation_s": 60}},
+}
+
+
+def test_an_archived_profile_of_another_model_starts_without_touching_code(
+    env: Env, tmp_path: Path
+) -> None:
+    profiles = tmp_path / "archived"
+    profiles.mkdir()
+    (profiles / "ministral-3-14b.yaml").write_text(yaml.safe_dump(MINISTRAL))
+    (env.cache / "models--mistralai--Ministral-3-14B-Instruct-2512" / "snapshots" / "abc").mkdir(
+        parents=True
+    )
+    dry = env.serve("start", "ministral-3-14b", "--dry-run", MODEL_PROFILES_DIR=str(profiles))
+    assert dry.returncode == 0, dry.stderr
+    assert "--tool-call-parser mistral" in dry.stdout and "--max-model-len 16384" in dry.stdout
+    assert "--tokenizer-mode mistral" in dry.stdout and "--reasoning-parser" not in dry.stdout
+    started = env.serve("start", "ministral-3-14b", MODEL_PROFILES_DIR=str(profiles))
+    assert started.returncode == 0, started.stderr + started.stdout
+    assert "Ministral-3-14B-Instruct-2512" in started.stdout
+    assert env.serve("stop").returncode == 0
+
+
+def test_serve_args_reads_only_the_server_section_and_validates_it(tmp_path: Path) -> None:
+    sys.path.insert(0, str(REPO / "tools" / "vllm"))
+    import serve_args
+
+    (tmp_path / "m.yaml").write_text(yaml.safe_dump(MINISTRAL))
+    server = serve_args.load_server("m", tmp_path)
+    args = serve_args.serve_args(server, 8123)
+    assert args[:2] == ["serve", "mistralai/Ministral-3-14B-Instruct-2512"]
+    assert args[args.index("--port") + 1] == "8123"
+    (tmp_path / "no_parser.yaml").write_text(yaml.safe_dump({"server": {"model": "x/y"}}))
+    with pytest.raises(serve_args.ProfileError, match="tool_call_parser"):
+        serve_args.load_server("no_parser", tmp_path)
+    (tmp_path / "big.yaml").write_text(
+        yaml.safe_dump({"server": {"model": "Qwen/Qwen3.5-27B-GPTQ", "tool_call_parser": "hermes"}})
+    )
+    with pytest.raises(serve_args.ProfileError, match="forbidden"):
+        serve_args.load_server("big", tmp_path)
+    with pytest.raises(serve_args.ProfileError, match="cannot read"):
+        serve_args.load_server("missing", tmp_path)

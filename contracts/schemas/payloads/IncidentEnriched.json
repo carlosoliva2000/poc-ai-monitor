@@ -28,9 +28,43 @@
       "title": "EnrichRole",
       "type": "string"
     },
+    "HypothesisCheck": {
+      "additionalProperties": false,
+      "description": "Qué comprobar (v1.4): la fuente (lista cerrada) y la frase para el operador.",
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/HypothesisTarget"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "text"
+      ],
+      "title": "HypothesisCheck",
+      "type": "object"
+    },
+    "HypothesisTarget": {
+      "description": "Qué fuente comprobar según una hipótesis (v1.4): lista cerrada, para poder medirla.",
+      "enum": [
+        "gps",
+        "receiver",
+        "radar",
+        "meteo",
+        "link",
+        "battery",
+        "autopilot"
+      ],
+      "title": "HypothesisTarget",
+      "type": "string"
+    },
     "IncidentHypothesis": {
       "additionalProperties": false,
-      "description": "Hipótesis del asistente sobre un incidente `UNDETERMINED` (v1.1): **no es un\ndiagnóstico**. Tipo de la lista (nunca `UNDETERMINED`), confianza `possible`.",
+      "description": "Hipótesis del asistente sobre un incidente `UNDETERMINED` (v1.1): **no es un\ndiagnóstico**. Tipo de la lista (nunca `UNDETERMINED`), confianza `possible`. v1.4 (aditiva):\n`ranked` (causas ordenadas; `kind` es la primera) y `checks` (qué comprobar), vacías en las\nhipótesis de la v1.1.",
       "properties": {
         "kind": {
           "$ref": "#/$defs/IncidentKind"
@@ -44,6 +78,22 @@
           },
           "minItems": 1,
           "title": "Evidence Event Ids",
+          "type": "array"
+        },
+        "ranked": {
+          "items": {
+            "$ref": "#/$defs/RankedCause"
+          },
+          "maxItems": 3,
+          "title": "Ranked",
+          "type": "array"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/HypothesisCheck"
+          },
+          "maxItems": 4,
+          "title": "Checks",
           "type": "array"
         }
       },
@@ -86,6 +136,38 @@
       ],
       "title": "IncidentState",
       "type": "string"
+    },
+    "RankedCause": {
+      "additionalProperties": false,
+      "description": "Una causa de la hipótesis (v1.4): qué la apoya y qué falta para darla por buena.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/IncidentKind"
+        },
+        "supports": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Supports",
+          "type": "array"
+        },
+        "missing": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Missing",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "supports",
+        "missing"
+      ],
+      "title": "RankedCause",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -129,6 +211,30 @@
       "minimum": 0,
       "title": "As Of Sim Time",
       "type": "number"
+    },
+    "model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model"
+    },
+    "prompt_sha": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Prompt Sha"
     }
   },
   "required": [

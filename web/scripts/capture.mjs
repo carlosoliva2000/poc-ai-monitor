@@ -1456,8 +1456,14 @@ async function runVideo1() {
   await sleep(500)
   await shot('09_informe')
   note(`informe: ${(await page.locator('[data-testid=report-view]').innerText()).replace(/\s+/g, ' ')}`)
-  await page.getByRole('tab', { name: 'Monitor' }).click()
   await setView('Instructor')
+  await page.getByRole('tab', { name: 'Report' }).click()
+  await page.locator('[data-testid=debrief]').waitFor({ timeout: 60000 })
+  await page.locator('[data-testid=debrief]').scrollIntoViewIfNeeded()
+  await sleep(600)
+  await shot('09b_debriefing_instructor')
+  note(`debriefing: ${(await page.locator('[data-testid=debrief]').innerText()).replace(/\s+/g, ' ')}`)
+  await page.getByRole('tab', { name: 'Monitor' }).click()
   await sleep(800)
   const injected = page.locator('[data-testid=injected-panel]')
   await injected.scrollIntoViewIfNeeded()
@@ -1523,6 +1529,28 @@ async function runVideo2() {
   await sleep(4500)
   await shot('07_wind_cerrado')
   await describeCard('WIND')
+  // el chat del instructor: unidades, una orden ambigua, una fuera del catálogo y una pregunta con la verdad
+  await pause()
+  await page.getByRole('tab', { name: 'Instructor' }).click()
+  const answersBefore = await page.locator('[data-testid=chat-instructor] article:not(.items-end)').count()
+  const sayToInstructor = async (text, name) => {
+    const before = await page.locator('[data-testid=chat-instructor] article:not(.items-end)').count()
+    await box.fill(text)
+    await box.press('Enter')
+    await page.waitForFunction(
+      ([sel, n]) => document.querySelectorAll(sel).length > n,
+      ['[data-testid=chat-instructor] article:not(.items-end)', before],
+      { timeout: 60000 },
+    )
+    await sleep(2500)
+    await shot(name)
+    note(`${text} -> ${(await page.locator('[data-testid=chat-instructor] article:not(.items-end)').last().innerText()).replace(/\s+/g, ' ')}`)
+  }
+  await sayToInstructor('wind from the west at twenty knots', '08_orden_nudos')
+  await sayToInstructor('Make it windy', '09_orden_ambigua')
+  await sayToInstructor('Spoof the GPS now', '10_orden_fuera_de_catalogo')
+  await sayToInstructor('Did the system detect the wind I put, and how fast?', '11_pregunta_con_la_verdad')
+  note(`respuestas del chat del instructor: ${(await page.locator('[data-testid=chat-instructor] article:not(.items-end)').count()) - answersBefore}`)
   writeFileSync(`${out}/capture_log.json`, JSON.stringify({ log, wall_total_s: (Date.now() - t0) / 1000 }, null, 2))
 }
 

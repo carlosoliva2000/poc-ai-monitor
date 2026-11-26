@@ -14,7 +14,7 @@ from poc_contracts.api import ScenarioInfo, ScenariosResponse
 from poc_contracts.commands import InstructorControl
 from poc_contracts.enums import EventType
 from poc_contracts.envelope import Envelope
-from poc_contracts.payloads import PAYLOAD_MODELS
+from poc_contracts.payloads import PAYLOAD_MODELS, IncidentHypothesis
 from poc_contracts.run_files import LabelsFile, PlanFile, RunMeta, TruthFile, UnlabeledEpisodesFile
 from poc_contracts.scenario import GpsConfig, LinkConfig, ScenarioConfig
 from poc_contracts.states import StateRow
@@ -78,6 +78,7 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ('{ "interactive": true }', payload_of(T.INTERACTIVE_MODE_CHANGED)),
     ('{ "source": "radar", "mode": "mute", "origin"', payload_of(T.FAULT_INJECTED)),
     ('{ "command": "set_wind", "params": {"from_deg": 0.0', payload_of(T.INSTRUCTOR_COMMAND)),
+    ('{ "injects": [ {"id": "A1"', payload_of(T.EXERCISE_INJECTS)),
     (
         '{ "detection_id": "det-0002", "rule": "ROUTE_DEVIATION", "severity"',
         payload_of(T.DETECTION_RAISED),
@@ -97,7 +98,9 @@ EXPECTED: list[tuple[str, Check | str]] = [
     ),
     ('{ "incident_id": "inc-0002", "revision": 3, "kind"', payload_of(T.INCIDENT_UPDATED)),
     ('{ "incident_id": "inc-0002", "revision": 3, "state"', payload_of(T.INCIDENT_ENRICHED)),
+    ('{ "kind": "GPS_SPOOFING", "confidence": "possible"', model(IncidentHypothesis)),
     ('{ "run_id": "…", "markdown"', payload_of(T.REPORT_GENERATED)),
+    ('{ "run_id": "…", "markdown": "# Debriefing', payload_of(T.DEBRIEF_GENERATED)),
     ('{ "conversation_id": "monitor", "text"', payload_of(T.OPERATOR_MESSAGE)),
     (
         '{ "conversation_id": "monitor", "reply_to": "ops-0004", "delta"',

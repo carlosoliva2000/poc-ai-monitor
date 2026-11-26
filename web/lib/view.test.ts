@@ -9,12 +9,13 @@ const ev = (type: string, payload: object = {}): Envelope =>
 test('la vista del alumno no enseña fallos, comandos ni el chat del instructor', () => {
   const events = [
     ev('FaultInjected'), ev('FaultCleared'), ev('InstructorCommand'), ev('InteractiveModeChanged'),
+    ev('ExerciseInjects'), ev('DebriefGenerated'), ev('AgentActivity', { agent: 'translator' }), ev('AgentActivity', { agent: 'debrief' }),
     ev('OperatorMessage', { conversation_id: 'instructor' }), ev('AgentReply', { conversation_id: 'instructor' }),
     ev('AgentReplyChunk', { conversation_id: 'instructor' }), ev('AgentActivity', { agent: 'chat-instructor' }),
     ev('IncidentUpdated'), ev('IncidentEnriched'), ev('SimulationStarted'), ev('WindReported'),
     ev('OperatorMessage', { conversation_id: 'monitor' }), ev('AgentActivity', { agent: 'chat-monitor' }),
   ]
-  assert.equal(events.filter(isInstructorOnly).length, 8)
+  assert.equal(events.filter(isInstructorOnly).length, 12)
   assert.deepEqual(eventsForView(events, 'student').map((e) => e.type), ['IncidentUpdated', 'IncidentEnriched', 'SimulationStarted', 'WindReported', 'OperatorMessage', 'AgentActivity'])
   assert.equal(eventsForView(events, 'instructor').length, events.length)
 })

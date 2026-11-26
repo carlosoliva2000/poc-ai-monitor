@@ -50,6 +50,8 @@ EVENT_SPECS: dict[EventType, EventSpec] = {
     _T.FAULT_INJECTED: EventSpec(SIM_DOMAIN, "player", "sim", "platform-player"),
     _T.FAULT_CLEARED: EventSpec(SIM_DOMAIN, "player", "sim", "platform-player"),
     _T.INSTRUCTOR_COMMAND: EventSpec(SIM_DOMAIN, "instructor", "cmd", "platform-player"),
+    # v1.4: lo programado en el ejercicio (de `labels.json`), solo para el proceso del instructor
+    _T.EXERCISE_INJECTS: EventSpec(SIM_DOMAIN, "instructor", "inj", "platform-player"),
     _T.DETECTION_RAISED: EventSpec("ai", "d1", "det", "ai-detector"),
     _T.DETECTION_UPDATED: EventSpec("ai", "d1", "det", "ai-detector"),
     _T.DETECTION_CLEARED: EventSpec("ai", "d1", "det", "ai-detector"),
@@ -62,6 +64,8 @@ EVENT_SPECS: dict[EventType, EventSpec] = {
     _T.INCIDENT_UPDATED: EventSpec("ai", "d1", "ai", "ai-monitor"),
     _T.INCIDENT_ENRICHED: EventSpec("ai", "d1", "ai", "ai-enricher"),
     _T.REPORT_GENERATED: EventSpec("ai", "d1", "ai", "ai-report"),
+    # v1.4: debriefing del instructor (con la verdad): `ai.instructor`, que el alumno no recibe
+    _T.DEBRIEF_GENERATED: EventSpec("ai", "instructor", "ai", "ai-debrief"),
     _T.OPERATOR_MESSAGE: EventSpec("ops", None, "ops", "web-operator"),
     _T.AGENT_REPLY: EventSpec("ai", None, "ai", None),
     _T.AGENT_REPLY_CHUNK: EventSpec("ai", None, "chk", None, ephemeral=True),
@@ -138,8 +142,11 @@ def topic_domain(topic: str) -> str | None:
 
 
 def matches_id_prefix(event_id: str, event_type: EventType) -> bool:
-    """`True` si `event_id` es `<prefijo>-<número>` con el prefijo del tipo."""
-    return re.fullmatch(rf"{EVENT_SPECS[event_type].id_prefix}-\d+", event_id) is not None
+    """`True` si `event_id` es `<prefijo>-<número>` con el prefijo del tipo, o (v1.4)
+    `<prefijo>-<letra>-<número>` con la etiqueta de un proceso del módulo de IA (`ai-a-0001`)."""
+    return (
+        re.fullmatch(rf"{EVENT_SPECS[event_type].id_prefix}(?:-[a-z])?-\d+", event_id) is not None
+    )
 
 
 def client_can_publish(client: ClientKind, topic: str) -> bool:

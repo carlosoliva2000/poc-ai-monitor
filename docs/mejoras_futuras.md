@@ -198,10 +198,23 @@ Lo que sale de la E7c y **no se hace ahora**. Las tablas congeladas no se tocan;
 - **`situation_rule.py` dice `MARGIN_K = 1.0` y `tables_freeze.json` dice `margin_k: 0.5`** (la evaluación de la E7b usó 0,5; el monitor lee el fichero de congelación). Que los dos digan lo mismo en la próxima congelación.
 - **El inventario de activos del monitor es uno solo (`assets.yaml`)**: en `endurance` el radar alcanza 8000 m y el monitor supone 6000. En el despliegue saldrá del inventario real; mientras tanto, un escenario con otros activos necesita otro `assets.yaml`.
 
-**Para la E7d (asistente con LLM):**
-- Los textos preparados solo cubren `demo` y `nominal` y cinco tipos de incidente (viento, engaño, enlace perdido, secuestro, sin determinar). Un incidente de otro tipo no tiene interpretación (la web dice «pending…» 8 s y después nada).
-- `UNDETERMINED` lleva la hipótesis vacía; el asistente podrá proponer una (marcada como hipótesis, nunca como diagnóstico).
-- Retirar `agent/profiles.py` y la dependencia `openai` si la E7d no los usa tal cual (`serve.sh` los necesita hasta entonces).
+## E7d · asistente LLM (26/11/2026)
+Lo que sale de la E7d y **no se hace ahora**. Los prompts están congelados (`agent-assets/prompts_freeze.json`) para la E8.
+
+**Para la E8 (texto del asistente):**
+- **Medir el asistente a ciegas** con la rúbrica y la verdad al lado: acierto de la primera hipótesis (hoy, en una aproximación fuera de línea con la causa quitada, 32 de 40: engaño 2 de 10, el resto 10 de 10; con 9 «sin determinar» reales la primera acierta en unos 5 de 8), si su «qué comprobar» incluye la fuente que distingue la causa y el texto de las interpretaciones y los chats. El prompt de la hipótesis se ajustó tres veces con la misma muestra de validación: la medida seria necesita el reservado.
+- **Fallos que las comprobaciones no ven:** afirmaciones sin respaldo («wind is decreasing»), especulación («this suggests a possible issue with the wind measurement»), una causa posible dicha como hecho, mezclar la hora del cambio de nombre con la del inicio (en el chat, la historia con horas la reduce) y «at opening» mal usado.
+- **Evidencias contradictorias en la entrada:** la tabla de causa puede leer «spoofed position» en un secuestro o el primer segundo de un viento; el modelo la copia y la comprobación de causa la rechaza, pero un texto sin cifras puede colarse. Una entrada que quite las evidencias contrarias al nombre del incidente sería de la E8 o del monitor.
+- **Comparar modelos** (hay perfiles archivados en `~/poc-backups/model-profiles-archivo/`; `POC_LLM_MODEL` y `serve.sh` los arrancan sin tocar código) y quitar lo que sobre.
+
+**Del asistente:**
+- **Streaming real** con comprobación por frases (hoy se genera, se comprueba y se escribe en trozos: la primera palabra tarda ≈ 2 s).
+- **Una sola plaza de LLM por proceso:** con varios chats a la vez se encolan (prioridad: aperturas > recuperaciones > chats > cierres > informe). Un `llm_max_concurrency` compartido entre procesos no existe.
+- **El plazo de la web (10 s) es único** y sin señal de «el asistente está apagado»: con `--no-llm` cada tarjeta dice «No interpretation» pasados 10 s. Un `AgentActivity` de presencia al arrancar lo evitaría.
+- **El traductor solo conoce el viento.** Los demás comandos del instructor (fallos, engaño, secuestro) siguen en el panel; el catálogo se amplía con el mismo patrón y exige que la plataforma sepa aplicarlos. Solo convierte cifras con unidad (`20 knots`, `50 km/h`, `30 mph`) y palabras que el modelo devuelve; Beaufort pide m/s.
+- **Los eventos del módulo anterior que nadie publica** (`Detection*`, `AnomalyDetected`, `AlertClosed`, `AlertEnriched`, `AgentToolCall`) siguen en el contrato y en la web hasta la D1 (borrarlos es un cambio que rompe: contrato v2.0).
+- **Hechos «de ahora» con el último `LinkStatus`:** llegan cada 5 s; si la evidencia es más nueva que el último informe del enlace, los hechos dicen su antigüedad, pero el modelo puede no cruzarlos.
+- **Ids con etiqueta de proceso** (`ai-m-0001` monitor, `ai-a-0001` alumno, `ai-i-0001` instructor; también `act-` y `chk-`) porque comparten prefijo en un bus que rechaza repetidos; en CITADEL cada worker tendrá su registro de ids y con varios drones habrá que añadir el activo.
 
 **Del monitor:**
 - `export_dmn.py` escribe las tablas congeladas en DMN sin haberlas validado con un motor DMN real.

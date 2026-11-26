@@ -10,8 +10,10 @@ export const VIEWS: { id: View; label: string }[] = [
 export const DEFAULT_VIEW: View = 'instructor'
 export const reviveView = (raw: unknown): View => (raw === 'student' ? 'student' : DEFAULT_VIEW)
 
-/** Eventos del simulador que son del instructor: fallos, modo interactivo y comandos. */
-const INSTRUCTOR_ONLY_TYPES = new Set(['FaultInjected', 'FaultCleared', 'InteractiveModeChanged', 'InstructorCommand'])
+/** Eventos que son del instructor: fallos, modo interactivo, comandos, lo programado en el ejercicio
+ *  (`ExerciseInjects`, v1.4) y el debriefing (`DebriefGenerated`, v1.4: lleva la verdad). */
+const INSTRUCTOR_ONLY_TYPES = new Set(['FaultInjected', 'FaultCleared', 'InteractiveModeChanged', 'InstructorCommand', 'ExerciseInjects', 'DebriefGenerated'])
+const INSTRUCTOR_AGENTS = new Set(['chat-instructor', 'translator', 'debrief'])
 const CONVERSATION_TYPES = new Set(['OperatorMessage', 'AgentReply', 'AgentReplyChunk'])
 const AGENT_TYPES = new Set(['AgentActivity', 'AgentToolCall'])
 
@@ -20,7 +22,7 @@ export function isInstructorOnly(e: Envelope): boolean {
   if (INSTRUCTOR_ONLY_TYPES.has(e.type)) return true
   const p = e.payload as { conversation_id?: string; agent?: string }
   if (CONVERSATION_TYPES.has(e.type)) return p.conversation_id === 'instructor'
-  if (AGENT_TYPES.has(e.type)) return p.agent === 'chat-instructor'
+  if (AGENT_TYPES.has(e.type)) return INSTRUCTOR_AGENTS.has(p.agent ?? '')
   return false
 }
 

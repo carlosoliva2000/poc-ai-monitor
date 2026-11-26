@@ -1,0 +1,100 @@
+# Glosario del asistente: cómo se dicen en inglés llano las facetas, sus estados y las entradas de
+# las tablas. El código lo usa para escribir las evidencias que recibe el LLM; así el modelo nunca
+# ve nombres internos. Un test comprueba que cubre todas las entradas de las tablas congeladas.
+
+facets:
+  gps.availability: GPS signal
+  gps.quality: GPS quality
+  gps.integrity: GPS integrity
+  link.availability: Command link
+  link.quality: Command link quality
+  environment.wind: Wind
+  radar.availability: Radar
+  meteo.availability: Weather station
+  battery.availability: Battery telemetry
+  battery.level: Battery level
+  battery.endurance: Battery endurance
+  drone.mode: Autopilot mode
+  drone.situation: Drone versus the route
+  drone.cause: Cause of the deviation
+
+values:
+  spoofed: spoofed
+  reliable: reliable
+  lost: lost
+  connected: connected
+  calm: calm
+  notable: notable
+  beyond_limit: beyond the drone limit
+  on_route: on the route
+  deviated: off the route
+  returning: returning to the route
+  normal: normal
+  good: good
+  degraded: degraded
+  no_fix: no fix
+  no_data: no data
+  out_of_range: out of range
+  low: low
+  critical: critical
+  sufficient: sufficient
+  cannot_reach_home: cannot reach home
+  mission: mission
+  failsafe_hold: failsafe holding position
+  failsafe_return: failsafe returning home
+  failsafe_land: failsafe landing
+  foreign_control: someone else controls the drone
+  spoofed_position: spoofed GPS position
+  dead_reckoning: dead reckoning
+  wind: wind
+  unexplained: undetermined
+  n/a: not applicable
+  "?": unknown
+
+# hidden: no se enseña al modelo (las edades en «periodos» no le dicen nada al operador; el contexto
+# del incidente da los segundos sin telemetría).
+# technical: se enseña a los textos de los incidentes pero no a los chats (σ y velocidades de
+# crucero: el operador no los entiende; los hechos de ahora dan las distancias en metros).
+# unit: se escribe tras el valor; kind: ratio (cociente con un activo), flag (0/1), plain.
+features:
+  agc_vs_nominal_db: {label: receiver gain (AGC) against its nominal, unit: " dB"}
+  cn0_vs_nominal_db: {label: signal strength (C/N0) against its nominal, unit: " dB"}
+  age_gps_p: {label: time since the last GPS message, unit: " periods", hidden: true}
+  age_gnss_p: {label: time since the last receiver status, unit: " periods", hidden: true}
+  age_autopilot_p: {label: time since the last autopilot status, unit: " periods", hidden: true}
+  age_radar_p: {label: time since the last radar track, unit: " periods", hidden: true}
+  age_meteo_p: {label: time since the last weather report, unit: " periods", hidden: true}
+  age_battery_p: {label: time since the last battery report, unit: " periods", hidden: true}
+  tele_gap_p: {label: time without drone telemetry, unit: " periods", hidden: true}
+  battery_pct: {label: battery, unit: " %"}
+  gps_fix_3d: {label: 3D GPS fix, kind: flag}
+  gps_hacc_m: {label: GPS accuracy reported by the receiver, unit: " m"}
+  gps_hdop: {label: GPS HDOP}
+  gps_radar_avg_sigma: {label: mean GPS-radar disagreement, unit: " sigmas", technical: true}
+  radar_dev_sigma: {label: radar distance to the route, unit: " sigmas", technical: true}
+  radar_dev_sigma_max30: {label: largest radar distance to the route in the last 30 s, unit: " sigmas", technical: true}
+  radar_dev_slope_cruise: {label: radar approach to the route, unit: " cruise speeds", technical: true}
+  radar_range_ratio: {label: share of the radar range used}
+  ground_speed_over_cruise: {label: ground speed as a share of the cruise speed}
+  home_time_ratio: {label: time needed to get home as a share of the time left}
+  link_latency_ms: {label: link latency, unit: " ms"}
+  link_latency_vs_base: {label: link latency as a multiple of its normal value}
+  link_loss_pct: {label: packet loss, unit: " %"}
+  link_rssi_dbm: {label: link signal, unit: " dBm"}
+  mode_hold: {label: holding position, kind: flag}
+  mode_return: {label: returning home, kind: flag}
+  mode_land: {label: landing, kind: flag}
+  station_wind_over_limit: {label: weather station wind as a multiple of the drone wind limit}
+  wind_est_mean5_over_limit: {label: estimated wind (5 s mean) as a multiple of the drone wind limit}
+  wind_est_over_airspeed: {label: estimated wind as a multiple of the drone top speed}
+  wind_est_over_limit: {label: estimated wind as a multiple of the drone wind limit}
+  cause_active: {label: a cause was already active, kind: flag}
+  dev_hi_m: {label: distance from the route, unit: " m"}
+  dev_lo_m: {label: distance from the route, unit: " m"}
+  previous: {label: state before}
+  # contexto del incidente
+  deviation_source: {label: deviation measured by}
+  wind_est_mps: {label: estimated wind, unit: " m/s"}
+  suspected_cause: {label: suspected cause}
+  possible_cause: {label: possible cause}
+  telemetry_gap_s: {label: time without telemetry, unit: " s"}

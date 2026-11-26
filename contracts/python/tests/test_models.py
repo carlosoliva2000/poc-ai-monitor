@@ -422,3 +422,38 @@ def test_incident_events_v1_1() -> None:
     assert EVENT_SPECS[EventType.INCIDENT_UPDATED].source == "ai-monitor"
     assert EVENT_SPECS[EventType.INCIDENT_ENRICHED].source == "ai-enricher"
     assert topic_for(EventType.INCIDENT_UPDATED) == "citadel.pub.evt.ai.d1.IncidentUpdated.v1"
+
+
+def test_hypothesis_and_instructor_events_v1_4() -> None:
+    """v1.4: hipótesis estructurada (aditiva) y eventos solo del proceso del instructor."""
+    from poc_contracts.payloads import DebriefGenerated, ExerciseInjects, IncidentHypothesis
+    from poc_contracts.topics import topic_for
+
+    hyp = {"kind": "WIND", "confidence": "possible", "evidence_event_ids": ["rad-000042"]}
+    assert IncidentHypothesis(**hyp).ranked == []  # las hipótesis de la v1.1 siguen valiendo
+    ranked = [
+        {"kind": "WIND", "supports": ["a"], "missing": []},
+        {"kind": "GPS_SPOOFING", "supports": [], "missing": ["b"]},
+    ]
+    checks = [{"target": "meteo", "text": "Check the station wind"}]
+    IncidentHypothesis(**hyp, ranked=ranked, checks=checks)
+    for bad in (
+        {"ranked": ranked[::-1]},  # kind es la primera de las causas
+        {"ranked": [ranked[0], ranked[0]]},  # sin repetir
+        {"ranked": [{"kind": "LINK_LOSS", "supports": [], "missing": []}]},  # no es una causa
+        {"checks": [{"target": "wifi", "text": "x"}]},  # fuente fuera de la lista cerrada
+    ):
+        with pytest.raises(ValidationError):
+            IncidentHypothesis(**{**hyp, **bad})
+    inject = {"id": "A1", "type": "wind", "source": None, "start_s": 95.0, "end_s": 150.0}
+    ExerciseInjects(injects=[inject])
+    with pytest.raises(ValidationError):
+        ExerciseInjects(injects=[{**inject, "type": "alien"}])
+    DebriefGenerated(run_id="r", markdown="# d", injects_count=1)
+    # lo del instructor va por topics que el alumno no recibe (`sim` y `ai.instructor`)
+    assert topic_for(EventType.EXERCISE_INJECTS) == (
+        "citadel.pub.evt.sim.instructor.ExerciseInjects.v1"
+    )
+    assert topic_for(EventType.DEBRIEF_GENERATED) == (
+        "citadel.pub.evt.ai.instructor.DebriefGenerated.v1"
+    )
